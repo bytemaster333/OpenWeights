@@ -1,0 +1,18 @@
+# Env secrets (NEVER commit)
+.env
+.env.*.local
+
+# Go build artifacts
+bench/compose-smoke/readiness/bin/
+bench/**/runs/
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Docker
+ops/data/
