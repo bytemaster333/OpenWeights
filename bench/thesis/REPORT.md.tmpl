@@ -1,0 +1,19 @@
+# Sia Range-Download Thesis Report
+
+**Generated:** {{ .Timestamp }}
+**SDK version:** siastorage v0.0.3
+**Threshold (D-01):** median ≤ 1 MiB across 3 trials of 128 KiB@64 MiB
+**Verdict:** {{ .Verdict }}
+
+## Trials
+
+| Trial | Inbound bytes | Ratio vs requested | Duration ms |
+|-------|---------------|--------------------|-------------|
+{{ range .Trials }}| {{ .TrialNum }} | {{ .InboundBytes }} | {{ printf "%.2fx" .Ratio }} | {{ .DurationMs }} |
+{{ end }}
+
+- Min:    {{ .Min }} bytes
+- Median: {{ .Median }} bytes
+- Max:    {{ .Max }} bytes
+
+Raw per-trial JSON: `bench/thesis/runs/{{ .RunDir }}/report.json`
