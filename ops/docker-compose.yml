@@ -1,0 +1,86 @@
+# ops/docker-compose.yml
+# Phase 1 Compose stack — indexd + postgres + redis (no siahub-cas / gateway / console yet).
+# See .planning/phases/01-validation-foundations/01-RESEARCH.md §9 for design notes.
+# CRITICAL: the indexd healthcheck binary ships from PLAN 05; bind-mount path is contractual.
+
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: siahub-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD must be set in .env}
+      POSTGRES_DB: postgres
+      # Passed through to init.sql via the psql-injected psql environment variables.
+      INDEXD_PASSWORD: ${INDEXD_POSTGRES_PASSWORD:?INDEXD_POSTGRES_PASSWORD must be set in .env}
+      SIAHUB_PASSWORD: ${SIAHUB_POSTGRES_PASSWORD:?SIAHUB_POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./indexd-postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: siahub-redis
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}"
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  indexd:
+    # Pin to digest at Phase 1 close:
+    #   docker pull ghcr.io/siafoundation/indexd:latest
+    #   docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/siafoundation/indexd:latest
+    image: ${INDEXD_IMAGE:-ghcr.io/siafoundation/indexd:latest}
+    container_name: siahub-indexd
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - indexd-data:/data
+      - ./indexd.yml:/data/indexd.yml:ro
+      - ../bench/compose-smoke/readiness/bin/readiness:/usr/local/bin/siahub-readiness:ro
+    environment:
+      INDEXD_DATA_DIR: /data
+      INDEXD_CONFIG_FILE: /data/indexd.yml
+    # Utreexo-checkpoint sync keeps first-run within the 10-30 min window per RESEARCH §6.
+    command: ["--instant"]
+    ports:
+      - "127.0.0.1:9980:9980"   # admin API (loopback only)
+      - "9981:9981"              # p2p syncer (must be network-reachable)
+      - "127.0.0.1:9982:9982"   # app API (loopback only; siahub-cas talks via internal network)
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/siahub-readiness"]
+      # 60 retries * 30s = 30 min max sync wait; start_period gives indexd headroom.
+      interval: 30s
+      timeout: 10s
+      retries: 60
+      start_period: 300s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    name: siahub-postgres-data
+  indexd-data:
+    name: siahub-indexd-data
