@@ -1,10 +1,14 @@
 # Env secrets (NEVER commit)
 .env
 .env.*.local
+# Generated from ops/indexd.yml.tmpl by `make bootstrap` — contains recovery phrase + admin password
+ops/indexd.yml
 
 # Go build artifacts
 bench/compose-smoke/readiness/bin/
 bench/**/runs/
+# Bootstrap wizard binary (compiled by `make bootstrap`)
+/bin/
 *.test
 *.out
 

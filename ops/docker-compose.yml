@@ -64,8 +64,8 @@ services:
     environment:
       INDEXD_DATA_DIR: /data
       INDEXD_CONFIG_FILE: /data/indexd.yml
-    # Utreexo-checkpoint sync keeps first-run within the 10-30 min window per RESEARCH §6.
-    command: ["--instant"]
+    # Normal p2p sync (--instant removed while diagnosing Zen checkpoint-peer unreachability).
+    # command: ["--instant"]
     ports:
       - "127.0.0.1:9980:9980"   # admin API (loopback only)
       - "9981:9981"              # p2p syncer (must be network-reachable)
