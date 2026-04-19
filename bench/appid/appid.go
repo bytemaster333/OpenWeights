@@ -1,12 +1,12 @@
 // Package appid holds the single SiaHub App ID constant used by every
 // Phase 1 validator and consumed verbatim by Phase 2 (cas/) via a
-// language-parallel copy.
+// language-parallel Rust copy in conformance/src/appid.rs.
 //
-// The constant is generated once by `siastorage.GenerateAppID()` and
-// committed. PLAN 07 fills in the real hex string during its
-// A3-verification task.
+// Generated once on 2026-04-20 via `crypto/rand` (equivalent to
+// siastorage.GenerateAppID() which uses lukechampine.com/frand per
+// RESEARCH §1). DO NOT rotate. Rotation invalidates every
+// {xorb_hash -> sia_object_id} mapping.
 package appid
 
-// SiaHubAppID is a 32-byte hex string. Replaced with the generated
-// value by PLAN 07 Task 1 before any live-network code runs.
-const SiaHubAppID = "REPLACE_WITH_32_BYTE_HEX_CONSTANT_IN_PLAN_07"
+// SiaHubAppID is the 32-byte Sia App ID (hex-encoded per types.Hash256.UnmarshalText).
+const SiaHubAppID = "f0955611cb463ab8aa8b6c61702d0ade26d795c22b50c6e5b3bfdb193a3fc049"

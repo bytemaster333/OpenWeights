@@ -3,11 +3,11 @@
 # Targets whose recipes depend on code from later plans emit a clear
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
 
-.PHONY: bootstrap up down thesis smoke compose-smoke verify test-unit clean \
-        build-readiness-probe help
+.PHONY: bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
+        build-readiness-probe help a3-verify
 
 GO      := go
-COMPOSE := docker compose -f ops/docker-compose.yml
+COMPOSE := docker compose -f ops/docker-compose.yml --env-file .env
 BENCH   := cd bench &&
 
 # -----------------------------------------------------------------------------
@@ -17,6 +17,7 @@ BENCH   := cd bench &&
 help:
 	@echo "SiaHub Makefile targets:"
 	@echo "  make bootstrap         From-zero-to-running wizard (first-time setup)"
+	@echo "  make bootstrap-reset   Remove .env + ops/indexd.yml for a clean re-bootstrap"
 	@echo "  make up                docker compose up -d"
 	@echo "  make down              docker compose down"
 	@echo "  make thesis            Sia range-download thesis measurement (Phase 1 gate)"
@@ -26,9 +27,11 @@ help:
 	@echo "  make test-unit         Fast Go unit tests (no network)"
 	@echo "  make clean             Tear down Compose + remove volumes (DESTRUCTIVE)"
 
-bootstrap: ops/indexd.yml bench/compose-smoke/readiness/bin/readiness
-	@echo "bootstrap: running wizard..."
-	$(BENCH) $(GO) run ./bootstrap
+bootstrap: bench/compose-smoke/readiness/bin/readiness
+	@echo "bootstrap: running wizard (renders ops/indexd.yml + brings up stack + funds wallet + smoke)..."
+	@mkdir -p bin
+	$(BENCH) $(GO) build -o "$(CURDIR)/bin/bootstrap" ./bootstrap
+	./bin/bootstrap
 
 up:
 	$(COMPOSE) up -d
@@ -42,7 +45,11 @@ down:
 
 thesis: bench/compose-smoke/readiness/bin/readiness
 	$(COMPOSE) up -d postgres indexd redis
-	$(BENCH) $(GO) run ./thesis
+	@echo "thesis: running measurement (PASS=0, FAIL=3 informational per D-02)..."
+	@set +e; $(BENCH) $(GO) run ./thesis; rc=$$?; \
+	  if [ $$rc -eq 0 ]; then echo "thesis: PASS"; exit 0; \
+	  elif [ $$rc -eq 3 ]; then echo "thesis: FAIL (informational — see bench/thesis/REPORT.md + CONTEXT D-02)"; exit 0; \
+	  else echo "thesis: hard error rc=$$rc"; exit $$rc; fi
 	@echo "thesis: report written; see bench/thesis/REPORT.md"
 
 smoke:
@@ -76,15 +83,27 @@ bench/compose-smoke/readiness/bin/readiness: bench/compose-smoke/readiness/main.
 		./compose-smoke/readiness
 
 # -----------------------------------------------------------------------------
-# indexd.yml template rendering — PLAN 07 provides the real generator
+# bootstrap-reset — remove wizard-generated local state for a clean re-bootstrap.
+# Keeps Compose volumes intact (xorbs stay pinned on Sia; run `make clean` for
+# a truly destructive tear-down).
 # -----------------------------------------------------------------------------
 
-ops/indexd.yml: ops/indexd.yml.tmpl
-	@if [ ! -f ops/indexd.yml.tmpl ]; then \
-		echo "ops/indexd.yml.tmpl missing — PLAN 03 provides it"; exit 2; \
-	fi
-	@echo "ops/indexd.yml generation: PLAN 07 fleshes this target; for now touching placeholder"
-	@touch ops/indexd.yml
+bootstrap-reset:
+	rm -f .env ops/indexd.yml
+	@echo "bootstrap-reset: .env + ops/indexd.yml removed; run 'make bootstrap' to redo."
+
+# -----------------------------------------------------------------------------
+# A3 Verification — resolves RESEARCH §3 Assumption A3 before PLAN 07 implements
+# the bootstrap wizard. Writes .planning/phases/01-validation-foundations/01-A3-VERIFICATION.md.
+# -----------------------------------------------------------------------------
+
+a3-verify: bench/compose-smoke/readiness/bin/readiness
+	$(COMPOSE) up -d postgres indexd redis
+	@echo "a3-verify: waiting for indexd readiness..."
+	@until $(COMPOSE) ps --format json | grep -q '"Health":"healthy"'; do sleep 10; echo "  waiting..."; done
+	@echo "a3-verify: running probe (timeout 30s for approval)..."
+	$(BENCH) $(GO) run -tags=a3probe ./bootstrap
+	@echo "a3-verify: see .planning/phases/01-validation-foundations/01-A3-VERIFICATION.md"
 
 # -----------------------------------------------------------------------------
 # Destructive
