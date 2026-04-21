@@ -1,0 +1,68 @@
+[workspace]
+resolver = "2"
+members  = [
+    "crates/siahub-cas",
+    "crates/siahub-cas-core",
+    "crates/siahub-cas-storage",
+    "crates/siahub-cas-db",
+    "crates/siahub-cas-proto",
+]
+
+[workspace.package]
+edition      = "2024"
+rust-version = "1.85"
+publish      = false
+license      = "MIT"
+
+[workspace.dependencies]
+# Protocol types (notes.md §1 — NEVER fork; re-export only via siahub-cas-proto).
+# Note: crates.io publishes this crate with a hyphenated name; the Rust
+# import identifier is `xet_core_structures`. The README of the crate disclaims
+# public use, but Phase 1/2 policy is to pin exact and live within the
+# structures-only subset.
+xet-core-structures = "=1.5.1"
+
+# Runtime
+axum       = "0.8"
+tokio      = { version = "1.50", features = ["full"] }
+tokio-util = "0.7"
+tower      = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
+hyper      = "1"
+http       = "1"
+
+# Data
+sqlx  = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "migrate", "macros", "uuid", "chrono", "json"] }
+fred  = { version = "10", default-features = false, features = ["enable-rustls", "i-std", "i-scripts", "transactions"] }
+
+# Storage
+sia_storage = "=0.7.0"
+
+# Utility
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror  = "1"
+anyhow     = "1"
+uuid       = { version = "1", features = ["v4", "v7", "serde"] }
+chrono     = { version = "0.4", features = ["serde"] }
+sha2       = "0.10"
+hmac       = "0.12"
+base64     = "0.22"
+bytes      = "1"
+
+# Observability
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Config
+envy = "0.4"
+
+# Dev-only — pinned in conformance/ crate, NOT in any cas/ crate runtime.
+# xet_client     = "=1.5.1"   # conformance/ only
+# testcontainers = "0.22"     # conformance/ only
+# insta          = "1"        # conformance/ only
+
+[profile.release]
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"

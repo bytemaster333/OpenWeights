@@ -20,3 +20,4 @@ bench/**/runs/
 
 # Docker
 ops/data/
+cas/target/

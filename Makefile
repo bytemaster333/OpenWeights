@@ -4,7 +4,8 @@
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
 
 .PHONY: bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
-        build-readiness-probe help a3-verify
+        build-readiness-probe help a3-verify \
+        cas-build cas-check cas-clippy cas-run cas-image cas-up
 
 GO      := go
 COMPOSE := docker compose -f ops/docker-compose.yml --env-file .env
@@ -112,3 +113,56 @@ a3-verify: bench/compose-smoke/readiness/bin/readiness
 clean:
 	$(COMPOSE) down -v
 	rm -rf bench/*/runs bench/compose-smoke/readiness/bin ops/indexd.yml
+
+# -----------------------------------------------------------------------------
+# Phase 2: siahub-cas
+# -----------------------------------------------------------------------------
+.PHONY: cas-build cas-check cas-clippy cas-run cas-image cas-up
+
+cas-build:
+	cd cas && cargo build --release --bin siahub-cas
+
+cas-check:
+	cd cas && cargo check --workspace
+
+cas-clippy:
+	cd cas && cargo clippy --workspace --all-targets -- -D warnings
+
+cas-run:
+	cd cas && cargo run --bin siahub-cas
+
+cas-image:
+	docker compose -f ops/docker-compose.yml build siahub-cas
+
+cas-up: cas-image
+	docker compose -f ops/docker-compose.yml up -d siahub-cas
+
+# -----------------------------------------------------------------------------
+# Phase 2: siahub-conformance — Xet protocol end-to-end harness.
+# Plan 02-10 (wave 6). Drives the full CAS via xet_client = "=1.5.1" as a
+# dev-dep (never a runtime dep). See conformance/Cargo.toml for the pin
+# rationale + T-02-10-06 guard.
+# -----------------------------------------------------------------------------
+.PHONY: conformance conformance-fixtures conformance-check conformance-clippy
+
+conformance-fixtures:
+	@if [ ! -f conformance/fixtures/eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632.xorb ]; then \
+	  echo "Fetching conformance fixtures from xet-team/xet-spec-reference-files@18bf9173fb..."; \
+	  cd conformance && git lfs clone https://huggingface.co/datasets/xet-team/xet-spec-reference-files \
+	    --revision 18bf9173fb2ca80ab3a6fdff81119ff61be7e7dd fixtures/; \
+	else \
+	  echo "conformance-fixtures: already present (skipping)"; \
+	fi
+
+# Unit-level + compile check; never touches Docker.
+conformance-check:
+	cd conformance && cargo check --tests
+
+conformance-clippy:
+	cd conformance && cargo clippy --all-targets -- -D warnings
+
+# Full run. Requires a siahub-cas image built via `make cas-image` AND the
+# fixtures cloned. Individual tests skip with eprintln when preconditions
+# aren't met — the invocation itself never fails on a fresh clone.
+conformance: conformance-fixtures
+	cd conformance && cargo test --release

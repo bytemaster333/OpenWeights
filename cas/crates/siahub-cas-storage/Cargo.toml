@@ -1,0 +1,23 @@
+[package]
+name                   = "siahub-cas-storage"
+version                = "0.1.0"
+edition.workspace      = true
+rust-version.workspace = true
+publish.workspace      = true
+license.workspace      = true
+
+[features]
+default  = []
+sia-mock = []   # enabled by the conformance crate; D-22
+
+[dependencies]
+sia_storage      = { workspace = true }
+tokio            = { workspace = true }
+thiserror        = { workspace = true }
+tracing          = { workspace = true }
+bytes            = { workspace = true }
+anyhow           = { workspace = true }
+async-trait      = "0.1"
+sha2             = { workspace = true }
+sqlx             = { workspace = true }
+siahub-cas-proto = { path = "../siahub-cas-proto" }

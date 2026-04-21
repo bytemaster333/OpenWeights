@@ -1,0 +1,23 @@
+---
+source: crates/siahub-cas-core/src/tests/reconstruction_tests.rs
+assertion_line: 79
+expression: "&by_hex"
+---
+{
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": [
+    {
+      "start": 1024,
+      "end_inclusive": 8191
+    },
+    {
+      "start": 12288,
+      "end_inclusive": 16383
+    }
+  ],
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": [
+    {
+      "start": 0,
+      "end_inclusive": 65535
+    }
+  ]
+}
