@@ -1,0 +1,5 @@
+# Keep `conformance/fixtures/` in the tree even when the git-lfs xorb/shard
+# blobs are absent. Small, git-managed JSON test fixtures (e.g.
+# signed_url_vectors.json) live alongside the LFS-tracked blobs; gitignore
+# handling (Plan 02-10) lists the big blob paths explicitly so these small
+# files remain committed.

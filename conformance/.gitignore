@@ -1,0 +1,13 @@
+# LFS blobs cloned from xet-team/xet-spec-reference-files at pinned revision
+# 18bf9173fb2ca80ab3a6fdff81119ff61be7e7dd — too large to commit.
+fixtures/*
+
+# BUT preserve small text files committed alongside the crate:
+!fixtures/README.md
+!fixtures/.gitkeep
+!fixtures/signed_url_vectors.json
+!fixtures/signed_url_vectors.README.md
+
+# Rust build artifacts.
+target/
+Cargo.lock

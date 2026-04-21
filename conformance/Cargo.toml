@@ -1,0 +1,71 @@
+[package]
+name         = "siahub-conformance"
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.85"
+publish      = false
+license      = "MIT"
+
+# Standalone crate with NO `[workspace]` block — `conformance/` deliberately
+# orphans itself from `cas/Cargo.toml` so the pinned `xet-client = "=1.5.1"`
+# dev-dep stays out of `cas/`'s resolution graph. Running from repo root:
+#   cd conformance && cargo test
+# Never add this crate to `cas/Cargo.toml` `[workspace].members` — doing so
+# leaks xet-client into the CAS workspace (T-02-10-06 guard).
+
+[[bin]]
+name = "_noop"
+path = "src/bin_noop.rs"
+
+[dependencies]
+anyhow             = "1"
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+tokio              = { version = "1", features = ["full"] }
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+[dev-dependencies]
+# Phase 1 handoff (CONFORMANCE-AUDIT.md + CONTEXT D-22): xet-client + xet-core-structures
+# pinned exactly at 1.5.1 so the conformance harness drives the protocol using
+# the official client — the only check that catches mismatches like the
+# `/shards` vs `/v1/shards` gotcha (notes.md gotcha #2) before production.
+#
+# Any bump requires a deliberate planning step (T-02-10-04).
+xet-client          = "=1.5.1"
+xet-core-structures = "=1.5.1"
+
+# Container orchestration for round-trip tests (D-22). Spins Postgres in
+# Docker; the CAS image is built separately via `make cas-image` and loaded
+# from the local daemon by testcontainers.
+testcontainers         = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+
+# Raw HTTP drivers for endpoint-level tests (fetch_info_coalescing, v2 flag).
+reqwest   = { version = "0.12", features = ["rustls-tls", "json"] }
+bytes     = "1"
+uuid      = { version = "1", features = ["v4", "serde"] }
+base64    = "0.22"
+sha2      = "0.10"
+hex       = "0.4"
+hmac      = "0.12"
+subtle    = "2"
+url       = "2"
+
+# Snapshot testing for P4 coalescing JSON shape.
+insta = { version = "1", features = ["json"] }
+
+# Path-deps into the CAS workspace (read-only consumers; conformance never
+# modifies cas/ crates). siahub-cas-storage pulls in `sia-mock` so tests can
+# assert counters on MockSiaAdapter.
+siahub-cas-core    = { path = "../cas/crates/siahub-cas-core" }
+siahub-cas-db      = { path = "../cas/crates/siahub-cas-db" }
+siahub-cas-storage = { path = "../cas/crates/siahub-cas-storage", features = ["sia-mock"] }
+siahub-cas-proto   = { path = "../cas/crates/siahub-cas-proto" }
+
+# sqlx for seeding API keys + direct inserts in fetch_info_coalescing.
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "chrono"] }
+
+# Cross-language test vector verification dupes these from siahub-cas-core's
+# signed_url module — we intentionally re-implement the HMAC path here to
+# prove the fixture is cross-language verifiable (not just Rust-self-consistent).

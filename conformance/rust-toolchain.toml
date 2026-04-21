@@ -1,0 +1,7 @@
+[toolchain]
+# Match cas/rust-toolchain.toml: 1.89 stable is required by the transitive
+# dep graph (konst, darling, icu_*, serde_with, sysinfo, time). Workspace
+# `rust-version` at 1.85 remains the MSRV claim for downstream consumers.
+channel    = "1.89"
+components = ["rustfmt", "clippy"]
+profile    = "minimal"
