@@ -14,6 +14,8 @@ services:
       # Passed through to init.sql via the psql-injected psql environment variables.
       INDEXD_PASSWORD: ${INDEXD_POSTGRES_PASSWORD:?INDEXD_POSTGRES_PASSWORD must be set in .env}
       SIAHUB_PASSWORD: ${SIAHUB_POSTGRES_PASSWORD:?SIAHUB_POSTGRES_PASSWORD must be set in .env}
+      # Phase 3: siahub_gw role is created at first-boot by indexd-postgres-init.sql.
+      SIAHUB_GW_PASSWORD: ${SIAHUB_GW_POSTGRES_PASSWORD:?SIAHUB_GW_POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./indexd-postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
@@ -79,6 +81,62 @@ services:
       start_period: 300s
     restart: unless-stopped
 
+  # siahub-gateway — Phase 3 Go gateway. Plans 03-01..03-07 own this service.
+  # Wave 1 scaffold: serves `/health` + stub `/xorb/{hash}` (501). Real range
+  # serving + cache land in plans 03-03/04/05. `/metrics` is loopback-only (D-33).
+  siahub-gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    container_name: siahub-gateway
+    depends_on:
+      postgres:    { condition: service_healthy }
+      redis:       { condition: service_healthy }
+      indexd:      { condition: service_healthy }
+      siahub-cas:  { condition: service_healthy }
+    environment:
+      GATEWAY_ADDR: ":8081"
+      GATEWAY_METRICS_ADDR: "127.0.0.1:9100"
+      GATEWAY_URL_SIGNING_KEY: ${GATEWAY_URL_SIGNING_KEY}
+      GATEWAY_URL_SIGNING_KEY_PREV: ${GATEWAY_URL_SIGNING_KEY_PREV:-}
+      GATEWAY_URL_TTL_SECS: ${GATEWAY_URL_TTL_SECS:-7200}
+      GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://127.0.0.1:9090}
+      # Wired for 03-02: connect as the dedicated `siahub_gw` role created
+      # by cas/migrations/0005_siahub_gw_role.sql (SELECT on xorbs + INSERT
+      # on usage_log — nothing else). SIAHUB_GW_POSTGRES_PASSWORD is set
+      # in .env by the migration runner/bootstrap and consumed at both
+      # migration time (via `SET siahub.gw_password`) and runtime (via this
+      # URL). If SIAHUB_GW_POSTGRES_PASSWORD is unset, the gateway fails
+      # fast on boot instead of silently connecting as the wrong role.
+      POSTGRES_URL: ${GATEWAY_POSTGRES_URL:-postgres://siahub_gw:${SIAHUB_GW_POSTGRES_PASSWORD}@postgres:5432/siahub?application_name=siahub-gateway}
+      SIAHUB_INDEXER_URL: http://indexd:9982
+      SIAHUB_APP_ID: ${SIAHUB_APP_ID}
+      SIAHUB_APP_KEY: ${SIAHUB_APP_KEY}
+      # Back-compat aliases — accepted by config.go's firstNonEmpty resolver.
+      # Remove once the downstream consumers migrate to the SIAHUB_* names.
+      SIA_INDEXER_URL: http://indexd:9982
+      APP_KEY: ${SIAHUB_APP_KEY}
+      # Whole-xorb disk LRU (03-05 / 03-06). 100 GiB default. GATEWAY_CACHE_*
+      # are the canonical env var names; CACHE_DIR / CACHE_SIZE_BYTES remain
+      # as legacy aliases for back-compat (config.go reads canonical first).
+      GATEWAY_CACHE_DIR: /var/cache/siahub
+      GATEWAY_CACHE_SIZE_BYTES: ${GATEWAY_CACHE_SIZE_BYTES:-107374182400}
+      # Legacy aliases — identical values; kept until every consumer migrates.
+      CACHE_DIR: /var/cache/siahub
+      CACHE_SIZE_BYTES: ${CACHE_SIZE_BYTES:-107374182400}
+    ports:
+      # Public port. Caddy reverse-proxies `cas.siahub.app` here in Phase 6.
+      - "127.0.0.1:9090:8081"
+      # Metrics deliberately NOT exposed — D-33. Scrape via `docker compose exec`.
+    volumes:
+      - gateway-cache:/var/cache/siahub
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8081/health >/dev/null || exit 1"]
+      interval: 10s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
   # siahub-cas — Phase 2 Rust CAS. Plans 02-01..02-11 own this service.
   siahub-cas:
     build:
@@ -110,8 +168,35 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # siahub-console — Phase 4 React/TS console. Plans 04-02..04-10 own this service.
+  # 04-02 lands: shadcn preset b7C9wTXYe init + TanStack Router/Query + Biome + Vitest
+  # + static /health (D-48) + nginx static serve. Later plans add /login, /onboarding,
+  # /keys, /assets, /stats, /stats/map, /setup + the conformance badge.
+  siahub-console:
+    build:
+      context: ../console
+      dockerfile: Dockerfile
+      args:
+        VITE_CAS_URL: ${VITE_CAS_URL:-http://localhost:8080}
+        VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:9090}
+        VITE_CONFORMANCE_BADGE_URL: ${VITE_CONFORMANCE_BADGE_URL:-}
+    container_name: siahub-console
+    depends_on:
+      siahub-cas: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:5173:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
 volumes:
   postgres-data:
     name: siahub-postgres-data
   indexd-data:
     name: siahub-indexd-data
+  gateway-cache:
+    name: siahub-gateway-cache

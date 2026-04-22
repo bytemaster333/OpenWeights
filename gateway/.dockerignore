@@ -1,0 +1,5 @@
+# Exclude tests, fixtures, and repo metadata from the docker build context.
+*_test.go
+testdata/
+*.md
+bin/

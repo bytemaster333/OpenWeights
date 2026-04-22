@@ -1,0 +1,51 @@
+module github.com/siahub/gateway
+
+go 1.26.0
+
+require (
+	github.com/go-chi/chi/v5 v5.2.0
+	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.9.2
+	github.com/joho/godotenv v1.5.1
+	github.com/prometheus/client_golang v1.21.1
+	go.sia.tech/core v0.19.1-0.20260326151920-bbeb92b26458
+	go.sia.tech/siastorage v0.0.3
+	golang.org/x/net v0.52.0
+	golang.org/x/sync v0.20.0
+)
+
+require (
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/dunglas/httpsfv v1.1.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/julienschmidt/httprouter v1.3.0 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/klauspost/reedsolomon v1.13.3 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/oschwald/geoip2-golang v1.13.0 // indirect
+	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.62.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/quic-go/quic-go v0.59.0 // indirect
+	github.com/quic-go/webtransport-go v0.10.0 // indirect
+	go.sia.tech/coreutils v0.21.2-0.20260327081620-0c3739d3b615 // indirect
+	go.sia.tech/indexd v0.1.1-0.20260408142741-3ec7d3af7e4c // indirect
+	go.sia.tech/jape v0.14.1 // indirect
+	go.sia.tech/mux v1.5.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/tools v0.43.0 // indirect
+	google.golang.org/protobuf v1.36.1 // indirect
+	lukechampine.com/blake3 v1.3.0 // indirect
+	lukechampine.com/frand v1.5.1 // indirect
+)

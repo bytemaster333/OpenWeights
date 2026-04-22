@@ -7,6 +7,7 @@ ops/indexd.yml
 # Go build artifacts
 bench/compose-smoke/readiness/bin/
 bench/**/runs/
+gateway/bin/
 # Bootstrap wizard binary (compiled by `make bootstrap`)
 /bin/
 *.test
@@ -21,3 +22,4 @@ bench/**/runs/
 # Docker
 ops/data/
 cas/target/
+.cache/

@@ -5,7 +5,9 @@
 
 .PHONY: bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
         build-readiness-probe help a3-verify \
-        cas-build cas-check cas-clippy cas-run cas-image cas-up
+        cas-build cas-check cas-clippy cas-run cas-image cas-up \
+        gateway-build gateway-check gateway-vet gateway-run gateway-test gateway-image gateway-up \
+        console-install console-dev console-build console-check console-test console-image console-up
 
 GO      := go
 COMPOSE := docker compose -f ops/docker-compose.yml --env-file .env
@@ -27,6 +29,14 @@ help:
 	@echo "  make verify            Full suite: unit + thesis + smoke + compose-smoke"
 	@echo "  make test-unit         Fast Go unit tests (no network)"
 	@echo "  make clean             Tear down Compose + remove volumes (DESTRUCTIVE)"
+	@echo "  ---"
+	@echo "  make console-install   pnpm install (D-36; frozen lockfile)"
+	@echo "  make console-dev       pnpm run dev (Vite dev server :5173)"
+	@echo "  make console-build     pnpm run build (tsc + Vite)"
+	@echo "  make console-check     pnpm run check (D-51 CI gate: biome + tsc + vitest)"
+	@echo "  make console-test      pnpm run test (Vitest)"
+	@echo "  make console-image     docker build siahub-console"
+	@echo "  make console-up        docker compose up -d siahub-console"
 
 bootstrap: bench/compose-smoke/readiness/bin/readiness
 	@echo "bootstrap: running wizard (renders ops/indexd.yml + brings up stack + funds wallet + smoke)..."
@@ -136,6 +146,63 @@ cas-image:
 
 cas-up: cas-image
 	docker compose -f ops/docker-compose.yml up -d siahub-cas
+
+# -----------------------------------------------------------------------------
+# Phase 3: siahub-gateway
+# Plans 03-01..03-07. Wave 1 scaffold ships /health + stub /xorb/{hash} (501)
+# + HMAC-SHA256 signed-URL verifier (cross-language vectors green).
+# -----------------------------------------------------------------------------
+.PHONY: gateway-build gateway-check gateway-vet gateway-run gateway-test gateway-image gateway-up
+
+gateway-build:
+	@mkdir -p gateway/bin
+	cd gateway && $(GO) build -o bin/siahub-gateway .
+
+gateway-check:
+	cd gateway && $(GO) build ./...
+
+gateway-vet:
+	cd gateway && $(GO) vet ./...
+
+gateway-test:
+	cd gateway && $(GO) test ./...
+
+gateway-run:
+	cd gateway && $(GO) run .
+
+gateway-image:
+	docker compose -f ops/docker-compose.yml build siahub-gateway
+
+gateway-up: gateway-image
+	docker compose -f ops/docker-compose.yml up -d siahub-gateway
+
+# -----------------------------------------------------------------------------
+# Phase 4: siahub-console
+# Plans 04-02..04-10. First commit = shadcn init preset b7C9wTXYe (04-02).
+# `console-check` is the CI gate (D-51: biome check + tsc + vitest).
+# -----------------------------------------------------------------------------
+.PHONY: console-install console-dev console-build console-check console-test console-image console-up
+
+console-install:
+	cd console && corepack enable && pnpm install --frozen-lockfile
+
+console-dev:
+	cd console && pnpm run dev
+
+console-build:
+	cd console && pnpm run build
+
+console-check:
+	cd console && pnpm run check
+
+console-test:
+	cd console && pnpm run test
+
+console-image:
+	docker compose -f ops/docker-compose.yml build siahub-console
+
+console-up: console-image
+	docker compose -f ops/docker-compose.yml up -d siahub-console
 
 # -----------------------------------------------------------------------------
 # Phase 2: siahub-conformance — Xet protocol end-to-end harness.
