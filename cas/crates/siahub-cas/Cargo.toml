@@ -31,6 +31,10 @@ thiserror          = { workspace = true }
 sqlx               = { workspace = true }
 fred               = { workspace = true }
 sia_storage        = { workspace = true }
+# Plan 04-01 — shared reqwest client for OAuth token exchange + indexd proxy.
+# default-features off + rustls-tls keeps the TLS stack consistent with
+# sqlx/fred's rustls choice (no native openssl dep).
+reqwest            = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 url                = "2"
 siahub-cas-core    = { path = "../siahub-cas-core" }
 siahub-cas-db      = { path = "../siahub-cas-db" }

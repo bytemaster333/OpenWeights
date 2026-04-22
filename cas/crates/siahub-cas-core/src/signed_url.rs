@@ -203,6 +203,64 @@ impl UrlSigner {
         url.to_string()
     }
 
+    /// Mint a signed gateway URL granting access to MULTIPLE non-contiguous
+    /// byte ranges of a single xorb. Phase 3 V2 flip (RECEIVED §G item 2):
+    /// replaces the Phase 2 bounding-range approximation with a segments-form
+    /// descriptor that the Go gateway parses into `[]Range` and serves as
+    /// RFC 7233 `multipart/byteranges` (notes.md gotcha #3).
+    ///
+    /// Canonical string format: SAME v1 algorithm as `mint_v1`; the `r` field
+    /// is the joined segments string `s1-e1,s2-e2,...` (comma-separated, no
+    /// spaces, each `s`/`e` ASCII decimals, `e` inclusive). Single-segment
+    /// input (`segments.len() == 1`) produces a canonical identical to the
+    /// equivalent `mint_v1(Some((s,e)))` — no `r` field split. This keeps
+    /// the verifier's canonical-string computation path uniform.
+    ///
+    /// # Panics
+    /// Panics if `segments` is empty. Empty multi-range is meaningless; the
+    /// V2 builder already guarantees at least one segment per xorb (a xorb
+    /// appearing in `fetch_info` by definition has ≥1 coalesced range).
+    pub fn mint_v1_multi_range(
+        &self,
+        xorb_hash: &MerkleHash,
+        segments: &[(u64, u64)],
+        kid: Uuid,
+        now_unix: u64,
+    ) -> String {
+        assert!(
+            !segments.is_empty(),
+            "mint_v1_multi_range requires at least one segment"
+        );
+        let exp = now_unix.saturating_add(self.default_ttl_secs);
+        let hex = xorb_hash.hex();
+        // Join segments into `s1-e1,s2-e2,...`.
+        let r_str: String = segments
+            .iter()
+            .map(|(s, e)| format!("{s}-{e}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        // Canonical re-uses the v1 5-field layout: the `r` slot holds the
+        // already-joined segments string. HMAC runs over the exact bytes the
+        // gateway verifier will reconstruct from the querystring.
+        let canonical = format!(
+            "{version}\n{hex}\n{exp}\n{r}\n{kid}",
+            version = CANONICAL_VERSION,
+            r = r_str,
+        );
+        let sig = self.sign_with(&self.key_current, &canonical);
+
+        let mut url = self.gateway_base.clone();
+        url.set_path(&format!("/xorb/{hex}"));
+        {
+            let mut qs = url.query_pairs_mut();
+            qs.append_pair("exp", &exp.to_string());
+            qs.append_pair("kid", &kid.to_string());
+            qs.append_pair("sig", &sig);
+            qs.append_pair("r", &r_str);
+        }
+        url.to_string()
+    }
+
     /// Verify a signed URL. Phase 3 Go gateway mirrors this logic and is
     /// conformance-checked against `conformance/fixtures/signed_url_vectors.json`.
     ///
@@ -315,6 +373,20 @@ pub trait UrlMinter: Send + Sync {
         kid: Uuid,
         now_unix: u64,
     ) -> String;
+
+    /// Mint a signed `GET` URL granting access to multiple non-contiguous
+    /// byte ranges of a single xorb. Used by V2 reconstruction (Phase 3
+    /// GATE-03 multi-range serving). Canonical string encodes the joined
+    /// `s1-e1,s2-e2,...` string in the `r` field.
+    ///
+    /// Panics if `segments` is empty.
+    fn mint_v1_multi_range(
+        &self,
+        xorb_hash: &MerkleHash,
+        segments: &[(u64, u64)],
+        kid: Uuid,
+        now_unix: u64,
+    ) -> String;
 }
 
 impl UrlMinter for UrlSigner {
@@ -329,6 +401,15 @@ impl UrlMinter for UrlSigner {
         now_unix: u64,
     ) -> String {
         UrlSigner::mint_v1(self, xorb_hash, range, kid, now_unix)
+    }
+    fn mint_v1_multi_range(
+        &self,
+        xorb_hash: &MerkleHash,
+        segments: &[(u64, u64)],
+        kid: Uuid,
+        now_unix: u64,
+    ) -> String {
+        UrlSigner::mint_v1_multi_range(self, xorb_hash, segments, kid, now_unix)
     }
 }
 

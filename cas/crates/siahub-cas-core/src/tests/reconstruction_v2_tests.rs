@@ -158,16 +158,21 @@ fn flag_on_build_v2_response_produces_per_xorb_single_url() {
         "url should embed xorb_a hex path: {}",
         a_entry.url
     );
-    // Bounding range stamped into the URL covers ALL segments (1024..=16383).
-    // Phase 3 minter upgrade swaps this to per-segment `r=s1-e1,s2-e2,...`
-    // (see Phase 3 flip checklist in SUMMARY).
+    // Phase 3 flip (RECEIVED §G item 2, Plan 03-07): URL now carries the
+    // per-segment multi-range descriptor `r=s1-e1,s2-e2,...` — NOT the
+    // earlier Phase 2 bounding-range approximation. The comma form encodes
+    // url-safely; url::Url percent-encodes `,` as `%2C` inside query values,
+    // so we tolerate both forms on assertion.
+    let url_a = &a_entry.url;
     assert!(
-        a_entry.url.contains("r=1024-16383"),
-        "url must bound the multi-range descriptor: {}",
-        a_entry.url
+        url_a.contains("r=1024-8191%2C12288-16383")
+            || url_a.contains("r=1024-8191,12288-16383"),
+        "url must stamp segments form `r=s1-e1,s2-e2`: {}",
+        url_a
     );
 
-    // xorb_b — single range 0..=65535.
+    // xorb_b — single range 0..=65535. Single-segment input still emits
+    // `r=0-65535` with no comma.
     let b_key = MerkleHash::from(xorb_b).hex();
     let b_entry: &XorbFetchInfoV2 = resp.fetch_info.get(&b_key).expect("xorb_b present");
     assert_eq!(b_entry.ranges.len(), 1);

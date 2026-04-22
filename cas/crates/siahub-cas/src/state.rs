@@ -2,6 +2,9 @@ use sqlx::PgPool;
 use std::sync::{Arc, atomic::AtomicBool};
 
 use siahub_cas_core::auth::{AuthStateRef, KeyCache};
+use siahub_cas_core::handlers::admin::map::MapState;
+use siahub_cas_core::handlers::admin::setup::SetupState;
+use siahub_cas_core::handlers::auth::github::GithubOAuthState;
 use siahub_cas_core::handlers::health::HealthState;
 use siahub_cas_core::handlers::reconstruction::ReconstructionState;
 use siahub_cas_core::handlers::shards::ShardUploadState;
@@ -45,6 +48,11 @@ pub struct AppState {
     /// this is `false` — `main.rs::run` flips it to `true` only after
     /// migrations applied AND the Sia startup self-check succeeded.
     pub ready: Arc<AtomicBool>,
+    /// Plan 04-01 — shared `reqwest::Client` reused across the OAuth
+    /// token-exchange call, the `/admin/stats/map` indexd proxy, and the
+    /// `/admin/setup/status` probes. Built ONCE at boot so TLS handshakes
+    /// + connection pooling are reused.
+    pub http_client: Arc<reqwest::Client>,
 }
 
 impl AuthStateRef for AppState {
@@ -120,5 +128,59 @@ impl ReconstructionState for AppState {
         // notes.md gotcha #3: enabling V2 before the gateway serves
         // multipart/byteranges silently corrupts xet-core downloads.
         self.cfg.v2_reconstruction_enabled
+    }
+}
+
+// Plan 04-01 — /admin/stats/map + OAuth + /admin/setup/status state impls.
+
+impl MapState for AppState {
+    fn indexd_url(&self) -> &str {
+        &self.cfg.indexd_url
+    }
+    fn indexd_admin_password(&self) -> &str {
+        &self.cfg.indexd_admin_password
+    }
+    fn http_client(&self) -> Arc<reqwest::Client> {
+        self.http_client.clone()
+    }
+}
+
+impl SetupState for AppState {
+    fn redis(&self) -> Arc<fred::clients::Client> {
+        self.redis.clone()
+    }
+    fn indexd_url(&self) -> &str {
+        &self.cfg.indexd_url
+    }
+    fn indexd_admin_password(&self) -> &str {
+        &self.cfg.indexd_admin_password
+    }
+    fn http_client(&self) -> Arc<reqwest::Client> {
+        self.http_client.clone()
+    }
+    fn github_oauth_configured(&self) -> bool {
+        !self.cfg.github_oauth_client_id.is_empty()
+            && !self.cfg.github_oauth_client_secret.is_empty()
+    }
+    fn v2_reconstruction_enabled(&self) -> bool {
+        self.cfg.v2_reconstruction_enabled
+    }
+}
+
+impl GithubOAuthState for AppState {
+    fn github_client_id(&self) -> &str {
+        &self.cfg.github_oauth_client_id
+    }
+    fn github_client_secret(&self) -> &str {
+        &self.cfg.github_oauth_client_secret
+    }
+    fn github_callback_url(&self) -> &str {
+        &self.cfg.github_oauth_callback_url
+    }
+    fn console_base_url(&self) -> &str {
+        &self.cfg.console_base_url
+    }
+    fn http_client(&self) -> Arc<reqwest::Client> {
+        self.http_client.clone()
     }
 }

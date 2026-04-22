@@ -88,6 +88,16 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
     let metrics = Arc::new(siahub_cas_core::metrics::Metrics::new());
     let ready = Arc::new(AtomicBool::new(false));
 
+    // Plan 04-01 — shared reqwest client for OAuth + indexd proxy + setup
+    // probes. Build once so TLS handshakes + connection pooling are reused
+    // across the three handlers that need outbound HTTP.
+    let http_client = Arc::new(
+        reqwest::Client::builder()
+            .user_agent("siahub-cas/1.0")
+            .build()
+            .context("reqwest client build")?,
+    );
+
     let state = AppState {
         cfg: Arc::new(cfg.clone()),
         pool: pool.clone(),
@@ -98,6 +108,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
         signer: Arc::new(signer),
         metrics: metrics.clone(),
         ready: ready.clone(),
+        http_client,
     };
 
     // Plan 02-09 Task 3 — spawn the pin-state reconciler. The task runs for

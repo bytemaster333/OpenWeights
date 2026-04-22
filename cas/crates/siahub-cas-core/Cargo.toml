@@ -32,6 +32,13 @@ async-trait        = "0.1"
 url                = "2"
 subtle             = "2"
 prometheus         = { version = "0.13", default-features = false }
+# Plan 04-01 (Phase 2.1 amendment) — GitHub OAuth token exchange + indexd
+# proxy for /admin/stats/map. default-features off keeps the tls stack
+# consistent with sqlx/fred's rustls choice.
+reqwest            = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Plan 04-01 — URL-safe random nonce generation for OAuth state + session
+# IDs + API-key plaintext. CSPRNG via getrandom (already transitive).
+getrandom          = "0.2"
 siahub-cas-proto   = { path = "../siahub-cas-proto" }
 siahub-cas-db      = { path = "../siahub-cas-db" }
 siahub-cas-storage = { path = "../siahub-cas-storage" }

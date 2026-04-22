@@ -34,6 +34,29 @@ pub struct Config {
     // Pool sizing
     #[serde(default = "default_pg_conn")]
     pub pg_max_connections: u32,
+
+    // Plan 04-01 (Phase 2.1 amendment) — GitHub OAuth + indexd admin.
+    //
+    // P14 (HIGH): the callback URL MUST match the value registered in the
+    // self-host operator's GitHub OAuth App settings. Mismatch manifests
+    // as opaque `redirect_uri_mismatch` from GitHub — `.env.example`
+    // carries a prominent comment.
+    #[serde(default)]
+    pub github_oauth_client_id: String,
+    #[serde(default)]
+    pub github_oauth_client_secret: String,
+    #[serde(default = "default_github_callback_url")]
+    pub github_oauth_callback_url: String,
+    /// Where to redirect the browser after a successful OAuth callback.
+    /// Defaults to the Vite dev server origin for local dev; production
+    /// overrides to `https://siahub.app`.
+    #[serde(default = "default_console_base_url")]
+    pub console_base_url: String,
+    /// HTTP Basic auth password for indexd's admin endpoints. Same secret
+    /// Plan 01-07 derives at bootstrap; CAS reads it for the
+    /// `/admin/stats/map` + `/admin/setup/status` probes.
+    #[serde(default)]
+    pub indexd_admin_password: String,
 }
 
 fn default_bind() -> String {
@@ -49,6 +72,17 @@ fn default_gateway_base_url() -> String {
 }
 fn default_pg_conn() -> u32 {
     20
+}
+fn default_github_callback_url() -> String {
+    // Local-dev default; production overrides via
+    // `GITHUB_OAUTH_CALLBACK_URL=https://cas.siahub.app/auth/github/callback`
+    // (or equivalent). Must match the GitHub OAuth App registration (P14).
+    "http://localhost:8080/auth/github/callback".to_string()
+}
+fn default_console_base_url() -> String {
+    // Vite dev server origin by default; production overrides via
+    // `CONSOLE_BASE_URL=https://siahub.app` in `.env`.
+    "http://localhost:5173".to_string()
 }
 
 impl Config {

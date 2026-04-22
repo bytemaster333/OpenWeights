@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use siahub_cas_core::handlers;
 
@@ -75,6 +75,53 @@ pub fn build(state: AppState) -> Router {
         .route(
             "/v2/reconstructions/{file_id}",
             get(handlers::reconstruction_v2::query_reconstruction_v2::<AppState>),
+        )
+        // Plan 04-01 (Phase 2.1 amendment — D-41) — admin + auth routes.
+        // Owned by Phase 4 per D-41; consumed by siahub-console's
+        // /admin/* + /auth/* flows. Session cookie middleware is applied
+        // via the `Session` extractor at handler level; no router-level
+        // tower::Layer wraps these because the public auth start/callback
+        // routes live in the same group and MUST remain unauthenticated.
+        .route(
+            "/admin/me",
+            get(handlers::admin::me::get_me::<AppState>),
+        )
+        .route(
+            "/admin/keys",
+            post(handlers::admin::keys::create_key::<AppState>)
+                .get(handlers::admin::keys::list_keys::<AppState>),
+        )
+        .route(
+            "/admin/keys/{id}",
+            delete(handlers::admin::keys::revoke_key::<AppState>),
+        )
+        .route(
+            "/admin/stats",
+            get(handlers::admin::stats::get_stats::<AppState>),
+        )
+        .route(
+            "/admin/xorbs",
+            get(handlers::admin::xorbs::list_xorbs::<AppState>),
+        )
+        .route(
+            "/admin/stats/map",
+            get(handlers::admin::map::get_map::<AppState>),
+        )
+        .route(
+            "/admin/setup/status",
+            get(handlers::admin::setup::get_setup_status::<AppState>),
+        )
+        .route(
+            "/auth/github/start",
+            get(handlers::auth::github::start::<AppState>),
+        )
+        .route(
+            "/auth/github/callback",
+            get(handlers::auth::github::callback::<AppState>),
+        )
+        .route(
+            "/auth/logout",
+            post(handlers::auth::logout::logout::<AppState>),
         )
         .with_state(state)
 }

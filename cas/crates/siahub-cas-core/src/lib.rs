@@ -8,6 +8,7 @@ pub mod metering;
 pub mod metrics;
 pub mod rate_limit;
 pub mod scopes;
+pub mod session;
 pub mod shard_parse;
 pub mod signed_url;
 

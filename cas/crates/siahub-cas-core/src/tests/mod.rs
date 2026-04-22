@@ -4,6 +4,7 @@
 //! Tests 3/4/7 (happy-path, dedup, Sia-unavailable-via-handler) defer to
 //! Plan 02-10's conformance crate where testcontainers Postgres is wired.
 
+mod admin_endpoints_tests;
 mod metering_tests;
 mod reconciler_tests;
 mod reconstruction_tests;

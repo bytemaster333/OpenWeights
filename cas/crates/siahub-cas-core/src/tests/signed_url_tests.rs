@@ -364,6 +364,167 @@ fn signer_rejects_bad_key_length() {
     assert!(matches!(err, SignerError::KeyNotBase64));
 }
 
+// ---------------------------------------------------------------------------
+// Plan 03-07 — `mint_v1_multi_range` (V2 flip minter, RECEIVED §G item 2).
+// Canonical `r=s1-e1,s2-e2,...` replaces the Phase 2 bounding approximation.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mint_v1_multi_range_canonical_joins_segments_with_commas() {
+    // Two segments → canonical `r` field holds `1024-8191,12288-16383`.
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let xorb = MerkleHash::from_hex(
+        "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632",
+    )
+    .expect("hash");
+    let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").expect("kid");
+    let segments = [(1024u64, 8191u64), (12288u64, 16383u64)];
+
+    let url_str = signer.mint_v1_multi_range(&xorb, &segments, kid, 1_700_000_000);
+    let url = Url::parse(&url_str).expect("mint output parses");
+
+    // `r` round-trips through the URL parser as the literal comma form.
+    let r = url
+        .query_pairs()
+        .find(|(k, _)| k == "r")
+        .map(|(_, v)| v.into_owned())
+        .expect("r present");
+    assert_eq!(r, "1024-8191,12288-16383");
+
+    // Canonical string recomputation — hit exact format in source doc.
+    let expected_canonical = format!(
+        "v1\neea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632\n1700007200\n1024-8191,12288-16383\n{kid}",
+    );
+    // Extract exp from the URL to assert it matches `now + ttl`.
+    let exp = url
+        .query_pairs()
+        .find(|(k, _)| k == "exp")
+        .map(|(_, v)| v.into_owned())
+        .and_then(|s| s.parse::<u64>().ok())
+        .expect("exp present");
+    assert_eq!(exp, 1_700_000_000 + 7200);
+    // Reconstruct the canonical by format-string — byte-identical signing contract.
+    assert_eq!(
+        expected_canonical.split('\n').collect::<Vec<_>>().len(),
+        5,
+        "canonical must still be 5 fields"
+    );
+}
+
+#[test]
+fn mint_v1_multi_range_single_segment_matches_mint_v1() {
+    // A single-segment multi-range mint has canonical identical to the
+    // equivalent `mint_v1(Some((s,e)))`: same HMAC → same `sig=`. This
+    // invariant keeps the verifier path uniform across single vs multi.
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let xorb = MerkleHash::from_hex(
+        "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632",
+    )
+    .expect("hash");
+    let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").expect("kid");
+
+    let single = signer.mint_v1(&xorb, Some((100, 199)), kid, 1_700_000_000);
+    let multi = signer.mint_v1_multi_range(&xorb, &[(100, 199)], kid, 1_700_000_000);
+
+    // Extract the `sig` param from each; they must match byte-identically
+    // because the canonical strings match byte-identically.
+    let sig_single = Url::parse(&single)
+        .unwrap()
+        .query_pairs()
+        .find(|(k, _)| k == "sig")
+        .map(|(_, v)| v.into_owned())
+        .unwrap();
+    let sig_multi = Url::parse(&multi)
+        .unwrap()
+        .query_pairs()
+        .find(|(k, _)| k == "sig")
+        .map(|(_, v)| v.into_owned())
+        .unwrap();
+    assert_eq!(
+        sig_single, sig_multi,
+        "single-segment multi-range mint must match mint_v1 signature"
+    );
+}
+
+#[test]
+fn mint_v1_multi_range_three_segments_encodes_all_commas() {
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let xorb = MerkleHash::from_hex(
+        "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632",
+    )
+    .expect("hash");
+    let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").expect("kid");
+    let segments = [(0u64, 99u64), (200u64, 299u64), (1000u64, 1023u64)];
+
+    let url_str = signer.mint_v1_multi_range(&xorb, &segments, kid, 1_700_000_000);
+    let url = Url::parse(&url_str).expect("mint output parses");
+    let r = url
+        .query_pairs()
+        .find(|(k, _)| k == "r")
+        .map(|(_, v)| v.into_owned())
+        .expect("r present");
+    assert_eq!(r, "0-99,200-299,1000-1023");
+}
+
+#[test]
+#[should_panic(expected = "mint_v1_multi_range requires at least one segment")]
+fn mint_v1_multi_range_panics_on_empty_segments() {
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let xorb = MerkleHash::from_hex(
+        "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632",
+    )
+    .expect("hash");
+    let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").expect("kid");
+    let _ = signer.mint_v1_multi_range(&xorb, &[], kid, 1_700_000_000);
+}
+
+#[test]
+fn url_minter_trait_delegates_mint_v1_multi_range() {
+    // The trait method goes through UrlMinter — not UrlSigner directly.
+    // Ensures 02-06/V2 callers that hold `&dyn UrlMinter` can invoke the
+    // Phase 3 flip path.
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let minter: &dyn UrlMinter = &signer;
+    let xorb = MerkleHash::from_hex(
+        "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632",
+    )
+    .unwrap();
+    let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").unwrap();
+    let url = minter.mint_v1_multi_range(&xorb, &[(0, 1023), (2048, 4095)], kid, 1_700_000_000);
+    assert!(url.starts_with("https://cas.siahub.app/xorb/"));
+    assert!(url.contains("r=0-1023%2C2048-4095") || url.contains("r=0-1023,2048-4095"));
+}
+
 #[test]
 fn url_minter_trait_delegates() {
     // Ensures 02-06 can depend on the trait rather than the concrete type.

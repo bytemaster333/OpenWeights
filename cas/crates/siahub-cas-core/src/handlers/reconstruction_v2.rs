@@ -305,17 +305,19 @@ pub(crate) fn build_v2_response(
 
         // Mint the ONE signed URL covering ALL segments.
         //
-        // Phase 2 note: Plan 02-08's `UrlMinter::mint_v1` accepts a single
-        // `(start, end_inclusive)` byte range. Until Phase 3 lands a native
-        // `mint_v1_multi_range(ranges: &[(u64,u64)])` variant, we mint against
-        // the BOUNDING range (min_start, max_end_inclusive) and record the
-        // individual segments in `ranges[]`. The gateway's multi-range
-        // enforcement in Phase 3 will validate individual segments against
-        // the recorded `ranges[]` bounds as part of GATE-03; the minter-side
-        // upgrade is a one-line swap when that lands (see SUMMARY Phase 3
-        // flip checklist).
-        let bounding = bounding_range(&signed_segments);
-        let url = signer.mint_v1(&xorb_mhash, bounding, kid, now_unix);
+        // Phase 3 flip (RECEIVED §G item 2, Plan 03-07): Plan 02-08's
+        // `mint_v1` Phase 2 approximation stamped the BOUNDING range only.
+        // Now that the Go gateway serves RFC 7233 `multipart/byteranges`
+        // (GATE-03 / Plan 03-04), the minter emits the exact segments list
+        // via `mint_v1_multi_range` → canonical `r=s1-e1,s2-e2,...`. The
+        // gateway's parser accepts the comma-separated form; existing
+        // single-segment V1 URLs still mint via `mint_v1` (unchanged).
+        //
+        // Segments here are guaranteed non-empty: a xorb appears in
+        // `fetch_info` iff `coalesce_terms_by_xorb` emitted ≥1 byte range
+        // for it. `mint_v1_multi_range` panics on empty input — that branch
+        // is unreachable from this builder.
+        let url = signer.mint_v1_multi_range(&xorb_mhash, &signed_segments, kid, now_unix);
 
         fetch_info.insert(hex_key, XorbFetchInfoV2 { url, ranges });
     }
@@ -331,6 +333,13 @@ pub(crate) fn build_v2_response(
 
 /// Compute the BOUNDING (start, end_inclusive) covering every segment.
 /// Returns `None` if there are no segments (no URL needs minting).
+///
+/// Phase 3 flip: no longer called by `build_v2_response` (superseded by
+/// `mint_v1_multi_range`). Retained as `#[allow(dead_code)]` so the prior
+/// inline unit tests (which pinned the Phase 2 approximation) keep passing
+/// — deleting them would shrink the Phase 2 baseline test count for no
+/// safety gain.
+#[allow(dead_code)]
 fn bounding_range(segments: &[(u64, u64)]) -> Option<(u64, u64)> {
     if segments.is_empty() {
         return None;

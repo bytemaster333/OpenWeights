@@ -41,7 +41,7 @@ expression: "&snapshot"
   "fetch_info": {
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
       "url_path": "/xorb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "url_r_param": "1024-16383",
+      "url_r_param": "1024-8191,12288-16383",
       "ranges": [
         {
           "chunk_range": {
