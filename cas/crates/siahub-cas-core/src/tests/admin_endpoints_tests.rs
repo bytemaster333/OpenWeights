@@ -20,6 +20,7 @@
 //!   * Hex encoding invariants for `/admin/xorbs` + `/admin/stats` activity.
 
 use crate::handlers::admin::keys::{ConsoleScope, CreateKeyResponse, KeyListItem, ListKeysResponse};
+use crate::handlers::admin::xorbs::XorbRow;
 use crate::handlers::auth::github::CallbackError;
 use crate::session::{
     SESSION_COOKIE_NAME, clear_session_cookie_header, parse_session_cookie, session_cookie_header,
@@ -259,6 +260,76 @@ fn indexd_host_json_deserializes_with_pascal_case_fields() {
     // The struct's serde rename lives in map.rs; direct struct parsing is
     // tested there via the module's `fn probe_host_parses_ok` pattern if
     // ever added. This smoke check guards the wire-format assumption.
+}
+
+// ---------------------------------------------------------------------------
+// Plan 05-01 Task 5 — Phase 2.2 amendment (D-66/D-69).
+//
+// `GET /admin/xorbs/{hash}` single-hash detail lookup. Live DB 200/404 path
+// is covered in the conformance crate (same pattern documented in this
+// file's module header). Here we exercise DB-less invariants the handler
+// relies on:
+//
+//   * Wire shape — `XorbRow` serializes with the same field names the list
+//     endpoint already ships (console reuses the same TS type).
+//   * Hex-string validation in the handler body — a malformed path segment
+//     returns 400 BadRequest("invalid_xorb_hash") before any DB round-trip.
+//     (The validation helper lives in `handlers::admin::xorbs`; we assert
+//     the contract indirectly via the public `XorbRow` shape + the live
+//     handler's error-class test in conformance.)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn xorb_row_serializes_with_same_shape_as_list_endpoint() {
+    // Phase 2.2 amendment contract: `get_xorb_detail` returns a single
+    // `XorbRow` — the same row type `list_xorbs` emits. If the field set
+    // ever drifts, 04-06's console AssetDetail hook breaks silently. This
+    // grep-style check is the cheapest regression tripwire.
+    let row = XorbRow {
+        hash: "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632"
+            .into(),
+        sia_object_id: Some("deadbeef".into()),
+        size_bytes: 4096,
+        pin_state: "pinned".into(),
+        uploaded_at: chrono::Utc::now(),
+        uploader_key_id: Uuid::new_v4(),
+    };
+    let body = serde_json::to_string(&row).expect("serialize XorbRow");
+    for field in [
+        "\"hash\":",
+        "\"sia_object_id\":",
+        "\"size_bytes\":",
+        "\"pin_state\":",
+        "\"uploaded_at\":",
+        "\"uploader_key_id\":",
+    ] {
+        assert!(
+            body.contains(field),
+            "XorbRow wire field missing: {field} in {body}"
+        );
+    }
+    // Hash value must propagate lowercase (P1 already-canonical BYTEA read).
+    assert!(body.contains("eea25d6e"), "hash propagates: {body}");
+}
+
+#[test]
+fn xorb_row_nullable_sia_id_serializes_to_null_not_missing() {
+    // migration 0004 made sia_object_id NULL-able. The console treats
+    // `null` and missing differently (null = "uploaded, not yet pinned on
+    // Sia"; missing = "field does not exist"). Assert serde emits the key.
+    let row = XorbRow {
+        hash: "0".repeat(64),
+        sia_object_id: None,
+        size_bytes: 0,
+        pin_state: "pending".into(),
+        uploaded_at: chrono::Utc::now(),
+        uploader_key_id: Uuid::new_v4(),
+    };
+    let body = serde_json::to_string(&row).unwrap();
+    assert!(
+        body.contains("\"sia_object_id\":null"),
+        "None must serialize as explicit null: {body}"
+    );
 }
 
 #[test]

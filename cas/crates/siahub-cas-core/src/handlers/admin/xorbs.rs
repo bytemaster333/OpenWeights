@@ -11,7 +11,7 @@
 //! (anti-feature guardrail — no paginated admin table for v1).
 
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -125,6 +125,80 @@ fn lowercase_hex(bytes: &[u8]) -> String {
     s
 }
 
+/// Decode a lowercase 64-char hex xorb hash into 32 raw bytes. Returns
+/// `None` if the input is malformed (wrong length or non-hex chars). The
+/// single call site (`get_xorb_detail` below) maps that to
+/// `AppError::BadRequest("invalid_xorb_hash")` — a 400, NOT a 404, so the
+/// console can distinguish typos from true absence.
+fn decode_xorb_hash_hex(s: &str) -> Option<[u8; 32]> {
+    if s.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    let bytes = s.as_bytes();
+    for (i, pair) in bytes.chunks_exact(2).enumerate() {
+        let hi = (pair[0] as char).to_digit(16)?;
+        let lo = (pair[1] as char).to_digit(16)?;
+        out[i] = ((hi << 4) | lo) as u8;
+    }
+    Some(out)
+}
+
+/// `GET /admin/xorbs/{hash}` — single-xorb detail lookup (Phase 2.2
+/// amendment, D-66). Admin-gated. Same row shape as one `XorbRow` element
+/// from `list_xorbs`. Returns 404 on absence so the console's AssetDetail
+/// page can drop the prefix-fallback workaround documented in 04-06.
+///
+/// The `{hash}` path segment is the lowercase 64-char hex encoding of the
+/// 32-byte `xorbs.xorb_merkle_hash` BYTEA column — the same encoding
+/// returned by `list_xorbs` and by the `/admin/stats` activity feed. The
+/// byte-reversal P1 pitfall is handled upstream by the
+/// `siahub-cas-proto::merklehash` crate at upload time; by the time bytes
+/// land in this BYTEA column they are already in the canonical order.
+pub async fn get_xorb_detail<S: AuthStateRef>(
+    Session(user): Session,
+    State(st): State<S>,
+    Path(hash_hex): Path<String>,
+) -> Result<Json<XorbRow>, AppError> {
+    if !user.is_admin {
+        return Err(AppError::Forbidden);
+    }
+
+    let hash_lc = hash_hex.to_lowercase();
+    let hash_bytes = decode_xorb_hash_hex(&hash_lc)
+        .ok_or(AppError::BadRequest("invalid_xorb_hash"))?;
+
+    type XorbDbRow = (
+        Vec<u8>,
+        Option<Vec<u8>>,
+        i64,
+        String,
+        DateTime<Utc>,
+        Uuid,
+    );
+    let row: Option<XorbDbRow> = sqlx::query_as(
+        "SELECT xorb_merkle_hash, sia_object_id, size_bytes, \
+                pin_state::text, uploaded_at, owner_api_key_id \
+           FROM xorbs \
+          WHERE xorb_merkle_hash = $1 \
+          LIMIT 1",
+    )
+    .bind(&hash_bytes[..])
+    .fetch_optional(st.pool())
+    .await?;
+
+    let row = row.ok_or(AppError::NotFound)?;
+    let (hash, sia_obj, size_bytes, pin_state, uploaded_at, key_id) = row;
+    Ok(Json(XorbRow {
+        hash: lowercase_hex(&hash),
+        sia_object_id: sia_obj.map(|b| lowercase_hex(&b)),
+        size_bytes,
+        pin_state,
+        uploaded_at,
+        uploader_key_id: key_id,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +213,35 @@ mod tests {
         let q = XorbQuery::default();
         assert!(q.hash_prefix.is_none());
         assert!(q.api_key_id.is_none());
+    }
+
+    #[test]
+    fn decode_xorb_hash_hex_accepts_canonical_64_char_lowercase() {
+        let s = "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632";
+        let got = decode_xorb_hash_hex(s).expect("canonical hex decodes");
+        assert_eq!(got.len(), 32);
+        assert_eq!(got[0], 0xee);
+        assert_eq!(got[31], 0x32);
+    }
+
+    #[test]
+    fn decode_xorb_hash_hex_rejects_wrong_length() {
+        assert!(decode_xorb_hash_hex("").is_none());
+        assert!(decode_xorb_hash_hex("abcd").is_none());
+        assert!(
+            decode_xorb_hash_hex(&"a".repeat(63)).is_none(),
+            "63 chars must reject"
+        );
+        assert!(
+            decode_xorb_hash_hex(&"a".repeat(65)).is_none(),
+            "65 chars must reject"
+        );
+    }
+
+    #[test]
+    fn decode_xorb_hash_hex_rejects_non_hex() {
+        let mut s: String = "a".repeat(62);
+        s.push_str("zz");
+        assert!(decode_xorb_hash_hex(&s).is_none());
     }
 }

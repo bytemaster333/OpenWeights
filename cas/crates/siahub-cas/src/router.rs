@@ -103,6 +103,16 @@ pub fn build(state: AppState) -> Router {
             "/admin/xorbs",
             get(handlers::admin::xorbs::list_xorbs::<AppState>),
         )
+        // Plan 05-01 Task 5 (Phase 2.2 amendment — D-66/D-69).
+        // Single-hash xorb detail lookup used by Phase 4's AssetDetail page
+        // to drop the prefix-fallback workaround. The `{hash}` segment is
+        // lowercase 64-char hex of the 32-byte xorb merkle hash BYTEA —
+        // decoded in-handler; 400 on malformed, 403 on non-admin,
+        // 404 on absence.
+        .route(
+            "/admin/xorbs/{hash}",
+            get(handlers::admin::xorbs::get_xorb_detail::<AppState>),
+        )
         .route(
             "/admin/stats/map",
             get(handlers::admin::map::get_map::<AppState>),
