@@ -1,0 +1,8 @@
+{
+  "generated_at": null,
+  "rows": [
+    { "scenario": "cold-cache", "siahub_mbps": null, "hf_baseline_mbps": null },
+    { "scenario": "warm-cache", "siahub_mbps": null, "hf_baseline_mbps": null },
+    { "scenario": "upload", "siahub_mbps": null, "hf_baseline_mbps": null }
+  ]
+}

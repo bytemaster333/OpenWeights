@@ -50,9 +50,34 @@ pub struct Harness {
     _cas: testcontainers::ContainerAsync<testcontainers::GenericImage>,
 }
 
+/// Opt-in knobs for the test stack; keep backward-compat with existing
+/// `spawn_cas()` callers by providing a `Default` that matches prior shape.
+#[derive(Debug, Clone, Default)]
+pub struct SpawnOpts {
+    /// If true, the CAS is launched with `V2_RECONSTRUCTION_ENABLED=true`.
+    /// Default false (matches Phase 2 `.env.example`); Plan 03-07 flips to
+    /// true in a V2 multi-range round-trip test.
+    pub v2_reconstruction_enabled: bool,
+}
+
 /// Spawn the full stack. Returns `Ok(None)` if a precondition (Docker, image)
 /// is not met — callers early-return to produce a skip.
 pub async fn spawn_cas() -> Result<Option<Harness>> {
+    spawn_cas_with(SpawnOpts::default()).await
+}
+
+/// Spawn with the V2 flag enabled. Plan 03-07 `v2_multi_range_round_trip`
+/// uses this to prove the end-to-end V2 → multi-range → multipart/byteranges
+/// path once the Go gateway's `multipart/byteranges` writer (03-04) lands.
+pub async fn spawn_cas_v2_enabled() -> Result<Option<Harness>> {
+    spawn_cas_with(SpawnOpts {
+        v2_reconstruction_enabled: true,
+    })
+    .await
+}
+
+/// Full-control spawn entrypoint; both public wrappers delegate here.
+pub async fn spawn_cas_with(opts: SpawnOpts) -> Result<Option<Harness>> {
     if !docker_available().await {
         eprintln!("SKIP spawn_cas: docker daemon unreachable (is Docker running?)");
         return Ok(None);
@@ -112,6 +137,14 @@ pub async fn spawn_cas() -> Result<Option<Harness>> {
         .with_env_var("SIAHUB_SIA_MOCK", "true")
         .with_env_var("GATEWAY_URL_SIGNING_KEY", &signing_key_b64)
         .with_env_var("GATEWAY_BASE_URL", "http://127.0.0.1:9090")
+        .with_env_var(
+            "V2_RECONSTRUCTION_ENABLED",
+            if opts.v2_reconstruction_enabled {
+                "true"
+            } else {
+                "false"
+            },
+        )
         .with_env_var("BIND_ADDR", "0.0.0.0:8080");
 
     let cas_container = cas
