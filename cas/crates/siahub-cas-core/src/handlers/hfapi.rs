@@ -460,6 +460,7 @@ pub async fn lfs_objects_batch<S: HfApiState>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_UPLOAD }>,
     Path((owner, repo_dotgit)): Path<(String, String)>,
+    headers_in: HeaderMap,
     Json(req): Json<LfsBatchReq>,
 ) -> Result<Json<LfsBatchResp>, AppError> {
     // Route captures `<repo>.git` verbatim (axum-0.8 limitation — see
@@ -509,6 +510,13 @@ pub async fn lfs_objects_batch<S: HfApiState>(
         if is_upload {
             let mut header = serde_json::Map::new();
             header.insert("Accept".into(), json!("application/vnd.git-lfs"));
+            // forward the caller's auth header so the PUT doesn't fail 401
+            if let Some(auth) = headers_in
+                .get(header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+            {
+                header.insert("Authorization".into(), json!(auth));
+            }
             actions.upload = Some(LfsAction {
                 href,
                 header: Some(header),
