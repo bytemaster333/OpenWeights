@@ -1,5 +1,5 @@
 //! hash-encoding canary — the first test written in, the load-bearing
-//! guard against the silent .md ("xet-core does NOT straight-hex-
+//! guard against the silent.md ("xet-core does NOT straight-hex-
 //! encode merkle hashes; it reverses each 8-byte group before hex-encoding").
 //! A passing canary means:
 //! - `xet_core_structures::merklehash::MerkleHash::from_hex` round-trips our

@@ -1,5 +1,5 @@
 //! `GET /admin/stats` — aggregate usage_log rows for the session user.
-//! Backs + . Pulls from Postgres (the durable source)
+//! Backs +. Pulls from Postgres (the durable source)
 //! rather than Prometheus counters (ephemeral; reset on gateway restart
 //! RECEIVED.md §D recommendation).
 //! Invariant 3 (RECEIVED.md §C): canonical event literal for gateway

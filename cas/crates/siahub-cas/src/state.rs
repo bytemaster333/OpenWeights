@@ -126,7 +126,7 @@ impl ReconstructionState for AppState {
 
     fn v2_reconstruction_enabled(&self) -> bool {
         //flag defaults to `false`; flips `.env` only.
-        // .md : enabling V2 before the gateway serves
+        //.md : enabling V2 before the gateway serves
         // multipart/byteranges silently corrupts xet-core downloads.
         self.cfg.v2_reconstruction_enabled
     }

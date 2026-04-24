@@ -291,7 +291,7 @@ impl UrlSigner {
         let kid = kid.ok_or(VerifyErr::Malformed("kid"))?;
         let sig = sig.ok_or(VerifyErr::Malformed("sig"))?;
         // If `r=` was present at all it must parse cleanly; silently dropping
-        // a malformed range would widen the signed grant.
+        // a malformed range would widen the signed.
         if url.query_pairs().any(|(k, _)| k == "r") && range.is_none() {
             return Err(VerifyErr::Malformed("range"));
         }

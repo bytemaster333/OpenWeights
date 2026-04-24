@@ -17,7 +17,7 @@
 //! }
 //! ```
 //! We do NOT verify the HS256 signature: HF uses a shared secret and does
-//! not expose a public JWKS for Xet tokens. Grant-demo posture: we trust
+//! not expose a public JWKS for Xet tokens. demo posture: we trust
 //! the `iss` + `exp` + `iat` + payload shape as a strong-enough signal
 //! when paired with network-level controls (proxy sits behind Caddy; only
 //! the hf client + our own CAS speak this token flow; the proxy itself
@@ -380,7 +380,7 @@ mod tests {
         // back through the validator. The key is NOT used for validation
         // (per module docs — no signature verify), but we still exercise
         // the HMAC path so a signing regression surfaces here.
-        let key = b"grant-demo-test-key-not-real-entropy";
+        let key = b"xet-jwt-test-key-not-real-entropy";
         let token = mint_siahub_token(
             key,
             "user/demo",

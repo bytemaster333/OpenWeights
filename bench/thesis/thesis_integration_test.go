@@ -12,9 +12,9 @@
 // - SIAHUB_INDEXER_URL (live indexd, typically http://localhost:9982)
 // - indexd is synced + wallet is funded (PLAN 05 readiness probe path; operator responsibility)
 // Invocation (authoritative per VALIDATION.md):
-// cd bench && go test -tags=integration ./thesis/... -run TestRangeDownloadSectorScoping -timeout 30m
+// cd bench && go test -tags=integration./thesis/... -run TestRangeDownloadSectorScoping -timeout 30m
 // Discovery check:
-// cd bench && go test -tags=integration ./thesis/... -run TestRangeDownloadSectorScoping -list '.*'
+// cd bench && go test -tags=integration./thesis/... -run TestRangeDownloadSectorScoping -list '.*'
 // → prints TestRangeDownloadSectorScoping (confirms name is reachable under the tag)
 package main
 

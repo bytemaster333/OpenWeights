@@ -11,8 +11,8 @@
 // (On LE hosts, this is zero-copy — byte order is preserved.)
 // 3. Hex-encode the result by printing each u64 with `%016x`. Because
 // we store them LE in memory, printing as big-endian hex equals
-// "reverse each 8-byte group, then hex-encode" — .md
-// and PITFALL .
+// "reverse each 8-byte group, then hex-encode" —.md
+// and PITFALL.
 // Reference construction in Rust:
 // let digest = blake3::keyed_hash(&DATA_KEY, slice); // step 1
 // let data_hash = DataHash::from(digest.as_bytes); // step 2 (transmute)

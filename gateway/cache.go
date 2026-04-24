@@ -1,7 +1,7 @@
 // Package main — cache.go.
 // Whole-xorb disk LRU cache for the gateway ( / / /
 // / PITFALL ). Semantics:
-// - Key: xorb_hash_hex (64 lowercase hex chars). .
+// - Key: xorb_hash_hex (64 lowercase hex chars)..
 // - Value: on-disk file at `<root>/xorbs/<prefix>/<hash>.bin`, where
 // `<prefix>` is the first 2 hex chars. Prefix-sharding keeps
 // directory entry counts low on filesystems that degrade above
@@ -29,7 +29,7 @@
 // path, but the index is the sole truth source and they remain
 // invisible until evicted by a `cleanup` helper (not implemented for
 // v1). Rationale: a rehydration scan implies we trust on-disk bytes
-// without a merkle re-verify; that contradicts .
+// without a merkle re-verify; that contradicts.
 // Post-v1 work: an "index rebuild + verify" pass on startup.
 // Concurrency:
 // - The in-memory index + LRU list are guarded by `mu`. Critical sections
@@ -64,7 +64,7 @@ var ErrCacheMiss = errors.New("cache miss")
 
 // ErrCacheHashMismatch is returned by Put when the streamed body's merkle
 // hash disagrees with the supplied hash key. Handler code MUST respond 502
-// and MUST NOT serve the partial bytes — per PITFALL .
+// and MUST NOT serve the partial bytes — per PITFALL.
 var ErrCacheHashMismatch = errors.New("cache: streamed body hash != declared hash")
 
 // ErrCacheSizeMismatch — the streamed body was shorter/longer than the size
@@ -315,7 +315,7 @@ func (c *Cache) Stats() Stats {
 
 // FetchAndCache pulls a whole xorb from Sia and writes it into the cache
 // atomically + hash-verified. Returns the hash on success.
-// Wiring: called via `MissCoalescer.Do(hash, ...)` so concurrent cold-miss
+// Wiring: called via `MissCoalescer.Do(hash,...)` so concurrent cold-miss
 // requests for the same xorb collapse onto one underlying Sia download
 // ( / ). The singleflight key is the xorb hash, NOT the HTTP
 // Range — we always fetch the whole object.

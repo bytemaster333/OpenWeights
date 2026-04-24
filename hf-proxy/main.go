@@ -7,7 +7,7 @@
 // huggingface_hub) fetch the Xet CAS URL from an HF API response header
 // (`X-Xet-Cas-Url`). The client-side env var `HF_XET_DATA_DEFAULT_CAS_ENDPOINT`
 // is ONLY a fallback for when that header is missing — which never happens
-// in an HF-integrated upload. So the grant-story env-var trick does not, by
+// in an HF-integrated upload. So the story env-var trick does not, by
 // itself, route bytes to SiaHub.
 // Fix: interpose this HTTP reverse proxy between the client and HF. The
 // client sets `HF_ENDPOINT=<proxy URL>`. The proxy forwards every request

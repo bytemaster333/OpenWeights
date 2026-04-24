@@ -55,7 +55,7 @@ fn p1_canary_only_call_site_is_crate_codec() {
     // MerkleHash. The assertion is a documentation barrier — if anyone ever
     // inserts `format!("{:02x}", b)` over MerkleHash::as_bytes, we want the
     // review to notice a mismatch. Since on little-endian hosts the straight
-    // hex of as_bytes happens to match .hex, we compare the bytes via
+    // hex of as_bytes happens to match.hex, we compare the bytes via
     // the SHA-256 prefix (a mild deterrent, not cryptographic proof).
     use sha2::{Digest, Sha256};
     let h = MerkleHash::from_hex(REF_HEX).unwrap();

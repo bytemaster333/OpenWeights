@@ -4,7 +4,7 @@
 // cache) parse additional fields and dial their dependencies.
 // Invariant: `GATEWAY_URL_SIGNING_KEY` is the only hard-required field at boot
 // (no URL verification without it). Every other field has a sane default per
-// CONTEXT ...
+// CONTEXT...
 package main
 
 import (
@@ -37,7 +37,7 @@ type Config struct {
 	// verifies the signature over the canonical string, not the URL prefix.
 	GatewayBaseURL string
 
-	// Consumed by .
+	// Consumed by.
 	PostgresURL   string
 	SiaIndexerURL string
 	// AppID is the 32-byte Sia app identifier, hex-encoded (64 chars).
@@ -50,7 +50,7 @@ type Config struct {
 	// is ctx-driven; no value/pointer confusion at our call site.
 	AppKey string
 
-	// Consumed by .
+	// Consumed by.
 	CacheDir       string
 	CacheSizeBytes int64
 }

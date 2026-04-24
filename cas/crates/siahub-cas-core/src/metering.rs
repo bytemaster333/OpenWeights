@@ -1,5 +1,5 @@
 //! Metering facade — thin wrapper around `siahub_cas_db::queries::usage_log`.
-//! / / . Every xorb_upload, shard_upload, and
+//! / /. Every xorb_upload, shard_upload, and
 //! reconstruction event writes exactly one row to `usage_log` synchronously
 //! from the handler's request path. This module is the ONE convergence point
 //! for every metering call-site — OQ-K (bytes/min pivot if the

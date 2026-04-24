@@ -111,7 +111,7 @@ CREATE INDEX IF NOT EXISTS repo_files_xet_idx ON repo_files (xet_hash)
     WHERE xet_hash IS NOT NULL;
 
 -- === small-file LFS storage (V1 inline) ===
--- Sidecar files (README.md, config.json, .gitattributes) under ~5MB stored
+-- Sidecar files (README.md, config.json,.gitattributes) under ~5MB stored
 -- inline as BYTEA. Keeps the pointer-layer self-contained; no need to stand
 -- up a separate object store for text files. Larger LFS objects are not
 -- supported in V1 — authors upload them via the Xet path instead.

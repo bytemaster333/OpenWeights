@@ -9,16 +9,16 @@ import { SetupPage } from "./Setup"
 /**
  * `/setup` page tests.
  *
- * Exercises the component against a stubbed `useSetupStatus()` hook. We don't
+ * Exercises the component against a stubbed `useSetupStatus` hook. We don't
  * test the hook-plumbing here (that's a TanStack Query pipe tested elsewhere);
  * we test the copy, variants, and regression invariants:
  *
- *  - 5 tiles render — Postgres, Redis, indexd, GitHub OAuth, V2.
- *  - OAuth card shows "configured" / "not configured" (P14 copy).
- *  - V2 card is read-only: no button / toggle / checkbox / switch is rendered.
- *  - Indexer URL surfaces from `data.indexd.url` (CONSOLE-12).
- *  - On OAuth missing, the OAuthErrorBanner (code=oauth_client_not_configured)
- *    is rendered at the top of the page (P14 surfacing).
+ * - 5 tiles render — Postgres, Redis, indexd, GitHub OAuth, V2.
+ * - OAuth card shows "configured" / "not configured" (P14 copy).
+ * - V2 card is read-only: no button / toggle / checkbox / switch is rendered.
+ * - Indexer URL surfaces from `data.indexd.url` (CONSOLE-12).
+ * - On OAuth missing, the OAuthErrorBanner (code=oauth_client_not_configured)
+ * is rendered at the top of the page (P14 surfacing).
  */
 
 type HookShape = ReturnType<typeof useSetup.useSetupStatus>

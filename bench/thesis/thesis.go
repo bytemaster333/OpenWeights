@@ -1,5 +1,5 @@
 // Package main — Sia range-download thesis measurement.
-// See .planning/phases/01-validation-foundations/01-RESEARCH.md §1 + §2 for methodology.
+// See.planning/phases/01-validation-foundations/01-RESEARCH.md §1 + §2 for methodology.
 // Per D-01: 128 KiB range of a 64 MiB object; PASS if median inbound bytes ≤ 1 MiB across 3 trials.
 // Per D-02: FAIL is informational, not a halt; program exits 3 on FAIL, Makefile wraps to 0.
 package main
@@ -200,9 +200,9 @@ func main() {
 	)
 
 	// Distinct exit codes so `make thesis` can differentiate:
-	//   0 = PASS
-	//   3 = FAIL (but Makefile wraps this to 0 per D-02)
-	//   1/2 = hard error (SDK init, upload, etc.)
+	// 0 = PASS
+	// 3 = FAIL (but Makefile wraps this to 0 per D-02)
+	// 1/2 = hard error (SDK init, upload, etc.)
 	if verdict == "FAIL" {
 		fmt.Fprintln(os.Stderr, "thesis: FAIL — median exceeds 8× threshold. See bench/thesis/REPORT.md + CONTEXT D-02.")
 		os.Exit(3)

@@ -4,9 +4,9 @@
 -- indexd — used by the indexd daemon itself (required per RESEARCH §9)
 -- siahub — used by siahub-cas / siahub-gateway (reserved for +)
 -- Passwords come from the postgres container's environment variables:
--- INDEXD_PASSWORD — maps to .env INDEXD_POSTGRES_PASSWORD
--- SIAHUB_PASSWORD — maps to .env SIAHUB_POSTGRES_PASSWORD
--- SIAHUB_GW_PASSWORD — maps to .env SIAHUB_GW_POSTGRES_PASSWORD
+-- INDEXD_PASSWORD — maps to.env INDEXD_POSTGRES_PASSWORD
+-- SIAHUB_PASSWORD — maps to.env SIAHUB_POSTGRES_PASSWORD
+-- SIAHUB_GW_PASSWORD — maps to.env SIAHUB_GW_POSTGRES_PASSWORD
 -- Docker entrypoint sources /docker-entrypoint-initdb.d/*.sql as the superuser
 -- postgres (authed via POSTGRES_PASSWORD env var).
 

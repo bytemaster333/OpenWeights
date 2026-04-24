@@ -2,7 +2,7 @@
 // +build integration
 
 // Package compose_smoke — integration test for the Compose stack healthcheck gating.
-// Run via `make compose-smoke` or `cd bench && go test -tags=integration -timeout=35m ./compose-smoke/...`.
+// Run via `make compose-smoke` or `cd bench && go test -tags=integration -timeout=35m./compose-smoke/...`.
 // requires a populated `.env` at repo root with INDEXD_ADMIN_PASSWORD set.
 // The bootstrap wizard (PLAN 07) produces this; dev without bootstrap must set manually.
 package compose_smoke

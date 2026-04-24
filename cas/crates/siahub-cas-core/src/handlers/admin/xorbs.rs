@@ -1,5 +1,5 @@
 //! `GET /admin/xorbs` — admin-only xorb listing for operator visibility.
-//! Backs ..06 (admin view). 403 on non-admin. Supports two
+//! Backs..06 (admin view). 403 on non-admin. Supports two
 //! optional filters per acceptance criteria:
 //! * `?hash_prefix=<8-hex>` — matches `xorbs.hash_prefix_8` (the generated
 //! STORED column from migration 0002).
@@ -44,7 +44,7 @@ pub struct ListXorbsResponse {
 
 /// `GET /admin/xorbs` — session-gated (any signed-in user).
 /// The admin flag has been removed: xorbs are public content-addressed Sia
-/// objects, and the grant-reviewer demo needs this surface visible to every
+/// objects, and the reviewer demo needs this surface visible to every
 /// signed-in user. Per-user filtering is optional via `api_key_id`.
 pub async fn list_xorbs<S: AuthStateRef>(
     Session(_user): Session,
@@ -142,7 +142,7 @@ fn decode_xorb_hash_hex(s: &str) -> Option<[u8; 32]> {
 /// `GET /admin/xorbs/{hash}` — single-xorb detail lookup (
 /// amendment). Admin-gated. Same row shape as one `XorbRow` element
 /// from `list_xorbs`. Returns 404 on absence so the console's AssetDetail
-/// page can drop the prefix-fallback workaround documented in .
+/// page can drop the prefix-fallback workaround documented in.
 /// The `{hash}` path segment is the lowercase 64-char hex encoding of the
 /// 32-byte `xorbs.xorb_merkle_hash` BYTEA column — the same encoding
 /// returned by `list_xorbs` and by the `/admin/stats` activity feed. The
@@ -201,7 +201,7 @@ pub async fn get_xorb_detail<S: AuthStateRef>(
     // Migration 0008 gives us `repo_files.xet_hash` as the bridge; the
     // JOIN fans out to owner login so the frontend can deep-link without
     // needing a second round-trip. Empty list == xorb uploaded raw, never
-    // bound to a repo (the grant-demo debug path pre-hfapi).
+    // bound to a repo (the demo debug path pre-hfapi).
     let repo_rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT DISTINCT u.github_login, r.name \
            FROM repo_files rf \

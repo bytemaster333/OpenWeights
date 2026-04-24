@@ -42,7 +42,7 @@ elif [[ -n "${XORB_HASH:-}" && -n "${CAS_VIA_CADDY_URL:-}" && -n "${SIAHUB_API_K
   # the reverse proxy.
   RESP=$(curl -fsS -H "Authorization: Bearer ${SIAHUB_API_KEY}" \
     "${CAS_VIA_CADDY_URL}/v1/reconstructions/${XORB_HASH}")
-  # Extract the first .terms[].url field. Fallback: jq if present, else grep.
+  # Extract the first.terms[].url field. Fallback: jq if present, else grep.
   if command -v jq >/dev/null 2>&1; then
     URL=$(echo "$RESP" | jq -r '.terms[0].url')
   else

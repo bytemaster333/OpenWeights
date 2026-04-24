@@ -23,14 +23,14 @@ import { useBenchmarks } from "@/hooks/useStats"
  *
  * UX notes:
  * - We render three KPI tiles for "SiaHub (MB/s)" at a glance AND a full
- *   table with both siahub + baseline columns. The tiles are for the
- *   "grant-reviewer skim" scenario; the table is the exhaustive view.
+ * table with both siahub + baseline columns. The tiles are for the
+ * "reviewer skim" scenario; the table is the exhaustive view.
  * - When a row has `siahub_mbps === null` the tile shows "—" (placeholder
- *   state pre-Phase 5 — the JSON ships with all-null values so the UI
- *   doesn't 404 before CI populates it).
+ * state pre-Phase 5 — the JSON ships with all-null values so the UI
+ * doesn't 404 before CI populates it).
  * - Footer links to `docs/benchmarks.md` (the authoritative report) so
- *   anyone reading the page can see the methodology, fixture list, and
- *   hardware notes.
+ * anyone reading the page can see the methodology, fixture list, and
+ * hardware notes.
  */
 
 const SCENARIOS = ["cold-cache", "warm-cache", "upload"] as const

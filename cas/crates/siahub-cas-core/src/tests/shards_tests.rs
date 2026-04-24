@@ -8,7 +8,7 @@
 //! - Test 1 (dual-path routing, full-handler): deferred to (needs Postgres)
 //! - Test 2 ( missing xorb → 400): asserted at the handler mapping
 //! level — the parser + `ShardMissingXorbs` error shape are exercised here;
-//! DB round-trip deferred to .
+//! DB round-trip deferred to.
 //! - Test 3 ( header.version != 2 → 400 ShardVersionUnsupported): **covered**
 //! - Test 4 ( footer.version != 1 → 400): **covered**
 //! - Test 5 (dedup response): deferred to (needs Postgres)
@@ -126,7 +126,7 @@ fn valid_shard_parses_and_extracts_referenced_xorb() {
     // plus chunks[1].len. For our fixture `&[(1,10),(2,20),(3,30),(4,40)]`:
     // chunks[0] = (chunk_byte_range_start=10, unpacked_segment_bytes=0)
     // chunks[1] = (chunk_byte_range_start=20, unpacked_segment_bytes=10)
-    // chunks[2] = (30, 30) ...
+    // chunks[2] = (30, 30)...
     // So term covering 0..2 yields byte range [10, 20 + 10) = [10, 30).
     let t = &parsed.terms[0];
     assert_eq!(t.term_index, 0);

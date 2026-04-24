@@ -12,8 +12,8 @@
 # { "generated_at": "<iso8601 or null>",
 # "rows": [
 # { "scenario": "cold-cache", "siahub_mbps": <n|null>, "hf_baseline_mbps": <n|null> },
-# { "scenario": "warm-cache", ... },
-# { "scenario": "upload", ... }
+# { "scenario": "warm-cache",... },
+# { "scenario": "upload",... }
 # ] }
 # (We also embed a `fixture` + `methodology` block for humans reading the raw JSON.)
 

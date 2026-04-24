@@ -63,7 +63,7 @@ pub trait XorbUploadState: AuthStateRef {
     fn rate_limit_defaults(&self) -> RateLimitDefaults;
 }
 
-/// `POST /v1/xorbs/{prefix}/{hash}` — / / .
+/// `POST /v1/xorbs/{prefix}/{hash}` — / /.
 /// Handler order is load-bearing:
 /// 1. Parse path hash.
 /// 2. Bound-read body (DoS cap).
@@ -209,7 +209,7 @@ where
             // respond 200 `was_inserted: true` so the client proceeds to the
             // commit step; the row stays in pin_state='pinning' and the
             // reconciler pushes it to Sia once contracts exist. Transparent
-            // to the grant demo, callers, and correctness (durability is
+            // to the demo, callers, and correctness (durability is
             // eventual rather than synchronous for this edge).
             let _ = xorb_q::set_pin_state(pool, &hash_bytes, XorbPinState::Pinning, None).await;
             tracing::warn!(err = %inner, "sia unavailable on upload — accepted pending (reconciler will retry)");
@@ -287,7 +287,7 @@ mod inline_tests {
     use super::*;
 
     /// canary — reference xorb hash round-trip through the merklehash crate.
-    /// .md §1 gotcha: NEVER hand-roll hex. Assert the crate's codec
+    ///.md §1 gotcha: NEVER hand-roll hex. Assert the crate's codec
     /// produces the same string we fed in, and that `From<DataHash> for
     /// [u8; 32]` + `.hex` round-trips.
     #[test]

@@ -34,12 +34,12 @@ use uuid::Uuid;
 use crate::auth::AuthStateRef;
 use crate::errors::AppError;
 
-/// Session cookie name — locked by . Console code must NEVER read / write
+/// Session cookie name — locked by. Console code must NEVER read / write
 /// this cookie directly; only CAS mints it on `/auth/github/callback` and
 /// clears it on `/auth/logout`.
 pub const SESSION_COOKIE_NAME: &str = "siahub_session";
 
-/// Session lifetime — 7 days rolling per . Expiry is refreshed on every
+/// Session lifetime — 7 days rolling per. Expiry is refreshed on every
 /// authenticated hit via `touch_session`.
 pub const SESSION_TTL_DAYS: i64 = 7;
 
@@ -64,7 +64,7 @@ pub struct MintedSession {
 
 /// Extractor placed in a handler signature like:
 /// ```ignore
-/// async fn get_me(Session(user): Session) -> Json<MeResponse> { ... }
+/// async fn get_me(Session(user): Session) -> Json<MeResponse> {... }
 /// ```
 /// Parsing failures (missing cookie, unknown session, expired, revoked) all
 /// collapse to 401 per — the console's `api.ts` then redirects to
@@ -124,7 +124,7 @@ pub fn clear_session_cookie_header() -> String {
 
 /// Insert a fresh session row and return `(session_id, expires_at)`.
 /// `session_id` is UUID v4 from `uuid::Uuid::new_v4` (CSPRNG-backed via
-/// `getrandom`). `expires_at = NOW + 7 days` per .
+/// `getrandom`). `expires_at = NOW + 7 days` per.
 pub async fn mint_session(db: &PgPool, user_id: i64) -> Result<MintedSession, sqlx::Error> {
     let session_id = Uuid::new_v4();
     let row: (DateTime<Utc>,) = sqlx::query_as(

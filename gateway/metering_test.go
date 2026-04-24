@@ -100,7 +100,7 @@ func TestFakeMeter_CapturesCall(t *testing.T) {
 }
 
 // event-name lock: confirm the SQL literal is 'download'. We grep ONLY
-// the `INSERT INTO usage_log ... VALUES` region (not the whole file) so
+// the `INSERT INTO usage_log... VALUES` region (not the whole file) so
 // explanatory documentation about reserved event slots does not
 // trip the forbidden-literal check.
 func TestLogDownload_EventLiteralIsDownload(t *testing.T) {

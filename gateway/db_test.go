@@ -4,7 +4,7 @@
 // These are the 80% confidence win without a Postgres container.
 // - Integration tests (tag `integration`) for the live `LookupXorb` path.
 // Gated on env var `TEST_POSTGRES_URL` so developers can opt in via
-// `TEST_POSTGRES_URL=postgres://... go test -tags=integration ./...`
+// `TEST_POSTGRES_URL=postgres://... go test -tags=integration./...`
 // when they have a live DB; CI skips without the env var.
 // Keeping the integration test in the same package (not `_test`) lets it
 // reach `decodeXorbHash` directly, which avoids duplicating the hash-decode

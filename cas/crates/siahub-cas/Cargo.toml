@@ -13,7 +13,7 @@ path = "src/main.rs"
 [features]
 default  = []
 # Enables the in-memory MockSiaAdapter escape hatch (SIAHUB_SIA_MOCK=true).
-# Dev-only; .md forbids running the binary with this feature in prod.
+# Dev-only;.md forbids running the binary with this feature in prod.
 sia-mock = ["siahub-cas-storage/sia-mock"]
 
 [dependencies]

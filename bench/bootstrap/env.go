@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// loadEnv reads .env into a map; missing file -> empty map, no error.
+// loadEnv reads.env into a map; missing file -> empty map, no error.
 func loadEnv(path string) (map[string]string, error) {
 	kv := make(map[string]string)
 	b, err := os.ReadFile(path)

@@ -2,7 +2,7 @@
 //! option C pipeline:
 //! ```text
 //! BEGIN TRANSACTION
-//! INSERT INTO shards (shard_hash, sia_object_id=NULL, ..., pin_state='pinning')
+//! INSERT INTO shards (shard_hash, sia_object_id=NULL,..., pin_state='pinning')
 //! ON CONFLICT (shard_hash) DO NOTHING RETURNING shard_hash
 //! ├── Some(..) → fresh row → INSERT reconstruction_files + reconstruction_terms
 //! └── None → dedup — caller returns {result: Exists}, no further writes
@@ -23,7 +23,7 @@ use crate::types::XorbPinState;
 
 /// Attempt to claim the shard hash + populate its reconstruction rows.
 /// One transaction covers three tables ( option C):
-/// 1. `INSERT INTO shards ... ON CONFLICT DO NOTHING` — atomic PK dedup.
+/// 1. `INSERT INTO shards... ON CONFLICT DO NOTHING` — atomic PK dedup.
 /// 2. `INSERT INTO reconstruction_files` — bulk, one row per `ParsedFile`.
 /// 3. `INSERT INTO reconstruction_terms` — bulk, one row per `ParsedTerm`.
 /// Returns:
@@ -95,17 +95,17 @@ pub async fn insert_shard_with_reconstruction(
         let file_ids: Vec<Vec<u8>> = terms.iter().map(|t| t.file_id.to_vec()).collect();
         let term_indices: Vec<i32> = terms.iter().map(|t| t.term_index).collect();
         let xorb_hashes: Vec<Vec<u8>> = terms.iter().map(|t| t.xorb_hash.to_vec()).collect();
-        // END-EXCLUSIVE — see .
+        // END-EXCLUSIVE — see.
         let xorb_starts: Vec<i64> = terms.iter().map(|t| t.xorb_start).collect();
-        // END-EXCLUSIVE — see .
+        // END-EXCLUSIVE — see.
         let xorb_ends: Vec<i64> = terms.iter().map(|t| t.xorb_end).collect();
-        // END-EXCLUSIVE — see .
+        // END-EXCLUSIVE — see.
         let xorb_byte_starts: Vec<i64> = terms.iter().map(|t| t.xorb_byte_start).collect();
-        // END-EXCLUSIVE — see .
+        // END-EXCLUSIVE — see.
         let xorb_byte_ends: Vec<i64> = terms.iter().map(|t| t.xorb_byte_end).collect();
-        // END-EXCLUSIVE — see .
+        // END-EXCLUSIVE — see.
         let unpacked_starts: Vec<i64> = terms.iter().map(|t| t.unpacked_start).collect();
-        // END-EXCLUSIVE — see .
+        // END-EXCLUSIVE — see.
         let unpacked_ends: Vec<i64> = terms.iter().map(|t| t.unpacked_end).collect();
 
         sqlx::query(

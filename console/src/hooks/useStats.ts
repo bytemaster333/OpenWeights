@@ -8,19 +8,19 @@ import { type ApiError, casFetch } from "@/lib/api"
  *
  * Load-bearing contract notes:
  * - `cache_hit_rate` is `[0, 1]` (CAS casts the `AVG(...)` to `double
- *   precision`; NULL rows are excluded). The UI multiplies by 100 for
- *   display.
+ * precision`; NULL rows are excluded). The UI multiplies by 100 for
+ * display.
  * - `total_bytes_stored` / `total_bytes_served` / `provider_count` are all
- *   `i64` serialized as JSON number; at consumer scale this stays well
- *   within the IEEE-754 safe-int range (< 2^53) for v1.
+ * `i64` serialized as JSON number; at consumer scale this stays well
+ * within the IEEE-754 safe-int range (< 2^53) for v1.
  * - `per_key[i].key_id` is a UUID string (CAS `api_keys.id`). `key_id` is
- *   NOT joined with the user-facing key label here; the `/keys` page
- *   fetches `/admin/keys` separately and can cross-reference by id.
+ * NOT joined with the user-facing key label here; the `/keys` page
+ * fetches `/admin/keys` separately and can cross-reference by id.
  * - `recent_activity[i].ts` is an ISO-8601 string (chrono `DateTime<Utc>`
- *   defaults to RFC 3339). The UI calls `toLocaleTimeString` for display.
+ * defaults to RFC 3339). The UI calls `toLocaleTimeString` for display.
  * - `recent_activity[i].hash` is the lowercase hex of `usage_log.xorb_hash`
- *   (display-only — NOT the xet-core byte-reversed merkle encoding, which
- *   is irrelevant for raw BYTEA column reads per CAS' handler comment).
+ * (display-only — NOT the xet-core byte-reversed merkle encoding, which
+ * is irrelevant for raw BYTEA column reads per CAS' handler comment).
  */
 
 export type PerKeyStats = {
@@ -81,13 +81,13 @@ export function useStats() {
  *
  * Rationale (decision captured in 04-07-SUMMARY.md):
  * - Plan 04-07 Task 2 flags `/admin/stats/benchmarks` as out-of-scope for
- *   CAS 04-01 (it shipped 11 handlers; benchmarks not among them).
+ * CAS 04-01 (it shipped 11 handlers; benchmarks not among them).
  * - Phase 5 CI is the authoritative producer of benchmark numbers; they
- *   live in `docs/benchmarks.md` + a machine-readable JSON next to it.
+ * live in `docs/benchmarks.md` + a machine-readable JSON next to it.
  * - Option (b) from the plan: the console reads the static JSON, which is
- *   overwritten by Phase 5's `bench` job the same way 04-02 set up
- *   `conformance-badge.json`. Zero real-time dependency on CAS for a
- *   value that changes at most monthly.
+ * overwritten by Phase 5's `bench` job the same way 04-02 set up
+ * `conformance-badge.json`. Zero real-time dependency on CAS for a
+ * value that changes at most monthly.
  *
  * Query key stays under TanStack so that page unmount cancels the fetch
  * and the 10s refetch keeps the pages feeling live together.
@@ -100,7 +100,7 @@ export type BenchmarkRow = {
 
 export type BenchmarksResponse = {
   /** ISO-8601 timestamp of the Phase 5 bench run that produced the row set,
-   * or `null` if the file is still the v1 placeholder. */
+ * or `null` if the file is still the v1 placeholder. */
   generated_at: string | null
   rows: BenchmarkRow[]
 }

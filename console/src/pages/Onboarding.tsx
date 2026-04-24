@@ -23,7 +23,7 @@ import { CAS_URL } from "@/lib/api"
  * unmounts it on navigation away, at which point the plaintext is
  * garbage-collected. It is never written to `localStorage`,
  * `sessionStorage`, analytics (we have none; see anti-features in
- * .md), or any other persistent sink.
+ *.md), or any other persistent sink.
  *
  * Strict-mode double-invoke of the mount effect is guarded with a ref so
  * we never fire two `POST /admin/keys` requests during development.*/

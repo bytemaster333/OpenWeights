@@ -2,7 +2,7 @@
 //! The Postgres enum `api_key_scope` has three variants; this crate mirrors
 //! them as u8 const generics (used by `AuthScoped<const S: u8>`) and as a
 //! Rust enum (used for comparisons at runtime).
-//! The three const values are load-bearing — Plans ..08 declare handler
+//! The three const values are load-bearing — Plans..08 declare handler
 //! signatures against them literally. Do NOT renumber.
 //! once (W2) lands `siahub_cas_db::types::ApiKeyScope`, this
 //! local enum can be re-exported from there instead. For parallel-execution

@@ -8,7 +8,7 @@
 // Outcome written to
 // PLAN 07's bootstrap wizard reads this file to choose Option A (connect-key) or
 // Option B (re-implement deriveAppKey).
-// Usage: cd bench && go run -tags=a3probe ./bootstrap
+// Usage: cd bench && go run -tags=a3probe./bootstrap
 package main
 
 import (

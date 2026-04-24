@@ -11,7 +11,7 @@
 //! 5. wait_for_approval → returns ApprovedState.
 //! 6. register(mnemonic) → returns Sdk; extract AppKey.
 //! 7. Print `SIAHUB_APP_KEY=<base64-export>` to stdout for shell redirection.
-//! 8. Optionally append to .env directly if --write-env is passed.
+//! 8. Optionally append to.env directly if --write-env is passed.
 
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;

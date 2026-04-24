@@ -1,5 +1,5 @@
 //! `POST /shards` + `POST /v1/shards` — dual-path shard upload.
-//! .md / RESEARCH §2.3: xet-core's production
+//!.md / RESEARCH §2.3: xet-core's production
 //! `RemoteClient::upload_shard` calls `{endpoint}/shards` (no `/v1`); the
 //! OpenAPI spec says `/v1/shards`. BOTH must route to the same handler
 //! registering only one silently breaks conformance.
@@ -132,10 +132,10 @@ where
     // whose footer layout differs from our pinned xet-core-structures 1.5.1
     // (the 1.4.0 structures crate isn't on crates.io, and 1.5.x header shape
     // is subtly incompatible). Rather than hard-block upload and break the
-    // grant demo, we log the version-rejection, treat the body as opaque
+    // demo, we log the version-rejection, treat the body as opaque
     // bytes, and insert the shard row with an empty reconstruction. The
     // download path cannot serve these shards until revisits the
-    // version matrix — tracked as a TODO in ROADMAP .
+    // version matrix — tracked as a TODO in.
     let parsed = match shard_parse::parse_and_validate(&collected) {
         Ok(p) => p,
         Err(shard_parse::ShardParseError::HeaderVersion(v))

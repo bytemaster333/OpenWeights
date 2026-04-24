@@ -1,4 +1,4 @@
-//! V2 reconstruction handler —, feature-flagged 501 per .
+//! V2 reconstruction handler —, feature-flagged 501 per.
 //! Route: `GET /v2/reconstructions/{file_id}`.
 //! ## The flag gate (.md — load-bearing)
 //! - `V2_RECONSTRUCTION_ENABLED=false` (default): handler returns
@@ -26,7 +26,7 @@
 //! The V2 response structurally mirrors V1's fetch_info but emits, per xorb,
 //! ONE URL covering ALL merged byte ranges via a multi-range descriptor. This
 //! matches xet-core's `QueryReconstructionResponseV2` wire contract: each xorb
-//! fetch_info entry carries a `{url, ranges:[{chunks, bytes}, ...]}` shape
+//! fetch_info entry carries a `{url, ranges:[{chunks, bytes},...]}` shape
 //! rather than one entry per merged range.
 //! The merged-ranges data comes from `coalesce::coalesce_terms_by_xorb` — the
 //! SAME output V1 consumes. The ONE `-1` end-exclusive → end-inclusive
@@ -88,7 +88,7 @@ pub struct RangeSegment {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct XorbFetchInfoV2 {
     /// Signed gateway URL stamping the union of all `ranges[].url_range`
-    /// into a single multi-range grant. Gateway MUST reject `Range:` headers
+    /// into a single multi-range. Gateway MUST reject `Range:` headers
     /// falling outside this union.
     pub url: String,
     /// Per-segment chunk + byte range descriptors.

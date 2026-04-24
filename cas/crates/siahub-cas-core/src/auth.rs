@@ -49,7 +49,7 @@ pub struct AuthContext {
 /// ```ignore
 /// use siahub_cas_core::auth::AuthScoped;
 /// use siahub_cas_core::scopes::SCOPE_UPLOAD;
-/// async fn upload_xorb(AuthScoped(ctx): AuthScoped<{ SCOPE_UPLOAD }>) { /* ...*/ }
+/// async fn upload_xorb(AuthScoped(ctx): AuthScoped<{ SCOPE_UPLOAD }>) { /*...*/ }
 /// ```
 pub struct AuthScoped<const S: u8>(pub AuthContext);
 

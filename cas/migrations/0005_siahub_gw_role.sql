@@ -8,7 +8,7 @@
 -- * PER-TABLE GRANTs live here because they depend on the `xorbs` +
 -- `usage_log` tables existing — those are created by migrations 0002
 -- and 0003, so this migration is sequenced after them.
--- Idempotent: `GRANT` against an already-granted role is a no-op in
+-- Idempotent: `` against an already-granted role is a no-op in
 -- Postgres. Replays against a bootstrapped cluster cost nothing.
 -- CONTEXT §2 + KEY-DECISIONS : gateway writes 'download' rows to
 -- `usage_log` directly (OQ-J resolved) and reads `xorb_merkle_hash →
@@ -36,12 +36,12 @@ $$;
 -- KEY-DECISIONS overrides to converge on 'download' (matches
 -- /04/08 stats surface). Forward-only ALTER; idempotent
 -- via IF NOT EXISTS so migration replays are no-ops.
--- ALTER TYPE ... ADD VALUE must run OUTSIDE a transaction on older
+-- ALTER TYPE... ADD VALUE must run OUTSIDE a transaction on older
 -- Postgres versions, but Postgres 12+ allows it in a transaction block.
 -- sqlx::migrate! on Postgres 17 handles this transparently.
 ALTER TYPE usage_event ADD VALUE IF NOT EXISTS 'download';
 
--- Schema access — required before any per-table grant resolves.
+-- Schema access — required before any per-table resolves.
 GRANT USAGE ON SCHEMA public TO siahub_gw;
 
 -- Read-only on xorbs (the only table gateway reads).
@@ -60,5 +60,5 @@ GRANT USAGE ON SEQUENCE usage_log_id_seq TO siahub_gw;
 
 -- NO grants on api_keys, users, sessions, oauth_state, shards,
 -- reconstruction_files, reconstruction_terms. If the gateway ever needs
--- any of these, add an explicit GRANT in a NEW migration — do NOT widen
+-- any of these, add an explicit in a NEW migration — do NOT widen
 -- this role silently.

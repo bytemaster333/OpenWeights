@@ -1,7 +1,7 @@
 //! fetch_info coalescing — the ONLY place in the codebase that converts
 //! END-EXCLUSIVE byte offsets (as stored in `reconstruction_terms`) to
 //! END-INCLUSIVE HTTP Range byte offsets (as served in fetch_info).
-//! Invariants (PITFALL — .md gotcha discipline):
+//! Invariants (PITFALL —.md gotcha discipline):
 //! 1. Input `Term::xorb_byte_start..xorb_byte_end` is END-EXCLUSIVE.
 //! 2. Output `ByteRange { start, end_inclusive }` is END-INCLUSIVE.
 //! 3. There is exactly ONE `- 1` conversion site in the entire codebase.

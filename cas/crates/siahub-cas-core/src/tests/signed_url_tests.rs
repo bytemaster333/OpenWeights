@@ -7,7 +7,7 @@
 //! between Go verify output and this fixture is a bug.
 //! Fixture regeneration:
 //! cargo run -p siahub-cas-core --example generate_signed_url_vectors -- \
-//! ../conformance/fixtures/signed_url_vectors.json
+//!../conformance/fixtures/signed_url_vectors.json
 //! (Path is relative to `cas/` workspace root.)
 
 use base64::Engine as _;

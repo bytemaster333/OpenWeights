@@ -189,7 +189,7 @@ async fn xet_client_falls_back_from_v2_501_to_v1() -> anyhow::Result<()> {
 /// * the signed URL's `r=` query param carries the segments form
 /// `s1-e1,s2-e2` — the `mint_v1_multi_range` output that the
 /// Go gateway parses into `[]Range` and serves as multipart/byteranges.
-/// **Runtime pairing deferred to .** The *gateway-side* multi-range
+/// **Runtime pairing deferred to.** The *gateway-side* multi-range
 /// byte-compare round-trip (fetch the signed URL, parse multipart, assert
 /// each part matches the expected xorb slice) needs the Go gateway binary
 /// running alongside the CAS container — that wiring is out of scope for

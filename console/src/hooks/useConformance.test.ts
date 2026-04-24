@@ -11,11 +11,11 @@ import {
  * fallback contract; the TanStack Query pipe is covered by upstream tests.
  *
  * Invariants locked:
- *  - Stale threshold is exactly 24h (regression check — loosening this would
- *    let a long-dead CI keep vouching for PASS).
- *  - Poll interval is 5 min (matches plan spec + CONSOLE-13).
- *  - `effectiveStatus` returns "unknown" for undefined/unknown input, honors
- *    the status if last_run is recent, and flips to "unknown" past 24h.
+ * - Stale threshold is exactly 24h (regression check — loosening this would
+ * let a long-dead CI keep vouching for PASS).
+ * - Poll interval is 5 min (matches plan spec + CONSOLE-13).
+ * - `effectiveStatus` returns "unknown" for undefined/unknown input, honors
+ * the status if last_run is recent, and flips to "unknown" past 24h.
  */
 
 describe("conformance constants", () => {

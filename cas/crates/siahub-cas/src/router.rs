@@ -7,8 +7,8 @@ use axum::{
 use siahub_cas_core::handlers;
 use tower_http::cors::CorsLayer;
 
-/// Build the top-level router. Plans .. register their routes here.
-/// .md §What NOT to Do: NEVER register
+/// Build the top-level router. Plans.. register their routes here.
+///.md §What NOT to Do: NEVER register
 /// - HEAD /v1/xorbs/*, HEAD /v1/files/*
 /// - /simulation/*, /v1/fetch_term, /v1/get_xorb/*
 /// - any DELETE route
@@ -56,7 +56,7 @@ pub fn build(state: AppState) -> Router {
             "/v1/xorbs/{prefix}/{hash}",
             post(handlers::xorbs::upload_xorb::<AppState>),
         )
-        //dual-path shard upload ( .md ).
+        //dual-path shard upload (.md ).
         // BOTH paths MUST route to the same handler — xet-core's production
         // `RemoteClient::upload_shard` calls `/shards` (no `/v1`); the OpenAPI
         // spec says `/v1/shards`. Registering only one silently breaks
@@ -97,7 +97,7 @@ pub fn build(state: AppState) -> Router {
         // default response is 501 Not Implemented until flips
         // `V2_RECONSTRUCTION_ENABLED=true` in `.env`. The full V2 response
         // builder is in code so the flip is a single-env-toggle change
-        // .md requires this shape to avoid silent corruption
+        //.md requires this shape to avoid silent corruption
         // via multi-range `Range:` headers before the gateway serves
         // `multipart/byteranges`. No batch V2 endpoint — xet-core's V2 path is
         // per-file (`get_reconstruction_with_version_override`, RESEARCH §2.6).

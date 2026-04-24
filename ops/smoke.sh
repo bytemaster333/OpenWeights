@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ops/smoke.sh — Fresh-machine objective smoke for the hosted demo.
-# . Replaces the cut outside-tester <15-min criterion.
+#. Replaces the cut outside-tester <15-min criterion.
 # Run immediately post-deploy + whenever the owner wants reassurance:
 # bash ops/smoke.sh # default domain: siahub.app
 # bash ops/smoke.sh example.com # custom domain
@@ -8,7 +8,7 @@
 # 0 all checks passed
 # 1 at least one check failed
 # 2 pre-condition skip (no network / missing tool)
-# Required env (sourced from .env by default):
+# Required env (sourced from.env by default):
 # SIAHUB_PUBLIC_READ_KEY read-scoped API key (mint one via the console)
 # SIAHUB_FIXTURE_FILE_ID file-id from ops/preload-fixture.sh receipt
 # (optional — check #3 degrades to 401-assert if unset)
@@ -30,7 +30,7 @@ command -v curl    >/dev/null 2>&1 || skip "curl not installed"
 command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
 command -v jq      >/dev/null 2>&1 || skip "jq not installed"
 
-# Source .env if present — makes SIAHUB_PUBLIC_READ_KEY / SIAHUB_FIXTURE_FILE_ID
+# Source.env if present — makes SIAHUB_PUBLIC_READ_KEY / SIAHUB_FIXTURE_FILE_ID
 # available without the operator re-exporting them.
 if [[ -f .env ]]; then
   set -a

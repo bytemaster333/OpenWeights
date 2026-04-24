@@ -2,7 +2,7 @@
 // Wave 1 exposes the Prometheus registry and ONE counter
 // (`gateway_requests_total`). The full metric set (Sia download duration,
 // cache hit/miss, singleflight coalescing, hash-mismatch, bytes served) lands
-// in . Registry is exported so later plans can register more metrics
+// in. Registry is exported so later plans can register more metrics
 // without touching main.go.
 // : the `/metrics` handler is served on a LOOPBACK-only listener
 // (`GATEWAY_METRICS_ADDR`, default `127.0.0.1:9100`). Caddy MUST NOT proxy it.

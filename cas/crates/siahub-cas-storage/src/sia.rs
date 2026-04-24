@@ -100,7 +100,7 @@ impl RustSdkAdapter {
     }
 
     /// Full connect sequence per A1 probe snippet: `Builder::new(url, meta)?
-    /// .connected(&AppKey).await?`. Returns `Err(Unavailable)` if the key is
+    ///.connected(&AppKey).await?`. Returns `Err(Unavailable)` if the key is
     /// not registered for this metadata.
     /// ** startup self-check:** the handshake inside `connected(..)`
     /// verifies account balance + registration with indexd; if that handshake

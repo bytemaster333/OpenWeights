@@ -1,9 +1,9 @@
 //! `POST/GET/DELETE /admin/keys[/{id}]` — API key CRUD for the session user.
-//! Backs ..04. Response contract locked in 04-KEY-DECISIONS §2:
+//! Backs..04. Response contract locked in 04-KEY-DECISIONS §2:
 //! * POST → `201 {id, name, scope, masked_prefix, plaintext_key, created_at}`
-//!plaintext returned EXACTLY ONCE per .
+//!plaintext returned EXACTLY ONCE per.
 //! * GET → `200 {keys: [{id, name, scope, masked_prefix, created_at,
-//! last_used_at}, ...]}` — plaintext NEVER included.
+//! last_used_at},...]}` — plaintext NEVER included.
 //! * DELETE → `204 No Content` — sets `revoked_at = NOW`. 's auth
 //! extractor (`siahub_cas_core::auth`) respects `revoked_at IS NULL` so
 //! propagation is immediate for uncached bearer paths. The in-process LRU
@@ -130,7 +130,7 @@ pub async fn create_key<S: AuthStateRef>(
     getrandom::getrandom(&mut raw).map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let plaintext = URL_SAFE_NO_PAD.encode(raw);
 
-    // SHA-256([u8; 32]) — stored raw BYTEA per 0001_initial.sql .
+    // SHA-256([u8; 32]) — stored raw BYTEA per 0001_initial.sql.
     let key_hash: [u8; 32] = Sha256::digest(plaintext.as_bytes()).into();
 
     // Masked prefix — first 8 chars + "..." ellipsis. Non-secret by design

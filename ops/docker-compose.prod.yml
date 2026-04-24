@@ -1,7 +1,7 @@
 # ops/docker-compose.prod.yml — Production overlay for the hosted demo.
-# . Compose with:
+#. Compose with:
 # docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
-# --env-file .env up -d
+# --env-file.env up -d
 # Differences from the base (dev/CI) compose:
 # 1. Adds a `caddy` service bound to 0.0.0.0:80 + 0.0.0.0:443 (ONLY public ports).
 # 2. Drops the base file's `127.0.0.1:<x>:<y>` port mappings to `expose:` so
@@ -12,13 +12,13 @@
 # suspenders for in production).
 # 4. Sets `GATEWAY_BASE_URL=https://cas.siahub.app/gateway` so signed URLs
 # minted by CAS reach the gateway via Caddy.
-# 5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in .env for a
+# 5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in.env for a
 # testnet demo.
 # 6. `restart: unless-stopped` on every service — reboot-resilient without
 # requiring a systemd unit.
-# indexd image pinning: `INDEXD_IMAGE` in .env MUST be a digest-pinned ref
+# indexd image pinning: `INDEXD_IMAGE` in.env MUST be a digest-pinned ref
 # (e.g. ghcr.io/siafoundation/indexd@sha256:...) rather than `:latest`.
-# close produced the canonical digest; the .env.prod.example file lists it.
+# close produced the canonical digest; the.env.prod.example file lists it.
 
 services:
 
@@ -100,7 +100,7 @@ services:
       - "9980"
       - "9982"
     environment:
-      # Default to mainnet in prod. Owner overrides to `zen` in .env for a
+      # Default to mainnet in prod. Owner overrides to `zen` in.env for a
       # testnet-funded demo. Keep in sync with SIAHUB_WALLET_THRESHOLD_HASTINGS.
       INDEXD_NETWORK: ${SIA_NETWORK:-mainnet}
     restart: unless-stopped

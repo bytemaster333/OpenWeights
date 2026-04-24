@@ -58,3 +58,4 @@ docs-site/.astro/
 # docker volumes / caches
 ops/data/
 .cache/
+settings.local.json

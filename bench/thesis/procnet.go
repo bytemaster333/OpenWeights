@@ -13,7 +13,7 @@ import (
 // Reads /proc/net/dev directly — see RESEARCH §2.
 // Header columns (Linux kernel):
 //	Inter-| Receive | Transmit
-//	 face |bytes packets errs drop fifo frame compressed multicast|bytes ...
+//	 face |bytes packets errs drop fifo frame compressed multicast|bytes...
 func readInboundBytes(iface string) (uint64, error) {
 	f, err := os.Open("/proc/net/dev")
 	if err != nil {

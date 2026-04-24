@@ -1,5 +1,5 @@
 //! `GET /admin/me` — return the authenticated user's profile.
-//! Backs ..03 (console header user menu). Response shape is locked by
+//! Backs..03 (console header user menu). Response shape is locked by
 //! 04-KEY-DECISIONS §2 row 1:
 //! ```json
 //! {"user": {"id": 123, "login": "octocat", "avatar_url": "...",

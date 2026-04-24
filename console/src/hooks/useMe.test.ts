@@ -93,7 +93,7 @@ describe("useMe", () => {
     const got = await runQueryFn()
     expect(got).not.toBeNull()
     expect(got!.email).toBeNull()
-    // Identity key is numeric id — . Compile-time forced below.
+    // Identity key is numeric id —. Compile-time forced below.
     expect(typeof got!.id).toBe("number")
   })
 })

@@ -119,7 +119,7 @@ fn build_response_produces_coalesced_fetch_info() {
     // : merged [1024, 8192) END-EXCLUSIVE → 1024..=8191 END-INCLUSIVE.
     assert_eq!(a_entries[0].url_range.start, 1024);
     assert_eq!(a_entries[0].url_range.end_inclusive, 8191);
-    // Chunk range union: min(0, 6) .. max(8, 16) = 0..16 END-EXCLUSIVE.
+    // Chunk range union: min(0, 6).. max(8, 16) = 0..16 END-EXCLUSIVE.
     assert_eq!(a_entries[0].range.start, 0);
     assert_eq!(a_entries[0].range.end, 16);
 

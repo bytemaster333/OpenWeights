@@ -159,7 +159,7 @@ func (d *DB) LookupXorb(ctx context.Context, hashHex string) (siaObjectID types.
 }
 
 // QueryXorbPinned is the deliverable-named alias of LookupXorb kept so the
-// top-level plan description (`QueryXorbPinned(xorbHash) (siaObjectID ...)`)
+// top-level plan description (`QueryXorbPinned(xorbHash) (siaObjectID...)`)
 // resolves at call sites. Returns the Sia object ID as a hex string because
 // the deliverable description uses `siaObjectID string`; internal code should
 // prefer the typed LookupXorb.

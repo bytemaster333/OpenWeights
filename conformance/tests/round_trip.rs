@@ -10,7 +10,7 @@
 //! our CAS responds with `{"was_inserted": true}` which the client
 //! internally swallows.
 //! 2. `xet_client::upload_shard` hits `POST /shards` (NO `/v1` — confirms the
-//! .md dual-path router is the ONLY way this works).
+//!.md dual-path router is the ONLY way this works).
 //! 3. `Client::get_reconstruction(file_id, None)` — V2-first with V1
 //! fallback on 501 (the V2_RECONSTRUCTION_ENABLED=false path).
 //! Returns `Option<QueryReconstructionResponseV2>` — Some-on-known-file.
@@ -128,7 +128,7 @@ async fn round_trip_reference_xorb_shard_file() -> anyhow::Result<()> {
     // ----------------------------------------------------------------
     // Step 2 — Upload the reference shard VIA xet-client.
     // This exercises `Client::upload_shard` which hits POST /shards (NO /v1
-    // prefix) — the load-bearing call that proves .md 's
+    // prefix) — the load-bearing call that proves.md 's
     // dual-path router works against a real xet-core client.
     // ----------------------------------------------------------------
     let upload_permit = client.acquire_upload_permit().await?;

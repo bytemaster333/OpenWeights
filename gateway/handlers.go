@@ -13,7 +13,7 @@
 // 'pinned'`. Miss → 404. Any other error → 500.
 // 3. Parse `Range:` header if present. Malformed → 400. Unsatisfiable → 416
 // with `Content-Range: bytes */<size>` (RFC 7233 §4.4).
-// 4. If the signed URL carried an `r=` grant, enforce that the requested
+// 4. If the signed URL carried an `r=`, enforce that the requested
 // client range sits entirely inside it. Violation → 403 (the signer
 // refused the bytes; this is NOT a malformed request).
 // 5. Fetch the whole xorb from Sia into a temp file. This IS the cold-miss
@@ -25,7 +25,7 @@
 // - one range → 206 + Content-Range via writeSingleRange
 // - many ranges → 501 ( owns)
 // Streaming via `io.Copy(w, io.NewSectionReader(...))` — whole-object
-// buffering in RAM would violate .
+// buffering in RAM would violate.
 // 7. Client-disconnect: everywhere we touch I/O we use `r.Context`.
 // Passing `ctx` to `SiaAdapter.DownloadRange` means a TCP RST from the
 // client cancels the Sia fetch within 1s.
@@ -77,7 +77,7 @@ type Handlers struct {
 	DB       XorbLookup
 	Sia      SiaDownloader
 	Meter    UsageWriter
-	// Cache is the whole-xorb disk LRU wired in by . Nil-safe for
+	// Cache is the whole-xorb disk LRU wired in by. Nil-safe for
 	// unit tests that only exercise verifier / DB branches; nil triggers the
 	// old SDK-direct temp-file path (Wave 3a behavior).
 	Cache *Cache
@@ -289,7 +289,7 @@ func (h *Handlers) ServeXorb(w http.ResponseWriter, r *http.Request) {
 }
 
 // reqLog is the in-handler accumulator for the one-log-line-per-request
-// JSON emission mandated by / ROADMAP § SC-6. Fields match
+// JSON emission mandated by / § SC-6. Fields match
 // the spec verbatim; handler updates `Status`, `BytesServed`, `CacheHit`,
 // `SiaLatencyMs` as each step resolves. A deferred `logRequest` emits the
 // final line at handler exit.
@@ -308,7 +308,7 @@ type reqLog struct {
 // logRequest emits one structured JSON log line per /xorb request. Level
 // is Info for 2xx, Warn for 4xx, Error for 5xx (499 is a Warn
 // client-side disconnect, not our fault).
-// Fields match / ROADMAP § SC-6 verbatim.
+// Fields match / § SC-6 verbatim.
 func (h *Handlers) logRequest(ctx context.Context, rl *reqLog) {
 	if rl == nil {
 		return
@@ -399,7 +399,7 @@ func (h *Handlers) incRequestsTot(method, route, status string) {
 	h.Metrics.RequestsTot.WithLabelValues(method, route, status).Inc()
 }
 
-// xorbSource is the seam shared with . Fields:
+// xorbSource is the seam shared with. Fields:
 // - ReaderAt: a seekable byte source (temp file in Wave 3a; cache file
 // in Wave 3b). MUST satisfy `io.ReaderAt` — `io.NewSectionReader`
 // consumes that interface to stream ranges without buffering.
@@ -445,7 +445,7 @@ func (s *xorbSource) Close() {
 // Nil-safety: if h.Cache or h.Miss is nil (unit-test mode), falls through
 // to the Wave-3a SDK-direct path for backwards compatibility. Production
 // main.go wires both non-nil.
-// Ctx propagation: h.Sia.DownloadRange(ctx, ...) honors ctx cancellation
+// Ctx propagation: h.Sia.DownloadRange(ctx,...) honors ctx cancellation
 // via the inner SDK. A client TCP RST propagates within 1s. If
 // the LEADER's ctx is canceled while followers wait, all followers receive
 // the same canceled error — the handler then falls back to the legacy

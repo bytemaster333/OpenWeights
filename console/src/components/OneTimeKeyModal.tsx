@@ -18,15 +18,15 @@ import {
  * Load-bearing invariants:
  *
  * 1. Plaintext lives in a **prop** — the parent owns state. We never copy
- *    it to a ref, never to storage, never to analytics. The only DOM
- *    imprint is the `<code>` element while `open={true}`.
+ * it to a ref, never to storage, never to analytics. The only DOM
+ * imprint is the `<code>` element while `open={true}`.
  * 2. While `open && !acknowledged`, we attach a `beforeunload` handler so
- *    an accidental tab close / reload prompts the browser's standard
- *    "leave site?" dialog. This is the ONLY place in the console that
- *    uses `beforeunload`.
+ * an accidental tab close / reload prompts the browser's standard
+ * "leave site?" dialog. This is the ONLY place in the console that
+ * uses `beforeunload`.
  * 3. Closing the dialog via the X button or Escape is a no-op until the
- *    user clicks "I've saved it" — at that point we call `onAck()`, and
- *    subsequent `onOpenChange(false)` events propagate normally.
+ * user clicks "I've saved it" — at that point we call `onAck`, and
+ * subsequent `onOpenChange(false)` events propagate normally.
  *
  * Do NOT add "reveal" / "hide" toggles, "regenerate" buttons, or any
  * persistence knob. The anti-features list (notes.md + CONSOLE spec) is
@@ -57,7 +57,7 @@ export function OneTimeKeyModal({ open, plaintext, onAck }: OneTimeKeyModalProps
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       // Legacy browsers read `returnValue`; modern browsers just need
-      // `preventDefault()` and will render their own text.
+      // `preventDefault` and will render their own text.
       e.returnValue = "Copy your API key first — it cannot be retrieved later."
     }
     window.addEventListener("beforeunload", handler)

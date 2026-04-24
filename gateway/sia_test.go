@@ -149,7 +149,7 @@ func TestFakeSia_PropagatesError(t *testing.T) {
 }
 
 // precondition: ctx cancel halts a blocking download within 1s.
-// The fake substitutes for the SDK here; the live-wire test lands in .
+// The fake substitutes for the SDK here; the live-wire test lands in.
 func TestFakeSia_CancellationAbortsDownload(t *testing.T) {
 	t.Parallel()
 	f := &fakeSia{block: true}

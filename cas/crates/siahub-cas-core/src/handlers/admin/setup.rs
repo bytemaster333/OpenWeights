@@ -1,5 +1,5 @@
 //! `GET /admin/setup/status` — consolidated subsystem-probe endpoint.
-//! Backs + . Admin-gated per (setup diagnostics
+//! Backs +. Admin-gated per (setup diagnostics
 //! expose indexer URL + OAuth config presence — non-public info).
 //! Returns a fixed-shape JSON body:
 //! ```json
@@ -149,7 +149,7 @@ async fn probe_indexd<S: SetupState>(st: &S) -> IndexdStatus {
 
     let (status, synced) = match result {
         Ok(resp) if resp.status().is_success() => {
-            // Best-effort parse of `{"consensus":{"synced":bool}, ...}`.
+            // Best-effort parse of `{"consensus":{"synced":bool},...}`.
             match resp.json::<serde_json::Value>().await {
                 Ok(json) => {
                     let synced = json

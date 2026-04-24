@@ -1,14 +1,14 @@
 // handlers_test.go — `GET /xorb/{hash}` integration + unit tests (Wave 3a).
 //
 // Setup pattern: every test builds a self-contained Handlers bundle with:
-//   - A real `UrlVerifier` seeded with a freshly-generated key.
-//   - A `fakeDB` satisfying XorbLookup — returns a canned (siaID, size) tuple
-//     or a typed error.
-//   - A `fakeSia` (from sia_test.go) serving a deterministic payload.
-//   - An optional `fakeMeter` from metering_test.go to assert the handler
-//     fired the `LogDownload` call with the correct (kid, bytes, hit) args.
-//   - `h.TimeNow` pinned so the signed URL's `exp` lives in a controlled
-//     window relative to test `now`.
+// - A real `UrlVerifier` seeded with a freshly-generated key.
+// - A `fakeDB` satisfying XorbLookup — returns a canned (siaID, size) tuple
+// or a typed error.
+// - A `fakeSia` (from sia_test.go) serving a deterministic payload.
+// - An optional `fakeMeter` from metering_test.go to assert the handler
+// fired the `LogDownload` call with the correct (kid, bytes, hit) args.
+// - `h.TimeNow` pinned so the signed URL's `exp` lives in a controlled
+// window relative to test `now`.
 //
 // We deliberately DO NOT stand up Postgres or Sia. Every assertion is
 // closed over in-process state, keeping CI deterministic and sub-second.
@@ -536,7 +536,7 @@ func TestServeXorb_MultiRange_206_Multipart(t *testing.T) {
 
 // TestServeXorb_MultiRange_BoundedURL_206 — signed-URL bound + multi-range
 // within the bound: must emit a multipart response (not 403) because every
-// requested range is inside the grant.
+// requested range is inside the.
 func TestServeXorb_MultiRange_BoundedURL_206(t *testing.T) {
 	t.Parallel()
 	payload := deterministicPayload(1024)
@@ -547,7 +547,7 @@ func TestServeXorb_MultiRange_BoundedURL_206(t *testing.T) {
 	sia := &fakeSia{payload: payload}
 
 	_, key, serve := newHandlersForTest(t, db, sia, nil, now)
-	// Grant 100..499; client asks for two disjoint ranges fully inside.
+	// 100..499; client asks for two disjoint ranges fully inside.
 	q := urlSpec{
 		hashHex: hash, exp: uint64(now.Unix()) + 60, kid: uuid.New(), key: key,
 		rng: &[2]uint64{100, 499},
@@ -585,7 +585,7 @@ func TestServeXorb_MultiRange_BoundedURL_206(t *testing.T) {
 }
 
 // TestServeXorb_MultiRange_BoundedURL_Escalation_403 — multi-range where ONE
-// of the ranges spills outside the signed-URL grant. Must return 403, never
+// of the ranges spills outside the signed-URL. Must return 403, never
 // a partial-content response. (If we accidentally only checked the first
 // range, this catches the regression.)
 func TestServeXorb_MultiRange_BoundedURL_Escalation_403(t *testing.T) {
@@ -603,7 +603,7 @@ func TestServeXorb_MultiRange_BoundedURL_Escalation_403(t *testing.T) {
 		rng: &[2]uint64{100, 299},
 	}.sign()
 
-	// First range fits; second escapes the grant.
+	// First range fits; second escapes the.
 	rec := serve(q, hash, http.Header{"Range": []string{"bytes=150-199,400-499"}}, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d; want 403 (multi-range escalation)", rec.Code)
@@ -648,7 +648,7 @@ func TestServeXorb_BoundedURL_RejectsEscalation(t *testing.T) {
 	sia := &fakeSia{payload: payload}
 
 	_, key, serve := newHandlersForTest(t, db, sia, nil, now)
-	// URL grants bytes 100..299. Client asks for 50..200 — lower bound outside grant.
+	// URL grants bytes 100..299. Client asks for 50..200 — lower bound outside.
 	q := urlSpec{
 		hashHex: hash, exp: uint64(now.Unix()) + 60, kid: uuid.New(), key: key,
 		rng: &[2]uint64{100, 299},
@@ -696,7 +696,7 @@ func TestServeXorb_BoundedURL_NoClientRangeDefaultsToBound(t *testing.T) {
 
 // TestServeXorb_ClientDisconnect_CancelsSia wires a blocking fakeSia and
 // cancels the request context mid-download. The handler MUST propagate the
-// cancel to the Sia call (via r.Context()) and return without writing 5xx —
+// cancel to the Sia call (via r.Context) and return without writing 5xx —
 // the client is gone, the TCP is dead.
 func TestServeXorb_ClientDisconnect_CancelsSia(t *testing.T) {
 	t.Parallel()

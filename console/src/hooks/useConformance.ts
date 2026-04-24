@@ -11,10 +11,10 @@ import { useQuery } from "@tanstack/react-query"
  * Shape (matches `.planning/phases/05-e2e-gates` deliverable):
  * ```json
  * {
- *   "status": "pass" | "fail" | "unknown",
- *   "last_run": "2026-04-21T12:34:56Z" | null,
- *   "commit": "abc1234" | null,
- *   "note": "populated by Phase 5 conformance CI artifact"
+ * "status": "pass" | "fail" | "unknown",
+ * "last_run": "2026-04-21T12:34:56Z" | null,
+ * "commit": "abc1234" | null,
+ * "note": "populated by Phase 5 conformance CI artifact"
  * }
  * ```
  *
@@ -25,7 +25,7 @@ import { useQuery } from "@tanstack/react-query"
  * broken.
  *
  * Credentials are explicitly omitted: the badge file is public by design
- * (grant reviewers who open the app in an incognito tab still see it).
+ * ( reviewers who open the app in an incognito tab still see it).
  */
 
 const BADGE_URL = import.meta.env.VITE_CONFORMANCE_BADGE_URL ?? "/conformance-badge.json"

@@ -93,7 +93,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
         )));
     }
 
-    // (1) Header parse — magic-number + version. .
+    // (1) Header parse — magic-number + version..
     let header = {
         let mut cur = Cursor::new(bytes);
         MDBShardFileHeader::deserialize(&mut cur)
@@ -179,7 +179,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
         let hash: [u8; 32] = xi.metadata.xorb_hash.into();
         // One entry per chunk: (byte_range_start, unpacked_segment_bytes).
         // Together they give the END-EXCLUSIVE (start..start+len) byte range
-        // of that chunk inside the serialized xorb — .
+        // of that chunk inside the serialized xorb —.
         let chunks: Vec<(u32, u32)> = xi
             .chunks
             .iter()
@@ -225,7 +225,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
             // Record for the cross-check.
             referenced_set.insert(xorb_hash, ());
 
-            // Chunk-index range — END-EXCLUSIVE per .
+            // Chunk-index range — END-EXCLUSIVE per.
             let xorb_start = seg.chunk_index_start as i64;
             let xorb_end = seg.chunk_index_end as i64;
             if xorb_start >= xorb_end {
@@ -261,7 +261,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
             }
             let (first_start, _) = chunks[first_idx];
             let (last_start, last_len) = chunks[last_idx];
-            // END-EXCLUSIVE byte offsets — see .
+            // END-EXCLUSIVE byte offsets — see.
             let xorb_byte_start = first_start as i64;
             let xorb_byte_end = last_start as i64 + last_len as i64;
             if xorb_byte_start >= xorb_byte_end {

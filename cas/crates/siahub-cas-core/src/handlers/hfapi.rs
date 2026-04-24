@@ -19,7 +19,7 @@
 //! repos allow anonymous; private repos require ownership check.
 //! The endpoints mirror the HF API shapes that `huggingface_hub` 1.11 +
 //! `hf_xet` 1.5.0.dev1 actually hit (confirmed via traffic capture in
-//! the grant-demo debug session). Extra HF-only fields (security scan
+//! the demo debug session). Extra HF-only fields (security scan
 //! results, billing hints) are omitted — hf_hub tolerates missing keys.
 
 use std::sync::Arc;
@@ -401,8 +401,8 @@ pub async fn xet_read_token<S: HfApiState>(
 // Classic Git-LFS batch API for the small text files (README, config.json,
 // etc.) that hf_hub routes via LFS instead of Xet. Request shape:
 // { "operation": "upload" | "download",
-// "transfers": ["basic", ...],
-// "objects": [{"oid": "<sha256>", "size": <bytes>}, ...] }
+// "transfers": ["basic",...],
+// "objects": [{"oid": "<sha256>", "size": <bytes>},...] }
 // For uploads we return a `basic` transfer with an upload action pointing
 // back at our own `PUT /lfs/objects/{oid}` endpoint. For downloads we
 // return a download action at `GET /lfs/objects/{oid}`.
@@ -1747,7 +1747,7 @@ pub async fn xet_file_serve<S: HfApiState>(
     // * /v1/reconstructions/{file_id} returning per-term signed URLs
     // * the gateway range-fetching specific xorb byte windows from Sia
     // * proper shard-parsed boundaries for multi-file xorbs
-    // Until then this is the honest grant-demo close: bytes upload to
+    // Until then this is the honest demo close: bytes upload to
     // Sia via the Xet protocol AND round-trip through `hf download`.
     use siahub_cas_proto::xorb_object::deserialize_chunk_to_writer;
     use std::io::Cursor;

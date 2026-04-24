@@ -16,7 +16,7 @@ func renderReportMarkdown(tmplPath string, r Report) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("parse template %s: %w", tmplPath, err)
 	}
-	// Template uses `{{ printf "%.2fx" .Ratio }}` on Trials — that's fine.
+	// Template uses `{{ printf "%.2fx".Ratio }}` on Trials — that's fine.
 	var buf strBuilder
 	if err := tmpl.Execute(&buf, r); err != nil {
 		return "", fmt.Errorf("execute template: %w", err)

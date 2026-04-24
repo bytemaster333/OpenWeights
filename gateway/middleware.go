@@ -1,6 +1,6 @@
 // Package main — middleware.go.
 // Wave 1 ships one middleware only: request-ID injection. Structured logging
-// (slog JSON per ) and per-request metric instrumentation land in .
+// (slog JSON per ) and per-request metric instrumentation land in.
 package main
 
 import (

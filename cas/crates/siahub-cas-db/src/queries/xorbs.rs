@@ -10,7 +10,7 @@
 //! reconciler sweeps rows stuck in 'uploading' or 'pinning' older
 //! than 5 minutes; after 5 attempts it transitions to 'orphaned'.
 //! NOTE on typed enums: we use runtime-checked `sqlx::query_as` / `sqlx::query`
-//! with string bind ("pinning", "pinned", ...) because binding a `sqlx::Type`
+//! with string bind ("pinning", "pinned",...) because binding a `sqlx::Type`
 //! custom enum via `query!` requires the macro to observe the Postgres schema
 //! at compile time — that is handled by the `cargo sqlx prepare --workspace`
 //! step. In this crate's current state the `.sqlx/` cache is empty; we keep

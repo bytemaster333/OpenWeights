@@ -6,7 +6,7 @@
 // `ParseRange` multi-spec-tolerant at the parser layer — it returns the full
 // slice — so only has to add a new writer, not touch the parser again.
 // The load-bearing nuance addressed here is the HTTP-end-inclusive vs
-// SDK-offset+length boundary (ROADMAP § SC-1). An HTTP byte-range
+// SDK-offset+length boundary ( § SC-1). An HTTP byte-range
 // `bytes=S-E` denotes the CLOSED interval [S, E], i.e. E - S + 1 bytes. The
 // siastorage SDK — and every `io.SectionReader` Go call we make downstream
 // expects (offset, length). The canonical conversion is:
@@ -41,7 +41,7 @@ import (
 // the boundary from the `Content-Type` header at parse time (via
 // `extract_boundary`) and does NOT pin any specific string. Any RFC-7233-
 // compliant boundary is accepted. We pin a literal for reproducibility + easy
-// log grep per ROADMAP § SC-2 and per RECEIVED §C invariant 10
+// log grep per § SC-2 and per RECEIVED §C invariant 10
 // (stable boundary, NOT a per-request random value).
 // One notable parser quirk: `parse_multipart_byteranges` calls
 // `parts.sort_by_key(|p| p.range.start)` — parts are re-ordered by the
@@ -106,7 +106,7 @@ var (
 // the request against this object even though the header is well-formed).
 // - A suffix LARGER than the object is clamped to the object length,
 // matching the RFC: "[suffix] is greater than or equal to the current
-// length ... the current length MUST be used as the current value of
+// length... the current length MUST be used as the current value of
 // last-byte-pos."
 // Zero-byte ranges `0-0` / `N-N` are LEGAL (they parse to a 1-byte range
 // a single byte at offset N). These are well-formed RFC 7233 inputs and
@@ -246,7 +246,7 @@ func writeSingleRange(w http.ResponseWriter, r Range, totalSize int64, src io.Re
 
 // allRangesWithin checks every r ∈ ranges satisfies `bound.Start <= r.Start`
 // AND `r.End <= bound.End`. Used by the handler to reject Range headers that
-// escape the signed-URL's `r=` grant.
+// escape the signed-URL's `r=`.
 func allRangesWithin(ranges []Range, bound Range) bool {
 	for _, r := range ranges {
 		if r.Start < bound.Start || r.End > bound.End {
@@ -265,7 +265,7 @@ const multipartPartContentType = "application/octet-stream"
 
 // writeMultipartRanges emits a `206 Partial Content` response in RFC 7233 §4.1
 // `multipart/byteranges` framing for MULTIPLE requested byte ranges. This is
-// THE single most integrity-critical function in — .md
+// THE single most integrity-critical function in —.md
 // (and RECEIVED §C invariant 3) call out that a concatenated body would
 // silently corrupt xet-core's V2 reconstruction downloads.
 // Framing (per RFC 7233 §4.1; mirrored from xet-core's parser expectations in
@@ -276,7 +276,7 @@ const multipartPartContentType = "application/octet-stream"
 //	\r\n
 //	<raw body bytes of the range>\r\n
 //	--<boundary>\r\n (next part — same shape)
-//	...
+//...
 //	--<boundary>--\r\n (closing delimiter; terminates body)
 // IMPLEMENTATION CHOICE: we use Go's stdlib `mime/multipart.Writer` rather than
 // hand-rolling CRLF + boundary framing. Rationale: hand-rolled framing is

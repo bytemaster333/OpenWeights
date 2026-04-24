@@ -12,7 +12,7 @@
 //! * The shard_version_rejected_total counter increments through the
 //! handler's error-mapping path on a rejection (no DB needed).
 //! Tests 6/7/8 from plan Task 5 (usage_log row present after each handler
-//! type's success path) require testcontainers Postgres — deferred to .
+//! type's success path) require testcontainers Postgres — deferred to.
 
 use crate::metering;
 use crate::metrics::Metrics;

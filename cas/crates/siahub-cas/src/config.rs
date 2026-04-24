@@ -12,7 +12,7 @@ pub struct Config {
     pub redis_url: String,    // required
     pub indexd_url: String,   // required
 
-    // Sia App Key / App ID (never persisted to DB — ; also .md )
+    // Sia App Key / App ID (never persisted to DB — ; also.md )
     pub siahub_app_id: String,
     pub siahub_app_key: String, // base64 32 bytes
 

@@ -33,7 +33,7 @@ use uuid::Uuid;
 fn session_cookie_header_shape_matches_d50_spec() {
     let id = Uuid::new_v4();
     let h = session_cookie_header(id);
-    // Cookie name locked by . Breaking this silently logs every user
+    // Cookie name locked by. Breaking this silently logs every user
     // out on deploy.
     assert!(h.starts_with(&format!("{}={}", SESSION_COOKIE_NAME, id)));
     // flags.
@@ -76,7 +76,7 @@ fn parse_session_cookie_rejects_missing_value() {
 }
 
 // ---------------------------------------------------------------------------
-// ..03 — scope translation + wire shape.
+//..03 — scope translation + wire shape.
 // ---------------------------------------------------------------------------
 
 #[test]

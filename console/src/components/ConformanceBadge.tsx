@@ -5,18 +5,18 @@ import { type ConformanceStatus, effectiveStatus, useConformance } from "@/hooks
 
 /**
  * Header pill that broadcasts the result of the most recent conformance-harness
- * CI run (CONSOLE-13, grant v1 gate).
+ * CI run (CONSOLE-13, v1 gate).
  *
  * - PASS — green `default` badge.
  * - FAIL — red `destructive` badge.
  * - unknown / stale — neutral `secondary` grey badge.
  *
- * "Stale" is bucketed into "unknown" by `effectiveStatus()` — if the last CI
+ * "Stale" is bucketed into "unknown" by `effectiveStatus` — if the last CI
  * run timestamp is older than 24h (or absent), we deliberately do NOT keep
  * showing a stale PASS. This hedges against a CI outage silently vouching
  * for a release that may have regressed.
  *
- * A `title` tooltip exposes `last_run` + `commit` so the grant reviewer can
+ * A `title` tooltip exposes `last_run` + `commit` so the reviewer can
  * hover and see "last run: 2026-04-21 12:34 UTC, commit abc1234".
  */
 

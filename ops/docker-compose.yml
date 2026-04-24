@@ -53,7 +53,7 @@ services:
   indexd:
     # Pin to digest at close:
     # docker pull ghcr.io/siafoundation/indexd:latest
-    # docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/siafoundation/indexd:latest
+    # docker inspect --format='{{index.RepoDigests 0}}' ghcr.io/siafoundation/indexd:latest
     image: ${INDEXD_IMAGE:-ghcr.io/siafoundation/indexd:latest}
     container_name: siahub-indexd
     depends_on:
@@ -81,7 +81,7 @@ services:
       start_period: 300s
     restart: unless-stopped
 
-  # siahub-gateway — Go gateway. Plans .. own this service.
+  # siahub-gateway — Go gateway. Plans.. own this service.
   # Wave 1 scaffold: serves `/health` + stub `/xorb/{hash}` (501). Real range
   # serving + cache land in plans 03-03/04/05. `/metrics` is loopback-only.
   siahub-gateway:
@@ -104,7 +104,7 @@ services:
       # Wired for : connect as the dedicated `siahub_gw` role created
       # by cas/migrations/0005_siahub_gw_role.sql (SELECT on xorbs + INSERT
       # on usage_log — nothing else). SIAHUB_GW_POSTGRES_PASSWORD is set
-      # in .env by the migration runner/bootstrap and consumed at both
+      # in.env by the migration runner/bootstrap and consumed at both
       # migration time (via `SET siahub.gw_password`) and runtime (via this
       # URL). If SIAHUB_GW_POSTGRES_PASSWORD is unset, the gateway fails
       # fast on boot instead of silently connecting as the wrong role.
@@ -125,9 +125,9 @@ services:
       CACHE_DIR: /var/cache/siahub
       CACHE_SIZE_BYTES: ${CACHE_SIZE_BYTES:-107374182400}
     ports:
-      # Public port. Caddy reverse-proxies `cas.siahub.app` here in .
+      # Public port. Caddy reverse-proxies `cas.siahub.app` here in.
       - "127.0.0.1:9090:8081"
-      # Metrics deliberately NOT exposed — . Scrape via `docker compose exec`.
+      # Metrics deliberately NOT exposed —. Scrape via `docker compose exec`.
     volumes:
       - gateway-cache:/var/cache/siahub
     healthcheck:
@@ -137,7 +137,7 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  # siahub-cas — Rust CAS. Plans .. own this service.
+  # siahub-cas — Rust CAS. Plans.. own this service.
   siahub-cas:
     build:
       context: ..
@@ -172,7 +172,7 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # siahub-console — React/TS console. Plans .. own this service.
+  # siahub-console — React/TS console. Plans.. own this service.
   # lands: shadcn preset b7C9wTXYe init + TanStack Router/Query + Biome + Vitest
   # + static /health + nginx static serve. Later plans add /login, /onboarding,
   # /keys, /assets, /stats, /stats/map, /setup + the conformance badge.

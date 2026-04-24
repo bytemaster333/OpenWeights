@@ -17,7 +17,7 @@
 //! DIRECTLY to `'orphaned'` on the first sweep — we cannot re-run
 //! `sdk.upload(bytes)` without the bytes. Ops intervention required.
 //! ## Idempotency (T-02- mitigation)
-//! The reconciler's UPDATE is not wrapped in `SELECT ... FOR UPDATE`. If a
+//! The reconciler's UPDATE is not wrapped in `SELECT... FOR UPDATE`. If a
 //! handler wins a race and flips a row to `'pinned'` between our SELECT and
 //! UPDATE, our UPDATE still fires and bumps `pin_attempts` — but because
 //! `set_pin_state` uses `COALESCE`, it does NOT overwrite the `sia_object_id`

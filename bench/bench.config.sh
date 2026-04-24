@@ -17,7 +17,7 @@
 # (c) 78 MB total — trivially fits gateway LRU cache (20 GB default)
 # AND the owner's server disk budget (≥50 GB headroom per deploy pre-check).
 # Probe 4 resolved: fixture << 10 GB risk ceiling.
-# (d) The grant-reviewer "recognizability" argument for bert-base-uncased is
+# (d) The reviewer "recognizability" argument for bert-base-uncased is
 # subjective; reviewer-useful signal is the MEASUREMENT methodology, not
 # the model name.
 # If a future planner swaps this for a mainstream model, update:

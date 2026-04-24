@@ -1,5 +1,5 @@
 # SiaHub root Makefile.
-# Single entry point for every operator task .
+# Single entry point for every operator task.
 # Targets whose recipes depend on code from later plans emit a clear
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
 
@@ -272,8 +272,8 @@ conformance-local: conformance-fixtures
 	@echo "conformance-local: PASS — stack still running; 'make down' to tear down."
 
 # -----------------------------------------------------------------------------
-# : benchmarks report — 3-trial median harness .
-# . Writes console/public/benchmarks.json + docs/benchmarks.md.
+# : benchmarks report — 3-trial median harness.
+#. Writes console/public/benchmarks.json + docs/benchmarks.md.
 # STACK=both (default) | siahub | hf-native.
 # Requires SIAHUB_CAS_URL + SIAHUB_API_KEY in env for SiaHub cells; HF CLI
 # (`hf` or `huggingface-cli`) on PATH.
@@ -283,7 +283,7 @@ conformance-local: conformance-fixtures
 benchmark:
 	STACK=$${STACK:-both} bash bench/run.sh --stack $${STACK:-both}
 
-# Alias for clarity when invoked from docs / grant submission instructions.
+# Alias for clarity when invoked from docs / submission instructions.
 benchmark-report: benchmark
 
 # Regenerate the JSON+MD artifacts with all-null values (placeholder). Useful
@@ -294,9 +294,9 @@ benchmark-dry-run:
 
 # -----------------------------------------------------------------------------
 # : HF byte-identical round-trip integration test (Gate #2).
-# . Mirrors .github/workflows/hf-roundtrip.yml locally so an
+#. Mirrors.github/workflows/hf-roundtrip.yml locally so an
 # operator can validate the Caddy-fronted stack end-to-end before pushing
-# to main. Expects .env present (run `make bootstrap` first) AND a fresh
+# to main. Expects.env present (run `make bootstrap` first) AND a fresh
 # Postgres with `siahub` schema — the helper mints a test API key via
 # direct psql INSERT (scripts/issue-test-key.sh).
 #
@@ -356,7 +356,7 @@ integration-hf-roundtrip-down:
 # Autonomous: FALSE. Never invoked from CI. The operator runs these commands
 # while SSH'd into the owner's server AFTER `git pull` brings the repo to the
 # desired HEAD. See for the
-# full 10-step runbook (DNS → .env → staging cert validation → prod deploy →
+# full 10-step runbook (DNS →.env → staging cert validation → prod deploy →
 # indexd wallet funding → first API key → fixture preload → smoke).
 #
 # The existing `smoke` target ( Sia range-download smoke) is NOT
@@ -391,11 +391,11 @@ deploy:
 	@echo "deploy: stack healthy. Run 'make deploy-smoke' to verify end-to-end reachability."
 
 # Objective post-deploy smoke test against the LIVE hosted demo.
-# Equivalent to the cut tester-recruitment criterion .
+# Equivalent to the cut tester-recruitment criterion.
 deploy-smoke:
 	bash ops/smoke.sh $${SIAHUB_DOMAIN:-siahub.app}
 
-# One-shot fixture preload . Run AFTER a write-scoped API key is
+# One-shot fixture preload. Run AFTER a write-scoped API key is
 # minted in the console. See ops/preload-fixture.sh for pre-conditions.
 preload-fixture:
 	bash ops/preload-fixture.sh

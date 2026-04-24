@@ -17,14 +17,14 @@ import { STATS_REFETCH_INTERVAL_MS, useStats } from "./useStats"
  *
  * Strategy: we verify the cadence two ways, each independent of the other:
  * 1. Constant assertion — the exported `STATS_REFETCH_INTERVAL_MS` is the
- *    single source of truth.
+ * single source of truth.
  * 2. Source-grep — the hook body uses that constant (or the 10_000
- *    literal) for `refetchInterval` AND `refetchIntervalInBackground` is
- *    `false`. Driving fake timers through TanStack Query's internals
- *    (AbortController, queue microtasks) is brittle under Vitest; the
- *    grep check catches accidental edits without the flake.
+ * literal) for `refetchInterval` AND `refetchIntervalInBackground` is
+ * `false`. Driving fake timers through TanStack Query's internals
+ * (AbortController, queue microtasks) is brittle under Vitest; the
+ * grep check catches accidental edits without the flake.
  * 3. Runtime — a fresh mount fires exactly one `casFetch('/admin/stats')`
- *    call so we also exercise the query wiring end-to-end.
+ * call so we also exercise the query wiring end-to-end.
  */
 
 function wrapper() {
@@ -53,10 +53,10 @@ describe("useStats constant", () => {
 
 describe("useStats source invariants (D-47)", () => {
   /**
-   * Guards the 10s cadence + background-pause flag from being edited out
-   * by hand. Pairs with the runtime test below (proves the hook actually
-   * wires to `/admin/stats` and returns data).
-   */
+ * Guards the 10s cadence + background-pause flag from being edited out
+ * by hand. Pairs with the runtime test below (proves the hook actually
+ * wires to `/admin/stats` and returns data).
+ */
   it("hook source uses the constant for refetchInterval", () => {
     const source = readFileSync(join(__dirname, "useStats.ts"), "utf-8")
     expect(source).toMatch(/refetchInterval:\s*(STATS_REFETCH_INTERVAL_MS|10_000|10000)/)

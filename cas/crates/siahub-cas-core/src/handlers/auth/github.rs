@@ -93,7 +93,7 @@ pub async fn callback<S: GithubOAuthState>(
     Query(q): Query<CallbackQuery>,
 ) -> Result<Response, CallbackError> {
     // (1) State CSRF check. `consume_oauth_state` uses a single UPDATE
-    // ... RETURNING that only matches an unconsumed unexpired nonce.
+    //... RETURNING that only matches an unconsumed unexpired nonce.
     let state_nonce = q.state.ok_or(CallbackError::StateMismatch)?;
     let consumed = consume_oauth_state(st.pool(), &state_nonce)
         .await

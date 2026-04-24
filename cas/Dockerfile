@@ -16,11 +16,11 @@ RUN mkdir -p ./cas/migrations ./cas/.sqlx
 # wildcard trick keeps the COPY from failing when hasn't landed.
 # At runtime `sqlx::migrate!` resolves the path at compile time.
 # because Dockerfile COPY does not support optional sources, 's
-# migrations/ and .sqlx/ are written unconditionally and this stanza becomes
+# migrations/ and.sqlx/ are written unconditionally and this stanza becomes
 # purely load-bearing once runs.
 
-# SQLX offline — requires .sqlx/ to be populated by `cargo sqlx prepare`.
-# Empty .sqlx/ is harmless for because no `sqlx::query!` macro
+# SQLX offline — requires.sqlx/ to be populated by `cargo sqlx prepare`.
+# Empty.sqlx/ is harmless for because no `sqlx::query!` macro
 # invocation exists yet.
 ENV SQLX_OFFLINE=true
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

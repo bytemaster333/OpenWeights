@@ -1,6 +1,6 @@
 //! `GET /admin/stats/map` — proxy indexd `/api/hosts?usable=true` and reshape
 //! for the console's Leaflet map.
-//! Backs . Keeps the browser off indexd entirely ( §C
+//! Backs. Keeps the browser off indexd entirely ( §C
 //! invariant — "browser never touches indexd directly"): CAS is the one hop
 //! that holds the `INDEXD_ADMIN_PASSWORD` and can reshape the upstream JSON
 //! into a stable console contract.

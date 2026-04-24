@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bench/lib/measure.sh <label> <cmd ...>
+# bench/lib/measure.sh <label> <cmd...>
 # Runs <cmd> once, emits elapsed-seconds on stdout (format: %.3f).
 # Caller is responsible for cache/state setup BETWEEN trials (see
 # prep_clean_state in bench/run.sh). On any non-zero exit from <cmd>,

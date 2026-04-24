@@ -31,7 +31,7 @@ pub async fn build_pool(
 /// into the binary at compile time. Safe to call on every boot: the
 /// `_sqlx_migrations` table tracks applied files by checksum and skips them
 /// on replay. All DDL in the embedded files is additionally idempotent via
-/// `CREATE ... IF NOT EXISTS` or `DO $$ ... EXCEPTION WHEN duplicate_object`
+/// `CREATE... IF NOT EXISTS` or `DO $$... EXCEPTION WHEN duplicate_object`
 /// wrappers — double defense against testcontainer restart races.
 pub async fn run_migrations(pool: &sqlx::PgPool) -> Result<(), sqlx::migrate::MigrateError> {
     sqlx::migrate!("../../migrations").run(pool).await

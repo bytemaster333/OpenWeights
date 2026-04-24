@@ -36,11 +36,11 @@ pub struct ParsedFile {
 
 /// DTO: one row destined for `reconstruction_terms`.
 /// Range convention (PITFALL ):
-/// - `xorb_start .. xorb_end` — chunk-index range, END-EXCLUSIVE.
-/// - `xorb_byte_start .. xorb_byte_end` — pre-computed byte offsets inside
+/// - `xorb_start.. xorb_end` — chunk-index range, END-EXCLUSIVE.
+/// - `xorb_byte_start.. xorb_byte_end` — pre-computed byte offsets inside
 /// the xorb, END-EXCLUSIVE. reads these verbatim — no Sia
 /// footer re-fetch at reconstruction time.
-/// - `unpacked_start .. unpacked_end` — byte offsets inside the
+/// - `unpacked_start.. unpacked_end` — byte offsets inside the
 /// reconstructed file, END-EXCLUSIVE.
 /// The single `- 1` conversion to end-INCLUSIVE byte range lives in
 /// `coalesce_terms_by_xorb`. The schema stays end-exclusive.
@@ -49,17 +49,17 @@ pub struct ParsedTerm {
     pub file_id: [u8; 32],
     pub term_index: i32,
     pub xorb_hash: [u8; 32],
-    /// END-EXCLUSIVE — see .
+    /// END-EXCLUSIVE — see.
     pub xorb_start: i64,
-    /// END-EXCLUSIVE — see .
+    /// END-EXCLUSIVE — see.
     pub xorb_end: i64,
-    /// END-EXCLUSIVE — see .
+    /// END-EXCLUSIVE — see.
     pub xorb_byte_start: i64,
-    /// END-EXCLUSIVE — see .
+    /// END-EXCLUSIVE — see.
     pub xorb_byte_end: i64,
-    /// END-EXCLUSIVE — see .
+    /// END-EXCLUSIVE — see.
     pub unpacked_start: i64,
-    /// END-EXCLUSIVE — see .
+    /// END-EXCLUSIVE — see.
     pub unpacked_end: i64,
 }
 

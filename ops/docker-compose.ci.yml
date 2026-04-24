@@ -3,7 +3,7 @@
 # `docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml up`
 # Purpose:
 # (a) Assert V2_RECONSTRUCTION_ENABLED=true at the service level ( CI
-# half — even if .env ever drifts to `false`, the CI overlay pins
+# half — even if.env ever drifts to `false`, the CI overlay pins
 # true).
 # (b) Tighten indexd's CI profile — conformance tests use testcontainers
 # for the CAS+Postgres they actually hit, so the live compose stack

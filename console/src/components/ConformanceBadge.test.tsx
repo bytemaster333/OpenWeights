@@ -8,10 +8,10 @@ import { ConformanceBadge } from "./ConformanceBadge"
  * `<ConformanceBadge>` tests.
  *
  * Covers:
- *  - PASS / FAIL / unknown all render distinct label + `data-status`
- *  - A PASS older than the 24h staleness threshold collapses to `unknown`
- *    (defensive: a silently-dead CI shouldn't keep vouching for green)
- *  - Hover title surfaces `last_run` + `commit` when present
+ * - PASS / FAIL / unknown all render distinct label + `data-status`
+ * - A PASS older than the 24h staleness threshold collapses to `unknown`
+ * (defensive: a silently-dead CI shouldn't keep vouching for green)
+ * - Hover title surfaces `last_run` + `commit` when present
  */
 
 function mockHook(data: useConf.ConformanceBadgeData | undefined) {

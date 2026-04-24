@@ -2,7 +2,7 @@
 //! Synchronous single-row INSERT helpers called from (xorb upload),
 //! (shard upload), and (V1 + batch reconstruction). Rationale:
 //! CONTEXT (latency is 1–3 ms noise-floor against 100s-of-ms Sia calls;
-//! no channel/batcher → no lost-events-on-crash; ..08 reads
+//! no channel/batcher → no lost-events-on-crash;..08 reads
 //! these rows directly with zero forward-migration).
 //! Schema reference: `cas/migrations/0003_usage_log_oauth.sql`. `event` is a
 //! Postgres enum (`usage_event`); `cache_hit` is nullable and left NULL by all
@@ -29,7 +29,7 @@ use uuid::Uuid;
 // ---------------------------------------------------------------------------
 
 /// Append `event='xorb_upload'` row. Called by after `set_pin_state
-/// (Pinned, ...)` succeeds AND on the dedup (was_inserted=false) path so both
+/// (Pinned,...)` succeeds AND on the dedup (was_inserted=false) path so both
 /// branches record the upload against the API key.
 pub async fn insert_xorb_upload(
     pool: &PgPool,

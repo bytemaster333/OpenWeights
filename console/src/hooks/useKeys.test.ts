@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest"
  * React state bounded by the `<OneTimeKeyModal>`.*/
 
 /**
- * Strip single-line (`//`) and block (`/* ... *\/`) comments so that the
+ * Strip single-line (`//`) and block (`/*... *\/`) comments so that the
  * invariants can be checked against executable code only. Comments
  * may legitimately mention `localStorage` / `sessionStorage` in the
  * context of "MUST NOT be written to X" — we only care that the code

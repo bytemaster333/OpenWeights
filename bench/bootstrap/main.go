@@ -32,7 +32,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	isTTY := isatty.IsTerminal(os.Stdin.Fd())
 
-	// 1. Load .env (or empty map).
+	// 1. Load.env (or empty map).
 	kv, err := loadEnv(envPath)
 	if err != nil {
 		logger.Error("loadEnv", "err", err)
@@ -65,7 +65,7 @@ func main() {
 	// 3. Generate missing passwords.
 	_ = fillMissing(logger, kv)
 
-	// 4. Persist .env (atomic).
+	// 4. Persist.env (atomic).
 	if err := writeEnv(envPath, kv); err != nil {
 		logger.Error("writeEnv", "err", err)
 		os.Exit(1)
@@ -114,7 +114,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 9. Persist SIAHUB_APP_KEY into .env.
+	// 9. Persist SIAHUB_APP_KEY into.env.
 	kv["SIAHUB_APP_KEY"] = appKeyHex
 	if err := writeEnv(envPath, kv); err != nil {
 		logger.Error("writeEnv (app key)", "err", err)

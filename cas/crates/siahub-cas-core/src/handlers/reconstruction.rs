@@ -115,7 +115,7 @@ pub struct BatchQueryParams {
 // -------------------------------------------------------------------------
 
 /// Minimum state surface the reconstruction handlers consume.
-/// Mirrors the `XorbUploadState` pattern from . Binary's AppState
+/// Mirrors the `XorbUploadState` pattern from. Binary's AppState
 /// implements this; handler stays decoupled from the concrete type.
 /// `url_signer` is a `dyn UrlMinter` trait object so:
 /// - provides the concrete `UrlSigner` (HMAC-SHA256) now.
@@ -127,7 +127,7 @@ pub trait ReconstructionState: AuthStateRef {
 
     /// flag gate for V2 reconstruction. default is `false`;
     /// flips this to `true` via `.env` only (no code change).
-    /// .md — enabling V2 before the gateway serves
+    ///.md — enabling V2 before the gateway serves
     /// `multipart/byteranges` silently corrupts xet-core downloads. Kept on
     /// the trait (not Config directly) so handler tests can pin both branches
     /// without booting a full binary.
@@ -138,7 +138,7 @@ pub trait ReconstructionState: AuthStateRef {
 // Handlers
 // -------------------------------------------------------------------------
 
-/// `GET /v1/reconstructions/{file_id_hex}` — .
+/// `GET /v1/reconstructions/{file_id_hex}` —.
 pub async fn query_reconstruction_v1<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
@@ -182,7 +182,7 @@ where
 }
 
 /// `GET /v1/reconstructions?file_id=A&file_id=B` AND
-/// `GET /reconstructions?file_id=A&file_id=B` — .
+/// `GET /reconstructions?file_id=A&file_id=B` —.
 /// Dual-path: xet-core's `batch_get_reconstruction` calls
 /// `{endpoint}/reconstructions?` (no `/v1`) per RESEARCH §2.5, while the
 /// OpenAPI spec lists `/v1/reconstructions?`. Register both.
@@ -233,7 +233,7 @@ where
         out.insert(hex, resp);
 
         // Meter each file as a distinct reconstruction event (per-file
-        // counter is what ..08 expects — one row per file_id).
+        // counter is what..08 expects — one row per file_id).
         crate::metering::log_on_err(
             "usage_log insert (reconstruction, batch) failed",
             crate::metering::record_reconstruction(st.pool(), &ctx, &fid_bytes).await,

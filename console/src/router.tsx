@@ -17,31 +17,31 @@ import { StatsPage } from "@/pages/Stats"
 /**
  * TanStack Router — code-based route definitions (D-40).
  *
- * Rationale: ~11 routes total; explicit `router.tsx` tree is a grant-reviewer
+ * Rationale: ~11 routes total; explicit `router.tsx` tree is a reviewer
  * legibility win and avoids the `@tanstack/router-vite-plugin` codegen step.
  *
  * Plans 04-03..04-09 add routes here; each plan's commit should be labeled
  * `router: add <path> route` to minimize merge conflicts across waves.
  *
  * Current routes:
- * - `/`                 Landing page + "Sign in with GitHub" CTA
- * - `/login`            Alias that redirects to CAS `/auth/github/start`
- * - `/dashboard`        Auth-gated welcome + KPI tiles (04-07)
- * - `/keys`             Auth-gated: API key CRUD + usage snippets
- *                       (merged `/onboarding` flow; CONSOLE-02 + KEYS-01..04)
- * - `/assets`           Auth-gated xorb catalog (04-06)
- * - `/assets/$hash`     Auth-gated single-xorb detail (04-06)
- * - `/stats`            Auth-gated live KPI (04-07)
- * - `/stats/map`        Auth-gated Leaflet map (04-08)
- * - `/setup`            Admin-gated operator diagnostics (04-09)
+ * - `/` Landing page + "Sign in with GitHub" CTA
+ * - `/login` Alias that redirects to CAS `/auth/github/start`
+ * - `/dashboard` Auth-gated welcome + KPI tiles (04-07)
+ * - `/keys` Auth-gated: API key CRUD + usage snippets
+ * (merged `/onboarding` flow; CONSOLE-02 + KEYS-01..04)
+ * - `/assets` Auth-gated xorb catalog (04-06)
+ * - `/assets/$hash` Auth-gated single-xorb detail (04-06)
+ * - `/stats` Auth-gated live KPI (04-07)
+ * - `/stats/map` Auth-gated Leaflet map (04-08)
+ * - `/setup` Admin-gated operator diagnostics (04-09)
  *
  * The root route wraps the whole tree in `<Header>` + `<Outlet>`; the header
- * self-hides on landing/login via `useMe()`, so the chrome is present exactly
+ * self-hides on landing/login via `useMe`, so the chrome is present exactly
  * where it should be.
  */
 
 const rootRoute = createRootRoute({
-  // `<Header>` self-hides for unauth'd users (useMe() === null), so mounting
+  // `<Header>` self-hides for unauth'd users (useMe === null), so mounting
   // it here means every auth'd page renders the chrome without per-page wiring
   // and landing/login stay chrome-less — see Header.tsx docstring.
   component: () => (
@@ -142,7 +142,7 @@ const mapRoute = createRoute({
 
 // /setup — diagnostic page (CONSOLE-11/12, OPS-01). Originally admin-gated
 // but demoted to session-only: the page shows service health tiles + indexer
-// URL + V2 flag — nothing sensitive — and grant reviewers expect to see it
+// URL + V2 flag — nothing sensitive — and reviewers expect to see it
 // after signing in. CAS matches this on the server side (no is_admin check).
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,

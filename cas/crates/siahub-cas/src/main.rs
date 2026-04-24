@@ -141,7 +141,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
 /// Priority order:
 /// 1. `SIAHUB_SIA_MOCK=true` (dev only) → in-memory `MockSiaAdapter`. Only
 /// compiled in when the `sia-mock` feature flag is enabled on this
-/// crate. .md forbids this path in production.
+/// crate..md forbids this path in production.
 /// 2. Otherwise, decode SIAHUB_APP_ID (hex) + SIAHUB_APP_KEY (base64 32
 /// bytes) and run the A1-probe builder sequence.
 async fn build_sia_adapter(
@@ -178,7 +178,7 @@ async fn build_sia_adapter(
     }
     let app_id = sia_storage::Hash256::new(id_bytes);
 
-    // Static &'static str fields on AppMetadata; hard-coded per .
+    // Static &'static str fields on AppMetadata; hard-coded per.
     let meta = sia_storage::AppMetadata {
         id: app_id,
         name: siahub_cas_storage::sia::DEFAULT_APP_META_NAME,

@@ -16,7 +16,7 @@
 -- 'pinned' — pin_object succeeded; only state served by reconstruction
 -- 'orphaned' — 5+ failed pin attempts; ops must manually re-drive or wipe
 -- Reconciler tick (60 s) advances 'uploading'→'pinning'→'pinned'
--- via sdk.upload retry + sdk.pin_object. See RESEARCH §4.3 + PITFALL .
+-- via sdk.upload retry + sdk.pin_object. See RESEARCH §4.3 + PITFALL.
 DO $$ BEGIN
     CREATE TYPE xorb_pin_state AS ENUM (
         'uploading',
@@ -31,7 +31,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- sia_object_id is the Hash256 returned by sdk.upload (RESEARCH §4.1);
 -- content-addressed so retries against a previously-uploaded body yield the
 -- same id ( reconciler relies on this).
--- pin_state + pin_attempts + last_pin_attempt_at implement / .
+-- pin_state + pin_attempts + last_pin_attempt_at implement /.
 -- hash_prefix_8 ( item 3) is a GENERATED STORED column
 -- prefix search uses it via a plain B-tree index.
 CREATE TABLE IF NOT EXISTS xorbs (

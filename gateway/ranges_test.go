@@ -180,7 +180,7 @@ func TestAllRangesWithin(t *testing.T) {
 // 1 KiB payload must emit EXACTLY 100 bytes (indices 100..199) — NOT 99
 // (classic off-by-one), NOT 101 (wrong direction off-by-one), NOT something
 // starting at 101 (offset misalignment).
-// If this ever fails, the breakage is grant-story-level: every range-serving
+// If this ever fails, the breakage is story-level: every range-serving
 // response corrupts content at the boundary. Treat as STOP-THE-LINE.
 func TestWriteSingleRange_BoundaryOffByOne(t *testing.T) {
 	t.Parallel()
@@ -341,7 +341,7 @@ func TestParseRangeSentinelsDistinct(t *testing.T) {
 }
 
 // ============================================================================
-// Multipart/byteranges (RFC 7233 §4.1) tests — .
+// Multipart/byteranges (RFC 7233 §4.1) tests —.
 // THE SINGLE MOST INTEGRITY-CRITICAL CODE PATH IN PHASE 3.
 // Strategy:
 // 1. Use Go's `mime/multipart.NewReader` to PARSE the response body back

@@ -4,7 +4,7 @@
 -- lands a Sia range-fetch path, we stash the raw upload body alongside
 -- the `xorbs` row and decompress chunks at serve time.
 -- Tradeoff: doubles local storage vs. the Sia-only story. Acceptable for
--- the grant demo and for `pin_state != 'pinned'` rows we'd need a local
+-- the demo and for `pin_state != 'pinned'` rows we'd need a local
 -- copy anyway. will retire this table in favor of
 -- `/v1/reconstructions/{file_id}` → gateway signed URL → Sia range fetch.
 

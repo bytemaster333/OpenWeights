@@ -16,7 +16,7 @@
 //! lookups, which makes compile-time ordering mistakes louder.
 //! 3. The `metrics-rs` facade would force us to either make the scraper
 //! also depend on it (forcing the Go gateway to round-trip through a
-//! Rust facade) or split the seam in .
+//! Rust facade) or split the seam in.
 //! **Orphaned metric ( alert).** `xorb_orphaned_total` + its shard mirror
 //! are the ops alert key: any non-zero value means a row hit 5 failed pin
 //! attempts and was quarantined. See `reconciler` module for the bump site.

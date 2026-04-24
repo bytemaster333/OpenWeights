@@ -1,6 +1,6 @@
 // Package main — signed_url.go.
 // Go port of `cas/crates/siahub-cas-core/src/signed_url.rs::UrlSigner::verify`.
-// MUST remain byte-identical to the Rust side. Drift is a grant-story-breaking
+// MUST remain byte-identical to the Rust side. Drift is a story-breaking
 // silent-corruption bug; enforcement lives in `signed_url_test.go` which loads
 // `conformance/fixtures/signed_url_vectors.json` and asserts every vector.
 // Wire contract (RECEIVED §B step 2; CONTEXT ):
@@ -120,7 +120,7 @@ func CanonicalString(version, hashHex string, exp uint64, r *[2]uint64, kid uuid
 // - `subtle.ConstantTimeCompare` is used for every HMAC compare (T1 spoofed
 // URL threat mitigation; mirrors Rust `subtle::ConstantTimeEq`).
 // - Mixed-case hex in the path segment is REJECTED — `MerkleHash::hex`
-// always emits lowercase, so accepting uppercase would widen the grant.
+// always emits lowercase, so accepting uppercase would widen the.
 func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*VerifyOk, *VerifyErr) {
 	// Path-segment shape: 64 lowercase hex chars. Any deviation = 400.
 	if len(xorbHashHex) != 64 {
@@ -219,7 +219,7 @@ func hmacSHA256(key, msg []byte) []byte {
 }
 
 // isHexLower enforces lowercase hex — MerkleHash::hex emits lowercase only,
-// so mixed-case would silently widen the signed grant.
+// so mixed-case would silently widen the signed.
 func isHexLower(b byte) bool {
 	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f')
 }

@@ -14,8 +14,8 @@
 // gateway only downloads, so this is informational — but documented here so
 // any future "add pinning on miss" change does not misread the signature.
 //
-// GATE-10 precondition: `r.Context()` propagates into `SDK.Download` via the
-// `ctx` argument. When the client TCP-resets, `ctx.Done()` fires and the SDK
+// GATE-10 precondition: `r.Context` propagates into `SDK.Download` via the
+// `ctx` argument. When the client TCP-resets, `ctx.Done` fires and the SDK
 // aborts the in-flight HTTP stream within 1s. The integration test in
 // sia_test.go (build tag `integration`) exercises this.
 package main
@@ -57,11 +57,11 @@ type SiaAdapter struct {
 // Required fields: `SiaIndexerURL`, `AppID` (64-char hex), `AppKey` (hex).
 //
 // Boot-time invariants:
-//   - AppID MUST parse as a `types.Hash256` (32-byte hex) — matches the bench
-//     thesis's `appID.UnmarshalText` path.
-//   - AppKey MUST decode as raw hex → `types.PrivateKey`. The siastorage
-//     SDK blesses PrivateKey-sized slices without further validation; the
-//     Zen / mainnet split is handled upstream by indexd.
+// - AppID MUST parse as a `types.Hash256` (32-byte hex) — matches the bench
+// thesis's `appID.UnmarshalText` path.
+// - AppKey MUST decode as raw hex → `types.PrivateKey`. The siastorage
+// SDK blesses PrivateKey-sized slices without further validation; the
+// Zen / mainnet split is handled upstream by indexd.
 //
 // Wiring a nil `metrics` registry is allowed for bench / unit-test paths
 // that do not want to pollute a global registerer — the histogram is no-op
@@ -139,17 +139,17 @@ func (s *SiaAdapter) Close() error {
 // single method the gateway's cache-miss path calls (03-05).
 //
 // Contract:
-//   - offset, length in bytes. `offset=0, length=0` streams the entire object
-//     per siastorage SDK convention (verified against bench/thesis/thesis.go,
-//     where `WithDownloadRange(rangeOffset, rangeLength)` drives partial
-//     fetches — the zero-zero combination passes through without the option
-//     and fetches whole-object).
-//   - ctx cancellation cancels the in-flight SDK call within 1s (GATE-10).
-//   - ONE `SDK.Download` call per invocation. No retry loop here; the cache
-//     layer decides whether to retry a failed miss.
-//   - Observes `gateway_sia_download_duration_seconds` for every call,
-//     succeed or fail — operators watching cold-miss latency in Grafana see
-//     the full distribution, not just the happy path.
+// - offset, length in bytes. `offset=0, length=0` streams the entire object
+// per siastorage SDK convention (verified against bench/thesis/thesis.go,
+// where `WithDownloadRange(rangeOffset, rangeLength)` drives partial
+// fetches — the zero-zero combination passes through without the option
+// and fetches whole-object).
+// - ctx cancellation cancels the in-flight SDK call within 1s (GATE-10).
+// - ONE `SDK.Download` call per invocation. No retry loop here; the cache
+// layer decides whether to retry a failed miss.
+// - Observes `gateway_sia_download_duration_seconds` for every call,
+// succeed or fail — operators watching cold-miss latency in Grafana see
+// the full distribution, not just the happy path.
 //
 // Two-step call: `SDK.Object` fetches the slab metadata for the hash (small
 // indexd call), then `SDK.Download` streams the actual bytes. Both inherit

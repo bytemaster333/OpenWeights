@@ -16,7 +16,7 @@ WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download
 
-# Source layer. `*_test.go` + any markdown excluded via .dockerignore.
+# Source layer. `*_test.go` + any markdown excluded via.dockerignore.
 COPY . .
 
 # Static build. `CGO_ENABLED=0` + `-tags netgo` keeps the binary self-contained

@@ -2,7 +2,7 @@
 // Whole-xorb disk LRU test suite. Covers (disk-backed, size-capped),
 // (hash-verify-on-write), (streaming / no whole-xorb RAM),
 // plus atomic-write invariants + LRU correctness + concurrent-reader safety.
-// Tests run with `go test -race ./...` to catch the cache-index concurrency
+// Tests run with `go test -race./...` to catch the cache-index concurrency
 // invariants.
 package main
 
