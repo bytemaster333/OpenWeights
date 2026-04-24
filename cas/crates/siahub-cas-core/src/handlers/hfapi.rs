@@ -785,6 +785,7 @@ pub async fn commit<S: HfApiState>(
         .map_err(|_| AppError::BadRequest("invalid_body"))?
         .to_bytes();
 
+    tracing::info!(ndjson = %String::from_utf8_lossy(&raw), "commit ndjson payload");
     let mut header = CommitHeader::default();
     let mut files: Vec<CommitFile> = Vec::new();
     for line in raw.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
