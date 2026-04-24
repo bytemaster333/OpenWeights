@@ -136,6 +136,7 @@ async fn probe_redis<S: SetupState>(st: &S) -> ProbeStatus {
 }
 
 async fn probe_indexd<S: SetupState>(st: &S) -> IndexdStatus {
+    // state.rs binds indexd_url() to cfg.indexd_admin_url (port 9980)
     let url_base = st.indexd_url().trim_end_matches('/').to_string();
     let state_url = format!("{}/api/state", url_base);
     let start = Instant::now();

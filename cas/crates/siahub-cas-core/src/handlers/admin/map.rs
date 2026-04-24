@@ -40,20 +40,20 @@ pub trait MapState: AuthStateRef {
     fn http_client(&self) -> Arc<reqwest::Client>;
 }
 
-/// Upstream shape — indexd `/api/hosts` response items.
+/// upstream shape — indexd /api/hosts response items (camelCase json)
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct IndexdHost {
-    #[serde(rename = "PublicKey")]
     pub public_key: String,
-    #[serde(rename = "CountryCode", default)]
+    #[serde(default)]
     pub country_code: Option<String>,
-    #[serde(rename = "Latitude", default)]
+    #[serde(default)]
     pub latitude: Option<f64>,
-    #[serde(rename = "Longitude", default)]
+    #[serde(default)]
     pub longitude: Option<f64>,
-    #[serde(rename = "Usable", default)]
+    #[serde(default)]
     pub usable: bool,
-    #[serde(rename = "ContractCount", default)]
+    #[serde(default)]
     pub contract_count: Option<u32>,
 }
 
