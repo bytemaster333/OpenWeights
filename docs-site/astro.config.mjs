@@ -5,31 +5,31 @@ export default defineConfig({
   site: "https://docs.siahub.app",
   integrations: [
     starlight({
-      title: "siahub docs",
-      description: "xet-compatible model hub on sia",
+      title: "SiaHub Docs",
+      description: "Xet-compatible model hub on Sia",
       sidebar: [
         {
-          label: "start here",
+          label: "Start here",
           items: [
-            { label: "what is siahub", slug: "index" },
-            { label: "quickstart", slug: "guides/quickstart" },
+            { label: "What is SiaHub", slug: "index" },
+            { label: "Quickstart", slug: "guides/quickstart" },
           ],
         },
         {
-          label: "guides",
+          label: "Guides",
           items: [
-            { label: "upload a model", slug: "guides/upload" },
-            { label: "download a model", slug: "guides/download" },
-            { label: "self-host", slug: "guides/self-host" },
-            { label: "mirror on huggingface", slug: "guides/hf-bridge" },
+            { label: "Upload a model", slug: "guides/upload" },
+            { label: "Download a model", slug: "guides/download" },
+            { label: "Self-host", slug: "guides/self-host" },
+            { label: "Mirror on Hugging Face", slug: "guides/hf-bridge" },
           ],
         },
         {
-          label: "reference",
+          label: "Reference",
           items: [
-            { label: "api", slug: "reference/api" },
-            { label: "cli env vars", slug: "reference/env" },
-            { label: "architecture", slug: "reference/architecture" },
+            { label: "API", slug: "reference/api" },
+            { label: "CLI env vars", slug: "reference/env" },
+            { label: "Architecture", slug: "reference/architecture" },
           ],
         },
       ],

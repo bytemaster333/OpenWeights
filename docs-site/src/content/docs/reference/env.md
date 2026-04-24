@@ -1,40 +1,40 @@
 ---
-title: cli env vars
-description: hf CLI env vars that matter for siahub
+title: CLI env vars
+description: hf CLI env vars that matter for SiaHub
 ---
 
-## the two you actually need
+## The two you actually need
 
 ```bash
-HF_ENDPOINT=https://cas.siahub.app   # route the CLI to a siahub
+HF_ENDPOINT=https://siahub.app       # route the CLI to SiaHub
 HF_TOKEN=<your-siahub-key>           # auth for writes + private reads
 ```
 
-prefix them per-command to avoid polluting your shell config:
+Prefix them per-command to avoid polluting your shell config:
 
 ```bash
 HF_TOKEN=... HF_ENDPOINT=... hf upload <owner>/<repo> ./files
 ```
 
-## running both siahub + huggingface.co
+## Running both SiaHub + huggingface.co
 
-the per-command prefix is already this pattern — `hf auth login` for
-huggingface.co stays put, and siahub commands override with `HF_TOKEN`.
-if you want a shorter form:
+The per-command prefix is already this pattern — `hf auth login` for
+huggingface.co stays put, and SiaHub commands override with `HF_TOKEN`.
+If you want a shorter form:
 
 ```fish
 function hfsia
-  env HF_ENDPOINT=https://cas.siahub.app HF_HOME=$HOME/.cache/huggingface-siahub hf $argv
+  env HF_ENDPOINT=https://siahub.app HF_HOME=$HOME/.cache/huggingface-siahub hf $argv
 end
 hfsia auth login --token <your-siahub-key>   # once
 hfsia upload / download ...                  # thereafter
 ```
 
-separate `HF_HOME` keeps the two token caches apart.
+A separate `HF_HOME` keeps the two token caches apart.
 
-## less-common vars
+## Less-common vars
 
 - `HF_HUB_DISABLE_TELEMETRY=1` — recommended; no analytics to hf.co
-- `HF_DEBUG=1` — verbose request traces (good when a command errors
+- `HF_DEBUG=1` — verbose request traces (useful when a command errors
   and you need the full stack)
-- `HF_HUB_VERBOSITY=debug` — log-level knob on the python side
+- `HF_HUB_VERBOSITY=debug` — log-level knob on the Python side

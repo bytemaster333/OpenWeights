@@ -1,71 +1,71 @@
 ---
-title: architecture
-description: what runs where
+title: Architecture
+description: What runs where
 ---
 
-## components
+## Components
 
 ```
      hf CLI
         |
         v
   +-----------+      +-----------+     +----------+
-  |  console  |      |    cas    |---->|  sia     |
-  |  (react)  |----->|  (rust)   |     | (indexd) |
+  |  console  |      |    cas    |---->|   Sia    |
+  |  (React)  |----->|  (Rust)   |     | (indexd) |
   +-----------+      +-----------+     +----------+
                           |    ^
                           v    |
                      +-----------+
                      |  gateway  |
-                     |   (go)    |
+                     |   (Go)    |
                      +-----------+
                           |
                           v
                      +-----------+
-                     | sia hosts |
+                     | Sia hosts |
                      +-----------+
 ```
 
-## cas (rust, axum)
+## cas (Rust, Axum)
 
-the hub + xet protocol server. speaks the hf api surface the `hf`
-CLI uses (repos, preupload, commit, resolve, xet write/read tokens)
-plus the xet-core wire protocol (xorb upload, shard upload,
-reconstruction). metadata lives in postgres; large byte buffers
-cache in `xorb_bodies` until the sia pin lands.
+The hub + Xet protocol server. Speaks the HF API surface the `hf` CLI
+uses (repos, preupload, commit, resolve, xet write/read tokens) plus
+the xet-core wire protocol (xorb upload, shard upload, reconstruction).
+Metadata lives in Postgres; large byte buffers cache in `xorb_bodies`
+until the Sia pin lands.
 
-## gateway (go)
+## gateway (Go)
 
-serves downloads. the signed-url flow mints a short-lived url on
-the cas, which the client redeems on the gateway. the gateway
-range-fetches from sia hosts and streams bytes back.
+Serves downloads. The signed-URL flow mints a short-lived URL on the
+CAS, which the client redeems on the gateway. The gateway range-fetches
+from Sia hosts and streams bytes back.
 
-## console (react)
+## console (React)
 
-browser ui: model catalog, asset inventory, key management, usage
-stats, storage provider map. talks to `/admin/*` on the cas.
+Browser UI: model catalog, asset inventory, key management, usage
+stats, storage provider map. Talks to `/admin/*` on the CAS.
 
-## hf-proxy (go)
+## hf-proxy (Go)
 
-optional. sits in front of huggingface.co and rewrites the
+Optional. Sits in front of huggingface.co and rewrites the
 `X-Xet-Cas-Url` header so `hf upload` traffic against hf.co actually
-targets a siahub cas. useful when pointing the standard cli at
-siahub without changing `HF_ENDPOINT`.
+targets a SiaHub CAS. Useful when pointing the standard CLI at SiaHub
+without changing `HF_ENDPOINT`.
 
-## indexd (sia foundation)
+## indexd (Sia Foundation)
 
-follows the sia chain, maintains the host pool, mediates storage
-contracts. siahub talks to its admin api for host geolocation
-(`/admin/stats/map`) and to its sdk for byte upload/pin/fetch.
+Follows the Sia chain, maintains the host pool, mediates storage
+contracts. SiaHub talks to its admin API for host geolocation
+(`/admin/stats/map`) and to its SDK for byte upload/pin/fetch.
 
-## storage tables
+## Storage tables
 
-| table | holds |
+| Table | Holds |
 |---|---|
-| `users`, `api_keys`, `sessions` | auth state |
-| `repos`, `repo_refs`, `repo_commits`, `repo_files` | model catalog |
-| `xorbs`, `shards` | xet-protocol objects |
-| `xorb_bodies` | local cache of xorb bytes (until pinned) |
-| `lfs_objects` | inline small-file LFS content |
-| `repo_downloads` | per-repo daily download counters |
-| `usage_log` | append-only event log |
+| `users`, `api_keys`, `sessions` | Auth state |
+| `repos`, `repo_refs`, `repo_commits`, `repo_files` | Model catalog |
+| `xorbs`, `shards` | Xet-protocol objects |
+| `xorb_bodies` | Local cache of xorb bytes (until pinned) |
+| `lfs_objects` | Inline small-file LFS content |
+| `repo_downloads` | Per-repo daily download counters |
+| `usage_log` | Append-only event log |
