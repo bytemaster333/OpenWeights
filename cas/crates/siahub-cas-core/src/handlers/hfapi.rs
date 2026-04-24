@@ -43,7 +43,7 @@ use crate::xet_jwt::{SiaHubAccess, mint_siahub_token};
 
 /// Maximum inline LFS body size. Anything larger must go through the Xet
 /// path. Matches the 5 MiB CHECK on the `lfs_objects` table.
-const MAX_LFS_INLINE_BYTES: usize = 5 * 1024 * 1024;
+const MAX_LFS_INLINE_BYTES: usize = 500 * 1024 * 1024;
 
 /// 15-minute TTL for write tokens. hf_xet uses the token across xorb+shard
 /// uploads for a single `hf upload` invocation; 15 min covers even slow
@@ -478,14 +478,11 @@ pub async fn lfs_objects_batch<S: HfApiState>(
         require_ownership(st.pool(), repo_id, ctx.user_id).await?;
     }
 
-    // Pick the best transfer adapter the client advertised. Prefer
-    // "xet" so the weights flow through our CAS; fall back to "basic"
-    // for classic LFS (inline small-file path).
-    let transfer = if req.transfers.iter().any(|t| t == "xet") {
-        "xet".to_string()
-    } else {
-        "basic".to_string()
-    };
+    // force basic transfer — xet packs multiple files into a single xorb
+    // which we can't split back on download without parsing xet shard
+    // v2 manifests (upstream format mismatch). basic LFS stores each
+    // file as a distinct lfs_objects row, so round-trips are byte-exact.
+    let transfer = "basic".to_string();
 
     let cas_base = st.cas_public_url().trim_end_matches('/');
     let mut objects = Vec::with_capacity(req.objects.len());
