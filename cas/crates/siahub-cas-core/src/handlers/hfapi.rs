@@ -558,9 +558,12 @@ pub async fn lfs_objects_batch<S: HfApiState>(
 // file bytes; oid in path is sha256 hex. We verify the body hashes to
 // the declared oid and store inline.
 
+// no auth: content-addressed write (sha256 verified on body), and the
+// client hits this URL only after the lfs batch handshake has gone
+// through the authenticated scope gate. hf_hub strips the bearer token
+// for LFS PUTs regardless of what we return in the action.
 pub async fn lfs_upload<S: HfApiState>(
     State(st): State<S>,
-    AuthScoped(_ctx): AuthScoped<{ SCOPE_UPLOAD }>,
     Path(oid_hex): Path<String>,
     body: Body,
 ) -> Result<StatusCode, AppError> {
