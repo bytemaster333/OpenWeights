@@ -17,12 +17,9 @@ export function LandingPage() {
       <section className="space-y-4">
         <h1 className="font-heading text-4xl font-medium tracking-tight">siahub</h1>
         <p className="max-w-2xl text-base/relaxed text-muted-foreground">
-          a self-hostable model hub where uploads and downloads go through the standard{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli, but
-          bytes live on the sia network instead of s3. no fork of huggingface_hub, no patched
-          client &mdash; just set{" "}
+          a model hub with bytes on sia. point{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">HF_ENDPOINT</code> at
-          a siahub deployment and push.
+          a siahub deployment and use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli as usual.
         </p>
       </section>
 
@@ -33,7 +30,6 @@ export function LandingPage() {
             <CardTitle className="text-base">upload with hf cli</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <p>mint an api key on the /keys page, then</p>
             <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
               {`HF_TOKEN=<your-key> \\
 HF_ENDPOINT=https://siahub.app \\
@@ -45,10 +41,9 @@ hf upload <user>/<repo> ./model.safetensors`}
         <Card>
           <CardHeader className="flex flex-row items-center gap-2 pb-2">
             <DownloadSimple weight="duotone" className="size-5 text-primary" />
-            <CardTitle className="text-base">download anonymously</CardTitle>
+            <CardTitle className="text-base">download</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <p>public repos need no token</p>
             <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
               {`HF_ENDPOINT=https://siahub.app \\
 hf download <user>/<repo>`}
@@ -58,44 +53,21 @@ hf download <user>/<repo>`}
       </section>
 
       <section>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">get started</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              sign in with github to mint an api key, browse hosted models, or self-host your own
-              siahub instance.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <a href={`${CAS_URL}/auth/github/start`}>
-                  <GithubLogo data-icon="inline-start" weight="fill" />
-                  sign in with github
-                </a>
-              </Button>
-              <Button asChild variant="outline">
-                <a href="https://docs.siahub.app" target="_blank" rel="noreferrer">
-                  read the docs
-                  <ArrowRight data-icon="inline-end" weight="regular" />
-                </a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <footer className="border-t pt-6 text-xs text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <a href="https://docs.siahub.app" className="hover:text-foreground" target="_blank" rel="noreferrer">
-            docs
-          </a>
-          <a href="https://github.com/bytemaster333/siahub" className="hover:text-foreground" target="_blank" rel="noreferrer">
-            github
-          </a>
-          <span className="ml-auto">bytes on sia &middot; xet-compatible</span>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <a href={`${CAS_URL}/auth/github/start`}>
+              <GithubLogo data-icon="inline-start" weight="fill" />
+              sign in with github
+            </a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href="https://docs.siahub.app" target="_blank" rel="noreferrer">
+              docs
+              <ArrowRight data-icon="inline-end" weight="regular" />
+            </a>
+          </Button>
         </div>
-      </footer>
+      </section>
     </main>
   )
 }

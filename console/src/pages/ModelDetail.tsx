@@ -254,11 +254,6 @@ curl -L -o ${firstFile} \\
         </div>
       </div>
       <CodeBlock code={active} />
-      <p className="mt-2 text-xs text-muted-foreground">
-        {tab === "cli" && "Standard hf CLI, no fork."}
-        {tab === "python" && "Same huggingface_hub library."}
-        {tab === "curl" && "Direct HTTP fetch."}
-      </p>
     </section>
   )
 }
