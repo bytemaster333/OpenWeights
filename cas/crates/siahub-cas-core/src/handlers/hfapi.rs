@@ -870,23 +870,27 @@ pub async fn commit<S: HfApiState>(
                 to_insert.push((f.path.clone(), None, Some(oid_bytes), size));
                 continue;
             }
-            // Xet-transferred file: bytes live in `xorbs`, not lfs_objects.
-            // hf_hub's commit payload for Xet uploads sends the file's
-            // sha256 OID but NOT the xet_hash (that's an HF-internal
-            // index lookup). To bridge without a shard-parse path, link
-            // the file to the most recent `pinning`-state xorb the
-            // caller uploaded that isn't yet bound to any repo_files
-            // row. This works for the one-file-per-upload demo case and
-            // keeps the column invariants clean.
+            // xet-transferred file: bytes live in `xorbs`, not lfs_objects.
+            // pick the most recent unbound xorb for this api key, EXCLUDING
+            // any xorb already claimed by an earlier file in this commit
+            // (we haven't flushed repo_files yet, so SQL's LEFT JOIN alone
+            // can't catch intra-commit collisions).
+            let already_claimed_in_commit: Vec<Vec<u8>> = to_insert
+                .iter()
+                .filter_map(|(_, xh, _, _)| xh.clone())
+                .collect();
             let claim: Option<(Vec<u8>, i64)> = sqlx::query_as(
                 "SELECT x.xorb_merkle_hash, x.size_bytes \
                    FROM xorbs x \
                    LEFT JOIN repo_files rf ON rf.xet_hash = x.xorb_merkle_hash \
-                  WHERE x.owner_api_key_id = $1 AND rf.xet_hash IS NULL \
+                  WHERE x.owner_api_key_id = $1 \
+                    AND rf.xet_hash IS NULL \
+                    AND NOT (x.xorb_merkle_hash = ANY($2)) \
                   ORDER BY x.uploaded_at DESC \
                   LIMIT 1",
             )
             .bind(ctx.api_key_id)
+            .bind(&already_claimed_in_commit)
             .fetch_optional(pool)
             .await?;
             let size = f.size.ok_or(AppError::BadRequest("missing_size"))?;
@@ -895,9 +899,6 @@ pub async fn commit<S: HfApiState>(
                     to_insert.push((f.path.clone(), Some(xet_hash), None, size));
                 }
                 None => {
-                    // No Xet byte upload in this session. Client sent an
-                    // LFS OID without PUTing content first — 409 tells
-                    // hf_hub "you didn't upload, try again".
                     return Err(AppError::BadRequest("lfs_oid_not_uploaded"));
                 }
             }
