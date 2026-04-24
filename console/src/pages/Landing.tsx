@@ -1,73 +1,101 @@
-import { GithubLogo, WarningCircle } from "@phosphor-icons/react"
+import { ArrowRight, CloudArrowUp, DownloadSimple, GithubLogo } from "@phosphor-icons/react"
 import { useSearch } from "@tanstack/react-router"
 
 import { OAuthErrorBanner, type OAuthErrorCode } from "@/components/OAuthErrorBanner"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CAS_URL } from "@/lib/api"
 
-/**
- * Landing page (route `/`). Primary entry point for unauthenticated users.
- *
- *, : sole authentication surface is the "Sign in with GitHub"
- * button, which performs a plain same-site navigation to CAS
- * `/auth/github/start`. CAS mints an OAuth state nonce, stores it in
- * `oauth_state` (TTL 10m), and 302s to GitHub — the browser, not the
- * console, crosses the cross-origin boundary.
- *
- * surfacing: when the callback fails, CAS's `CallbackError` emits a
- * stable `code` (`oauth_state_mismatch`, `oauth_code_missing`,
- * `github_token_exchange_failed`). The callback handler appends
- * `?error=<code>` to the redirect URL so this page can render a friendly
- * banner; see `OAuthErrorBanner` for the code → copy map.*/
 export function LandingPage() {
   const search = useSearch({ strict: false }) as { error?: string }
   const errorCode = isOAuthErrorCode(search.error) ? search.error : undefined
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-2xl flex-col justify-center gap-6 px-6 py-16">
+    <main className="mx-auto max-w-4xl space-y-10 px-6 py-16">
       {errorCode ? <OAuthErrorBanner code={errorCode} /> : null}
 
-      <div>
-        <h1 className="font-heading text-3xl font-medium tracking-tight">SiaHub</h1>
-        <p className="mt-3 text-sm/relaxed text-muted-foreground">
-          A Xet-compatible storage backend on Sia. Point{" "}
-          <code className="rounded-none bg-muted px-1 py-0.5 font-mono text-xs">
-            HF_XET_DATA_DEFAULT_CAS_ENDPOINT
-          </code>{" "}
-          at a SiaHub deployment and keep using{" "}
-          <code className="rounded-none bg-muted px-1 py-0.5 font-mono text-xs">
-            huggingface-cli
-          </code>{" "}
-          unchanged.
+      <section className="space-y-4">
+        <h1 className="font-heading text-4xl font-medium tracking-tight">siahub</h1>
+        <p className="max-w-2xl text-base/relaxed text-muted-foreground">
+          a self-hostable model hub where uploads and downloads go through the standard{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli, but
+          bytes live on the sia network instead of s3. no fork of huggingface_hub, no patched
+          client &mdash; just set{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">HF_ENDPOINT</code> at
+          a siahub deployment and push.
         </p>
-      </div>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Get started</CardTitle>
-          <CardDescription>Sign in with GitHub to mint an API key.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild>
-            {/*
- A plain `<a href>` (not TanStack `<Link>`) — the destination
- is CAS, a different origin. React-router-style client
- navigation would no-op against a same-SPA route table.*/}
-            <a href={`${CAS_URL}/auth/github/start`}>
-              <GithubLogo data-icon="inline-start" weight="fill" />
-              Sign in with GitHub
-            </a>
-          </Button>
-        </CardContent>
-      </Card>
+      <section className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2 pb-2">
+            <CloudArrowUp weight="duotone" className="size-5 text-primary" />
+            <CardTitle className="text-base">upload with hf cli</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs text-muted-foreground">
+            <p>mint an api key on the /keys page, then</p>
+            <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
+              {`HF_TOKEN=<your-key> \\
+HF_ENDPOINT=https://siahub.app \\
+hf upload <user>/<repo> ./model.safetensors`}
+            </pre>
+          </CardContent>
+        </Card>
 
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <WarningCircle weight="regular" className="size-3.5" />
-        Operator console only. Runs end-user uploads go through{" "}
-        <code className="rounded-none bg-muted px-1 py-0.5 font-mono text-xs">huggingface-cli</code>
-        , not the browser.
-      </p>
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2 pb-2">
+            <DownloadSimple weight="duotone" className="size-5 text-primary" />
+            <CardTitle className="text-base">download anonymously</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs text-muted-foreground">
+            <p>public repos need no token</p>
+            <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
+              {`HF_ENDPOINT=https://siahub.app \\
+hf download <user>/<repo>`}
+            </pre>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">get started</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              sign in with github to mint an api key, browse hosted models, or self-host your own
+              siahub instance.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild>
+                <a href={`${CAS_URL}/auth/github/start`}>
+                  <GithubLogo data-icon="inline-start" weight="fill" />
+                  sign in with github
+                </a>
+              </Button>
+              <Button asChild variant="outline">
+                <a href="https://docs.siahub.app" target="_blank" rel="noreferrer">
+                  read the docs
+                  <ArrowRight data-icon="inline-end" weight="regular" />
+                </a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <footer className="border-t pt-6 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <a href="https://docs.siahub.app" className="hover:text-foreground" target="_blank" rel="noreferrer">
+            docs
+          </a>
+          <a href="https://github.com/bytemaster333/siahub" className="hover:text-foreground" target="_blank" rel="noreferrer">
+            github
+          </a>
+          <span className="ml-auto">bytes on sia &middot; xet-compatible</span>
+        </div>
+      </footer>
     </main>
   )
 }
