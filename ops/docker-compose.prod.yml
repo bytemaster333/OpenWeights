@@ -1,0 +1,115 @@
+# ops/docker-compose.prod.yml — Production overlay for the hosted demo.
+#
+# Plan 05-04. Compose with:
+#   docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
+#                  --env-file .env up -d
+#
+# Differences from the base (dev/CI) compose:
+#   1. Adds a `caddy` service bound to 0.0.0.0:80 + 0.0.0.0:443 (ONLY public ports).
+#   2. Drops the base file's `127.0.0.1:<x>:<y>` port mappings to `expose:` so
+#      CAS/gateway/console/Postgres/Redis/indexd(app)/indexd(admin) are reachable
+#      only on the Compose network — Caddy proxies CAS + gateway + console, and
+#      Postgres/Redis/indexd are internal dependencies of the siahub-* services.
+#   3. Pins `V2_RECONSTRUCTION_ENABLED=true` (Phase 3 default anyway; belt-and-
+#      suspenders for D-65 in production).
+#   4. Sets `GATEWAY_BASE_URL=https://cas.siahub.app/gateway` so signed URLs
+#      minted by CAS reach the gateway via Caddy.
+#   5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in .env for a
+#      testnet demo.
+#   6. `restart: unless-stopped` on every service — reboot-resilient without
+#      requiring a systemd unit.
+#
+# indexd image pinning: `INDEXD_IMAGE` in .env MUST be a digest-pinned ref
+# (e.g. ghcr.io/siafoundation/indexd@sha256:...) rather than `:latest`. Phase 1
+# close produced the canonical digest; the .env.prod.example file lists it.
+
+services:
+
+  caddy:
+    image: caddy:2.8
+    container_name: siahub-caddy
+    # Caddy cannot start until the upstreams are ready to accept proxied
+    # traffic — otherwise the first ACME challenge races.
+    depends_on:
+      siahub-cas:      { condition: service_healthy }
+      siahub-gateway:  { condition: service_healthy }
+      siahub-console:  { condition: service_healthy }
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persist ACME account + issued cert + on-disk OCSP cache across
+      # container restarts. WITHOUT this Let's Encrypt re-issues certs on
+      # every deploy, which quickly trips the 5/week rate limit.
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      SIAHUB_ACME_EMAIL: ${SIAHUB_ACME_EMAIL:?must be set in .env for Let's Encrypt}
+    restart: unless-stopped
+
+  # ─── siahub-cas: drop 127.0.0.1 publish; only internally exposed ────────────
+  siahub-cas:
+    ports: !reset []
+    expose:
+      - "8080"
+    environment:
+      # V2 flip explicit in prod (CAS emits multipart-aware signed URLs).
+      V2_RECONSTRUCTION_ENABLED: "true"
+      # Signed URLs minted here land at https://cas.siahub.app/gateway/<path>
+      # after Caddy's handle_path strip.
+      GATEWAY_BASE_URL: https://cas.siahub.app/gateway
+    restart: unless-stopped
+
+  # ─── siahub-gateway: drop 127.0.0.1 publish; only internally exposed ────────
+  siahub-gateway:
+    ports: !reset []
+    expose:
+      - "8081"
+    environment:
+      # Gateway verifies URLs minted with this base; must match CAS.
+      GATEWAY_BASE_URL: https://cas.siahub.app/gateway
+    restart: unless-stopped
+
+  # ─── siahub-console: drop 127.0.0.1 publish; only internally exposed ────────
+  siahub-console:
+    ports: !reset []
+    expose:
+      - "80"
+    restart: unless-stopped
+
+  # ─── Postgres: loopback-only in prod (Caddy has no reason to reach it) ─────
+  postgres:
+    ports: !reset []
+    expose:
+      - "5432"
+    restart: unless-stopped
+
+  # ─── Redis: loopback-only in prod ──────────────────────────────────────────
+  redis:
+    ports: !reset []
+    expose:
+      - "6379"
+    restart: unless-stopped
+
+  # ─── indexd: keep p2p port public (required by Sia protocol), loopback
+  #     the admin/app APIs. The base compose already loopback-binds 9980/9982
+  #     so this is a belt-and-suspenders explicit reset.
+  indexd:
+    # Keep the p2p syncer port (9981) network-reachable; drop the rest.
+    ports: !override
+      - "9981:9981"
+    expose:
+      - "9980"
+      - "9982"
+    environment:
+      # Default to mainnet in prod. Owner overrides to `zen` in .env for a
+      # testnet-funded demo. Keep in sync with SIAHUB_WALLET_THRESHOLD_HASTINGS.
+      INDEXD_NETWORK: ${SIA_NETWORK:-mainnet}
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+    name: siahub-caddy-data
+  caddy-config:
+    name: siahub-caddy-config

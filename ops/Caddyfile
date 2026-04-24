@@ -1,0 +1,123 @@
+# ops/Caddyfile — Production dual-SAN reverse proxy for the SiaHub hosted demo.
+#
+# Plan 05-04 (Phase 5 Ship v1). Pairs with `ops/docker-compose.prod.yml`.
+# CI variant lives at `ops/Caddyfile.ci` (HTTP-only h2c, loopback only) —
+# DO NOT edit that file from here; the two intentionally coexist.
+#
+# ┌──────────────────────────────── Probe 2 resolution ────────────────────────────┐
+# │                                                                                │
+# │  Caddy v2.8 supports dual-SAN automatic certs by listing both hostnames as     │
+# │  the site-address of a SINGLE site block. Caddy provisions one Let's Encrypt   │
+# │  cert with both names in `subjectAltName` and auto-renews it.                  │
+# │                                                                                │
+# │  Owner-run staging validation BEFORE prod issuance (05-04 runbook §3):         │
+# │    1. Uncomment the `acme_ca` directive below.                                 │
+# │    2. `make deploy`.                                                           │
+# │    3. `openssl s_client -connect siahub.app:443 -servername siahub.app` and    │
+# │       `openssl x509 -noout -ext subjectAltName` to confirm BOTH DNS names.     │
+# │    4. Comment `acme_ca` back out and redeploy for prod issuance.               │
+# │                                                                                │
+# │  Fallback (only if Caddy splits the cert into two): replace the two-domain     │
+# │  site address with a `tls_automation` policy block naming both domains in      │
+# │  the same `automation_policy`. We'll commit that fallback inline here as       │
+# │  a visible decision if Probe 2 surfaces a Caddy 2.8 regression.                │
+# │                                                                                │
+# └────────────────────────────────────────────────────────────────────────────────┘
+
+{
+    # Disable the remote admin API entirely. /metrics exposure is a Phase-5
+    # anti-feature; there is no monitoring dashboard layer.
+    admin off
+
+    # Owner-set via ops/.env.prod -> docker-compose.prod.yml -> SIAHUB_ACME_EMAIL.
+    # Caddy reads this to register the ACME account; Let's Encrypt emails the
+    # account here for renewal / revocation notices.
+    email {$SIAHUB_ACME_EMAIL}
+
+    # Uncomment ONLY for Probe 2 staging-cert validation. Leave commented in prod.
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# ─── Single site block, two SANs, one cert ─────────────────────────────────────
+# Caddy treats "siahub.app, cas.siahub.app" as a single site and issues one
+# dual-SAN cert covering both names. HSTS + HTTP/2 tuning apply to both.
+siahub.app, cas.siahub.app {
+    encode zstd gzip
+
+    # HTTP/2 tuning — P12 mitigation. `max_concurrent_streams 256` gives xet-core
+    # plenty of stream headroom for multi-range reconstruction GETs without
+    # Caddy queueing (default 100 is tight for 40+ parallel parts).
+    servers {
+        protocols h1 h2
+        max_concurrent_streams 256
+    }
+
+    # ─── Per-host routing via host matchers ─────────────────────────────────────
+
+    # siahub.app → console (shadcn/TanStack Router/Query SPA served as static
+    # assets by the console's nginx inside the container).
+    @console host siahub.app
+    handle @console {
+        reverse_proxy http://siahub-console:80
+    }
+
+    # cas.siahub.app → CAS + gateway (path-split). Gateway lives under /gateway/*
+    # so Caddy can apply `flush_interval -1` specifically to the streaming
+    # multipart/byteranges path (P12 load-bearing).
+    @cas host cas.siahub.app
+    handle @cas {
+        # Gateway: signed-URL range serving. `handle_path` strips the prefix
+        # before proxying so the gateway sees its canonical URL paths. This
+        # matches GATEWAY_BASE_URL=https://cas.siahub.app/gateway in .env.prod.
+        handle_path /gateway/* {
+            reverse_proxy http://siahub-gateway:8081 {
+                # P12: keep streaming + multipart/byteranges boundaries intact.
+                # Caddy would otherwise buffer + potentially recompose the body;
+                # -1 disables flush batching entirely.
+                flush_interval -1
+            }
+        }
+
+        # Deny /metrics explicitly — loopback-bound per CONTEXT §5. Even though
+        # siahub-cas does NOT publish its metrics port externally, a belt-and-
+        # suspenders guard protects against a future compose overlay regression.
+        @metrics path /metrics /metrics/*
+        handle @metrics {
+            respond "not found" 404
+        }
+
+        # Default: CAS protocol surface (/v1/*, /admin/*, /auth/*, /health).
+        reverse_proxy http://siahub-cas:8080 {
+            # Same streaming guard. `/v1/xorbs` uploads are large; let them flow.
+            flush_interval -1
+        }
+    }
+
+    # ─── Security headers ──────────────────────────────────────────────────────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options    "nosniff"
+        # No CSP/COEP/COOP/Referrer-Policy — frontend concerns handled by the
+        # console's own meta tags. No analytics/tracking headers (anti-feature).
+        # Remove the Server header to avoid leaking Caddy version for no gain.
+        -Server
+    }
+
+    # ─── Clean error responses ─────────────────────────────────────────────────
+    handle_errors {
+        @4xx expression `{err.status_code} >= 400 && {err.status_code} < 500`
+        handle @4xx {
+            respond "{err.status_code} {err.status_text}"
+        }
+        @5xx expression `{err.status_code} >= 500`
+        handle @5xx {
+            respond "{err.status_code} {err.status_text}"
+        }
+    }
+
+    # JSON stdout logs (Phase 5 anti-feature: no log aggregation SaaS).
+    log {
+        output stdout
+        format json
+    }
+}

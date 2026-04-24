@@ -1,0 +1,55 @@
+# Plan 05-02 — HTTP-only CI overlay Caddyfile.
+#
+# HTTP-only, loopback-bound, no TLS. Exercises the SAME reverse-proxy code path
+# that the production Caddyfile (05-04) will carry — path-prefix fanout from a
+# single port to CAS + gateway + console — so P12 (HTTP/2 Range integrity
+# through Caddy) is regression-gated in CI without paying for Let's Encrypt
+# staging issuance on every nightly run.
+#
+# P12 mitigation knobs:
+#   * `flush_interval -1` on the gateway proxy keeps streaming responses
+#     unbuffered — Caddy will not coalesce or re-chunk multipart/byteranges
+#     bodies emitted by siahub-gateway.
+#   * `servers { protocols h1 h2c }` runs plaintext HTTP/2 (h2c) so CI
+#     exercises the exact multi-range path production HTTPS/2 will carry.
+#
+# WHY NOT THE PROD Caddyfile:
+#   * Prod (05-04) = dual-SAN automatic Let's Encrypt TLS for `siahub.app` +
+#     `cas.siahub.app`. Neither domain is resolvable from the CI runner; ACME
+#     issuance would fail instantly and leak the staging email.
+#   * CI round-trip needs a single loopback port (`:8090`) with the same
+#     handler topology. Path-prefix-routing preserves the proxy code path
+#     without needing DNS.
+
+{
+    auto_https off
+    admin off
+    servers {
+        protocols h1 h2c
+    }
+}
+
+:8090 {
+    # Round-trip harness targets these path prefixes; `handle_path` strips
+    # the prefix before proxying so each upstream sees its canonical URL.
+
+    # CAS endpoint (HF_XET_DATA_DEFAULT_CAS_ENDPOINT target in run.sh).
+    handle_path /cas/* {
+        reverse_proxy http://siahub-cas:8080 {
+            flush_interval -1
+        }
+    }
+
+    # Gateway endpoint (signed URLs resolve here; single + multi-range paths).
+    handle_path /gateway/* {
+        reverse_proxy http://siahub-gateway:8081 {
+            flush_interval -1
+        }
+    }
+
+    # Console — proxied for parity with prod; not exercised by the round-trip
+    # harness but ensures the overlay matches the 4-service fanout shape.
+    handle /* {
+        reverse_proxy http://siahub-console:80
+    }
+}
