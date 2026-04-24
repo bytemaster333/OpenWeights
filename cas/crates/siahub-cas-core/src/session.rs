@@ -1,30 +1,26 @@
-//! Session cookie middleware + primitives for Phase 4 console admin routes.
-//!
-//! Plan 04-01 (Phase 2.1 amendment — D-41). Locks the `siahub_session`
-//! cookie semantics (D-50 + D-54) and provides the `Session` extractor used
+//! Session cookie middleware + primitives for console admin routes.
+//! ( amendment — ). Locks the `siahub_session`
+//! cookie semantics ( + ) and provides the `Session` extractor used
 //! by every `/admin/*` handler + `POST /auth/logout`.
-//!
-//! Cookie spec (authoritative — D-50):
-//!   * Name: `siahub_session`
-//!   * Value: UUID v4 (opaque to client)
-//!   * Flags: `HttpOnly; Secure; SameSite=Lax; Path=/`
-//!   * Max-Age / Expires: 7 days, rolling (refreshed on every authenticated
-//!     request via `touch_session`).
-//!
+//! Cookie spec (authoritative — ):
+//! * Name: `siahub_session`
+//! * Value: UUID v4 (opaque to client)
+//! * Flags: `HttpOnly; Secure; SameSite=Lax; Path=/`
+//! * Max-Age / Expires: 7 days, rolling (refreshed on every authenticated
+//! request via `touch_session`).
 //! Threat model:
-//!   * `HttpOnly` blocks JS access — no XSS-driven theft.
-//!   * `Secure` + TLS pins cookie to HTTPS in production (Caddy apex).
-//!   * `SameSite=Lax` blocks cross-site CSRF for mutating routes (POST /
-//!     DELETE). Combined with the OAuth `state` nonce, the auth round-trip
-//!     is CSRF-safe.
-//!   * Cookie value is ONLY ever a UUID — no PII, no user-id, no scope.
-//!
+//! * `HttpOnly` blocks JS access — no XSS-driven theft.
+//! * `Secure` + TLS pins cookie to HTTPS in production (Caddy apex).
+//! * `SameSite=Lax` blocks cross-site CSRF for mutating routes (POST /
+//! DELETE). Combined with the OAuth `state` nonce, the auth round-trip
+//! is CSRF-safe.
+//! * Cookie value is ONLY ever a UUID — no PII, no user-id, no scope.
 //! DB columns read/written:
-//!   * `sessions(session_id, user_id, created_at, expires_at, revoked_at,
-//!     last_seen_at)` — `last_seen_at` added by migration
-//!     `0006_sessions_touch.sql`.
-//!   * `users(id, github_login, email, avatar_url, is_admin)` —
-//!     `avatar_url` + `is_admin` added by the same migration.
+//! * `sessions(session_id, user_id, created_at, expires_at, revoked_at,
+//! last_seen_at)` — `last_seen_at` added by migration
+//! `0006_sessions_touch.sql`.
+//! * `users(id, github_login, email, avatar_url, is_admin)`
+//! `avatar_url` + `is_admin` added by the same migration.
 
 use std::future::Future;
 
@@ -38,12 +34,12 @@ use uuid::Uuid;
 use crate::auth::AuthStateRef;
 use crate::errors::AppError;
 
-/// Session cookie name — locked by D-54. Console code must NEVER read / write
+/// Session cookie name — locked by . Console code must NEVER read / write
 /// this cookie directly; only CAS mints it on `/auth/github/callback` and
 /// clears it on `/auth/logout`.
 pub const SESSION_COOKIE_NAME: &str = "siahub_session";
 
-/// Session lifetime — 7 days rolling per D-50. Expiry is refreshed on every
+/// Session lifetime — 7 days rolling per . Expiry is refreshed on every
 /// authenticated hit via `touch_session`.
 pub const SESSION_TTL_DAYS: i64 = 7;
 
@@ -67,13 +63,11 @@ pub struct MintedSession {
 }
 
 /// Extractor placed in a handler signature like:
-///
 /// ```ignore
 /// async fn get_me(Session(user): Session) -> Json<MeResponse> { ... }
 /// ```
-///
 /// Parsing failures (missing cookie, unknown session, expired, revoked) all
-/// collapse to 401 per D-50 — the console's `api.ts` then redirects to
+/// collapse to 401 per — the console's `api.ts` then redirects to
 /// `/login`. No 403 is ever emitted by the extractor itself; admin-gated
 /// handlers check `session.user.is_admin` in their own body.
 #[derive(Debug, Clone)]
@@ -85,7 +79,6 @@ pub struct Session(pub SessionUser);
 
 /// Extract `siahub_session=<uuid>` from a raw `Cookie:` header value. Tolerant
 /// to multiple cookies (`; ` separated) and surrounding whitespace.
-///
 /// Returns `None` if the cookie is absent OR the value does not parse as a
 /// UUID. Both outcomes produce a 401 at the extractor boundary — the client
 /// observationally cannot distinguish them.
@@ -102,12 +95,10 @@ pub fn parse_session_cookie(cookie_header: &str) -> Option<Uuid> {
 }
 
 /// Build the `Set-Cookie` header value for a minted session.
-///
 /// Header shape (exact text; asserted in unit tests):
 /// ```text
 /// siahub_session=<uuid>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
 /// ```
-///
 /// `Max-Age=604800` is preferred over `Expires=` to keep the header robust
 /// against client-clock skew (RFC 6265 §4.1.2.2).
 pub fn session_cookie_header(session_id: Uuid) -> String {
@@ -132,9 +123,8 @@ pub fn clear_session_cookie_header() -> String {
 // ---------------------------------------------------------------------------
 
 /// Insert a fresh session row and return `(session_id, expires_at)`.
-///
 /// `session_id` is UUID v4 from `uuid::Uuid::new_v4` (CSPRNG-backed via
-/// `getrandom`). `expires_at = NOW() + 7 days` per D-50.
+/// `getrandom`). `expires_at = NOW + 7 days` per .
 pub async fn mint_session(db: &PgPool, user_id: i64) -> Result<MintedSession, sqlx::Error> {
     let session_id = Uuid::new_v4();
     let row: (DateTime<Utc>,) = sqlx::query_as(
@@ -333,7 +323,7 @@ mod tests {
 
     #[test]
     fn session_cookie_name_locked_to_siahub_session() {
-        // D-54 — name is part of the cross-service contract; breaking it
+        //name is part of the cross-service contract; breaking it
         // silently logs every user out.
         assert_eq!(SESSION_COOKIE_NAME, "siahub_session");
     }

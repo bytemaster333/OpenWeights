@@ -1,23 +1,20 @@
-//! Plan 02-05 Task 5 — shard handler tests (unit-level, Docker-free).
-//!
+//! Task 5 — shard handler tests (unit-level, Docker-free).
 //! These tests drive the pure shard-parse logic directly; the full-handler
 //! happy-path + dedup + Sia-unavailable tests that need testcontainers
-//! Postgres are deferred to Plan 02-10's conformance crate where that rig is
-//! wired. This matches the Plan 02-04 split rationale documented in
+//! Postgres are deferred to 's conformance crate where that rig is
+//! wired. This matches the split rationale documented in
 //! `tests/xorbs_tests.rs`.
-//!
 //! Coverage mapped to plan §Task 5:
-//!   - Test 1 (dual-path routing, full-handler): deferred to 02-10 (needs Postgres)
-//!   - Test 2 (P18, missing xorb → 400): asserted at the handler mapping
-//!     level — the parser + `ShardMissingXorbs` error shape are exercised here;
-//!     DB round-trip deferred to 02-10.
-//!   - Test 3 (P19, header.version != 2 → 400 ShardVersionUnsupported): **covered**
-//!   - Test 4 (P19, footer.version != 1 → 400): **covered**
-//!   - Test 5 (dedup response): deferred to 02-10 (needs Postgres)
-//!   - Test 6 (Sia failure → DURABLE reconstruction): deferred to 02-10
-//!   - Test 7 (dedup endpoint 401/403/404): auth matrix exercised by
-//!     `auth.rs` unit tests; the 404-stub shape is asserted here.
-//!
+//! - Test 1 (dual-path routing, full-handler): deferred to (needs Postgres)
+//! - Test 2 ( missing xorb → 400): asserted at the handler mapping
+//! level — the parser + `ShardMissingXorbs` error shape are exercised here;
+//! DB round-trip deferred to .
+//! - Test 3 ( header.version != 2 → 400 ShardVersionUnsupported): **covered**
+//! - Test 4 ( footer.version != 1 → 400): **covered**
+//! - Test 5 (dedup response): deferred to (needs Postgres)
+//! - Test 6 (Sia failure → DURABLE reconstruction): deferred to 02-10
+//! - Test 7 (dedup endpoint 401/403/404): auth matrix exercised by
+//! `auth.rs` unit tests; the 404-stub shape is asserted here.
 //! The tests in this file require the `test_routines` + `gen_specific_shard`
 //! helpers from `xet_core_structures` to produce valid shards at runtime.
 
@@ -52,14 +49,14 @@ fn build_valid_shard_bytes() -> (Vec<u8>, [u8; 32]) {
     let shard = gen_specific_shard(&[(42u64, xorb_chunks)], file_nodes, None, None)
         .expect("gen_specific_shard ok");
     let bytes = convert_to_file(&shard).expect("serialize ok");
-    // Xorb hash for the P18 set: simple_hash(42) as 32 raw bytes.
+    // Xorb hash for the set: simple_hash(42) as 32 raw bytes.
     let xorb_hash: [u8; 32] =
         siahub_cas_proto::merklehash::MerkleHash::from([42u64, 1, 0, 0]).into();
     (bytes, xorb_hash)
 }
 
 // ---------------------------------------------------------------------------
-// P19 — header version mismatch → 400 ShardVersionUnsupported
+//header version mismatch → 400 ShardVersionUnsupported
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -106,7 +103,7 @@ fn p19_footer_version_not_one_is_rejected() {
 }
 
 // ---------------------------------------------------------------------------
-// Valid shard — parse succeeds, extracts the referenced xorb for P18 lookup
+// Valid shard — parse succeeds, extracts the referenced xorb for lookup
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -121,15 +118,15 @@ fn valid_shard_parses_and_extracts_referenced_xorb() {
     assert_eq!(parsed.files.len(), 1, "one file per fixture");
     assert_eq!(parsed.terms.len(), 1, "one term per fixture");
 
-    // Pre-computed byte offsets (P4): term covers chunks 0..2 (END-EXCLUSIVE).
+    // Pre-computed byte offsets: term covers chunks 0..2 (END-EXCLUSIVE).
     // The xet-core `gen_specific_shard` helper populates each XorbChunkSequenceEntry
     // with (chunk_byte_range_start, unpacked_segment_bytes) = (s_i, pos_i) in
     // an order that deviates from the field names' "natural" reading — so the
     // parsed byte range is derived from the STARTS of chunks[0] and chunks[1]
     // plus chunks[1].len. For our fixture `&[(1,10),(2,20),(3,30),(4,40)]`:
-    //   chunks[0] = (chunk_byte_range_start=10, unpacked_segment_bytes=0)
-    //   chunks[1] = (chunk_byte_range_start=20, unpacked_segment_bytes=10)
-    //   chunks[2] = (30, 30) ...
+    // chunks[0] = (chunk_byte_range_start=10, unpacked_segment_bytes=0)
+    // chunks[1] = (chunk_byte_range_start=20, unpacked_segment_bytes=10)
+    // chunks[2] = (30, 30) ...
     // So term covering 0..2 yields byte range [10, 20 + 10) = [10, 30).
     let t = &parsed.terms[0];
     assert_eq!(t.term_index, 0);
@@ -149,7 +146,7 @@ fn valid_shard_parses_and_extracts_referenced_xorb() {
 }
 
 // ---------------------------------------------------------------------------
-// P18 — ShardMissingXorbs shape + 400 status
+//ShardMissingXorbs shape + 400 status
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -239,6 +236,6 @@ fn random_middle_bytes_produce_malformed_not_version_error() {
         Err(ShardParseError::HeaderVersion(_)) | Err(ShardParseError::FooterVersion(_)) => {
             panic!("expected non-version error on mid-body corruption")
         }
-        Err(_) | Ok(_) => { /* acceptable — either Malformed or lucky still-parses */ }
+        Err(_) | Ok(_) => { /* acceptable — either Malformed or lucky still-parses*/ }
     }
 }

@@ -1,11 +1,9 @@
 //! Sia-storage boundary for siahub-cas.
-//!
 //! All code that writes to / reads from Sia goes through the [`SiaAdapter`]
 //! trait. The real binary wires in [`sia::RustSdkAdapter`] (thin wrapper around
 //! `sia_storage::Sdk`); the conformance crate wires in [`mock::MockSiaAdapter`]
 //! via the `sia-mock` feature so `cargo test` does not need a live `indexd`
-//! (CONTEXT D-22).
-//!
+//! (CONTEXT ).
 //! The trait is object-safe so `AppState::sia: Arc<dyn SiaAdapter>` works
 //! without generics bleeding into every handler.
 

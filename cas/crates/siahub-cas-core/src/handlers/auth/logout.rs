@@ -1,13 +1,10 @@
 //! `POST /auth/logout` — revoke the current session server-side and clear
 //! the cookie client-side.
-//!
-//! Backs AUTH-05. Requires a valid `siahub_session` cookie (extractor
+//! Backs . Requires a valid `siahub_session` cookie (extractor
 //! returns 401 otherwise). Idempotent against its own revocation: a second
 //! call by the same revoked session would already fail at the extractor.
-//!
 //! Response: `204 No Content` with `Set-Cookie: siahub_session=; Max-Age=0`.
 //! Console's `<UserMenu>` hits this endpoint then redirects to `/login`
-//! (D-50).
 
 use std::future::Future;
 

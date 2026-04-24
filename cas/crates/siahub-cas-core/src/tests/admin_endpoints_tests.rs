@@ -1,23 +1,20 @@
-//! Plan 04-01 Task 8 — unit-level coverage for `/admin/*` endpoints.
-//!
+//! Task 8 — unit-level coverage for `/admin/*` endpoints.
 //! Full DB round-trip tests (testcontainers Postgres, seed a user + key,
-//! hit the handler via axum's `oneshot`) are deferred to Plan 02-10's
+//! hit the handler via axum's `oneshot`) are deferred to 's
 //! conformance crate — same rationale documented in every other
 //! `tests/*.rs` module in this crate (xorbs, shards, reconstruction,
 //! reconciler, metering, signed_url). Conformance already has
 //! `testcontainers-modules` + a Postgres fixture pattern; re-wiring it in
-//! this crate would violate T-02-10-06 (xet-client must not leak into the
+//! this crate would violate T-02- (xet-client must not leak into the
 //! CAS workspace).
-//!
 //! This file exercises the invariants that do NOT require a live Postgres:
-//!
-//!   * Cookie header construction / parse round-trip (D-50).
-//!   * OAuth `state` nonce generation entropy + URL-safe alphabet.
-//!   * Scope translation `"read"|"write"|"admin"` ↔ `ApiKeyScope::*` (D-45).
-//!   * `plaintext_key` field-name invariant (grep-based schema check).
-//!   * Callback error code stability (P14).
-//!   * `IndexdHost` deserialization against a probed JSON shape.
-//!   * Hex encoding invariants for `/admin/xorbs` + `/admin/stats` activity.
+//! * Cookie header construction / parse round-trip.
+//! * OAuth `state` nonce generation entropy + URL-safe alphabet.
+//! * Scope translation `"read"|"write"|"admin"` ↔ `ApiKeyScope::*`.
+//! * `plaintext_key` field-name invariant (grep-based schema check).
+//! * Callback error code stability.
+//! * `IndexdHost` deserialization against a probed JSON shape.
+//! * Hex encoding invariants for `/admin/xorbs` + `/admin/stats` activity.
 
 use crate::handlers::admin::keys::{ConsoleScope, CreateKeyResponse, KeyListItem, ListKeysResponse};
 use crate::handlers::admin::xorbs::XorbRow;
@@ -29,17 +26,17 @@ use axum::response::IntoResponse;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
-// AUTH-04 — session cookie construction + parse.
+//session cookie construction + parse.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn session_cookie_header_shape_matches_d50_spec() {
     let id = Uuid::new_v4();
     let h = session_cookie_header(id);
-    // Cookie name locked by D-54. Breaking this silently logs every user
+    // Cookie name locked by . Breaking this silently logs every user
     // out on deploy.
     assert!(h.starts_with(&format!("{}={}", SESSION_COOKIE_NAME, id)));
-    // D-50 flags.
+    // flags.
     assert!(h.contains("HttpOnly"), "HttpOnly missing: {h}");
     assert!(h.contains("Secure"), "Secure missing: {h}");
     assert!(h.contains("SameSite=Lax"), "SameSite=Lax missing: {h}");
@@ -79,7 +76,7 @@ fn parse_session_cookie_rejects_missing_value() {
 }
 
 // ---------------------------------------------------------------------------
-// KEYS-01..03 — scope translation + wire shape.
+// ..03 — scope translation + wire shape.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -101,7 +98,7 @@ fn console_scope_rejects_unknown_variant() {
 }
 
 // ---------------------------------------------------------------------------
-// KEYS-02 — D-45 plaintext-key invariant (field-name schema check).
+//plaintext-key invariant (field-name schema check).
 // ---------------------------------------------------------------------------
 
 /// `CreateKeyResponse` MUST include `plaintext_key`. Grep-style check so a
@@ -128,7 +125,7 @@ fn create_response_includes_plaintext_key_field() {
 }
 
 /// `ListKeysResponse` + `KeyListItem` MUST NOT include any `plaintext_key`
-/// field. This is the single most important contract in plan 04-01 —
+/// field. This is the single most important contract in
 /// grep-based check is the cheapest way to catch a future regression.
 #[test]
 fn list_response_never_includes_plaintext_key_field() {
@@ -154,7 +151,7 @@ fn list_response_never_includes_plaintext_key_field() {
 }
 
 // ---------------------------------------------------------------------------
-// AUTH-01/02 — OAuth callback error code stability (P14 mitigation).
+// /02 — OAuth callback error code stability ( mitigation).
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -236,12 +233,12 @@ mod futures_executor {
 }
 
 // ---------------------------------------------------------------------------
-// CONSOLE-09 — IndexdHost JSON shape (Probe 2 output).
+//IndexdHost JSON shape (Probe 2 output).
 // ---------------------------------------------------------------------------
 
 #[test]
 fn indexd_host_json_deserializes_with_pascal_case_fields() {
-    // Observed against a running Phase 1 compose stack (Task 1 Probe 2).
+    // Observed against a running compose stack (Task 1 Probe 2).
     // Go JSON marshal defaults to PascalCase field names for exported Go
     // fields. serde_rename below must match EXACTLY.
     let sample = r#"{
@@ -263,25 +260,23 @@ fn indexd_host_json_deserializes_with_pascal_case_fields() {
 }
 
 // ---------------------------------------------------------------------------
-// Plan 05-01 Task 5 — Phase 2.2 amendment (D-66/D-69).
-//
+// Task 5 — amendment (/).
 // `GET /admin/xorbs/{hash}` single-hash detail lookup. Live DB 200/404 path
 // is covered in the conformance crate (same pattern documented in this
 // file's module header). Here we exercise DB-less invariants the handler
 // relies on:
-//
-//   * Wire shape — `XorbRow` serializes with the same field names the list
-//     endpoint already ships (console reuses the same TS type).
-//   * Hex-string validation in the handler body — a malformed path segment
-//     returns 400 BadRequest("invalid_xorb_hash") before any DB round-trip.
-//     (The validation helper lives in `handlers::admin::xorbs`; we assert
-//     the contract indirectly via the public `XorbRow` shape + the live
-//     handler's error-class test in conformance.)
+// * Wire shape — `XorbRow` serializes with the same field names the list
+// endpoint already ships (console reuses the same TS type).
+// * Hex-string validation in the handler body — a malformed path segment
+// returns 400 BadRequest("invalid_xorb_hash") before any DB round-trip.
+// (The validation helper lives in `handlers::admin::xorbs`; we assert
+// the contract indirectly via the public `XorbRow` shape + the live
+// handler's error-class test in conformance.)
 // ---------------------------------------------------------------------------
 
 #[test]
 fn xorb_row_serializes_with_same_shape_as_list_endpoint() {
-    // Phase 2.2 amendment contract: `get_xorb_detail` returns a single
+    // amendment contract: `get_xorb_detail` returns a single
     // `XorbRow` — the same row type `list_xorbs` emits. If the field set
     // ever drifts, 04-06's console AssetDetail hook breaks silently. This
     // grep-style check is the cheapest regression tripwire.
@@ -308,7 +303,7 @@ fn xorb_row_serializes_with_same_shape_as_list_endpoint() {
             "XorbRow wire field missing: {field} in {body}"
         );
     }
-    // Hash value must propagate lowercase (P1 already-canonical BYTEA read).
+    // Hash value must propagate lowercase ( already-canonical BYTEA read).
     assert!(body.contains("eea25d6e"), "hash propagates: {body}");
 }
 

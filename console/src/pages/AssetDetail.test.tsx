@@ -19,13 +19,12 @@ import { AssetDetailPage } from "./AssetDetail"
  * `GET /admin/xorbs/{hash}` (see `useAssets.ts` docblock).
  *
  * Tests:
- *   1. Happy path — the detail endpoint 200s; every required field
- *      renders.
- *   2. `sia_object_id: null` renders the em-dash placeholder (covers
- *      pin_state="orphaned").
- *   3. `referencing_repos: ["user/repo"]` renders the list section.
- *   4. Unknown hash → "Not found" (detail 404 + scan also misses).
- */
+ * 1. Happy path — the detail endpoint 200s; every required field
+ * renders.
+ * 2. `sia_object_id: null` renders the em-dash placeholder (covers
+ * pin_state="orphaned").
+ * 3. `referencing_repos: ["user/repo"]` renders the list section.
+ * 4. Unknown hash → "Not found" (detail 404 + scan also misses).*/
 
 const HASH_A = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 const HASH_B = "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"

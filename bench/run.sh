@@ -1,28 +1,24 @@
 #!/usr/bin/env bash
-# bench/run.sh — 3-trial median benchmark harness (D-59).
-#
+# bench/run.sh — 3-trial median benchmark harness.
 # Measures 5 cells across 2 stacks:
-#   siahub.cold-download   siahub.warm-download   siahub.upload
-#   hf-native.cold-download hf-native.warm-download
+# siahub.cold-download siahub.warm-download siahub.upload
+# hf-native.cold-download hf-native.warm-download
 # Each cell runs BENCH_TRIALS (default: 3) trials; the median is reported.
 # (There is no `hf-native.upload` because `huggingface-cli upload` talks to
 # hf.co's own CAS in both stacks — the upload-side distinction is the xorb
 # PUT layer only, and measuring it against "itself" produces no signal.)
-#
 # Writes:
-#   console/public/benchmarks.json   (consumer: BenchmarksPage.tsx)
-#   docs/benchmarks.md               (reviewer-facing report; D-68: only file under docs/)
-#
+# console/public/benchmarks.json (consumer: BenchmarksPage.tsx)
+# docs/benchmarks.md (reviewer-facing report; : only file under docs/)
 # Flags:
-#   --dry-run           skip all HF network activity; emit placeholder artifacts
-#                       (every cell value becomes "null"); useful for CI layout
-#                       tests and for validating the output schema.
-#   --stack <s>         siahub | hf-native | both (default: both)
-#   --trials <n>        override BENCH_TRIALS (default: 3 per D-59)
-#
+# --dry-run skip all HF network activity; emit placeholder artifacts
+# (every cell value becomes "null"); useful for CI layout
+# tests and for validating the output schema.
+# --stack <s> siahub | hf-native | both (default: both)
+# --trials <n> override BENCH_TRIALS (default: 3 per )
 # Env: SIAHUB_CAS_URL (required for SiaHub cells unless --dry-run)
-#      SIAHUB_API_KEY (required for SiaHub upload cell unless --dry-run)
-#      INDEXD_ADMIN_PASSWORD (used by the thesis fold-in to query usable-host count)
+# SIAHUB_API_KEY (required for SiaHub upload cell unless --dry-run)
+# INDEXD_ADMIN_PASSWORD (used by the thesis fold-in to query usable-host count)
 
 set -euo pipefail
 
@@ -130,7 +126,7 @@ prep_clean_state() {
   case "$cell" in
     siahub.cold-download)
       # Gateway LRU flush (OPS admin endpoint; 10-line handler — see plan Task 3
-      # Note. On Phase 5 exit the gateway endpoint is expected to exist; if not,
+      # Note. On exit the gateway endpoint is expected to exist; if not,
       # a 404 is swallowed so the benchmark still runs (cold-vs-warm delta is
       # still measurable via xet-core cache purge alone, just less clean).
       curl -fsS -X POST -H "Authorization: Bearer ${SIAHUB_API_KEY:-}" \
@@ -181,7 +177,7 @@ print(f'{statistics.median(vals):.3f}')
 
 # -----------------------------------------------------------------------------
 # 0) one-time fixture fetch (used as the local source for the upload cell and
-#    for sizing the JSON `size_bytes`).
+# for sizing the JSON `size_bytes`).
 # -----------------------------------------------------------------------------
 mkdir -p "$WORK/fixture-src"
 echo "[bench] fetching fixture ${HF_FIXTURE_REPO}@${HF_FIXTURE_REVISION:0:12}..."
@@ -272,12 +268,11 @@ if [[ "$STACK" == "hf-native" || "$STACK" == "both" ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 3) D-70 Phase 1 thesis live-run conditional.
-#
-#     USABLE = count of Zen hosts with positive uptime usability.
-#     If USABLE >= 6   -> run `make thesis`, fold verdict into docs/benchmarks.md.
-#     If USABLE <  6   -> append a NOT-RUN-LIVE blocker note citing
-#                          indexd's hardcoded minRecoveryProbability=99.99%.
+# 3) thesis live-run conditional.
+# USABLE = count of Zen hosts with positive uptime usability.
+# If USABLE >= 6 -> run `make thesis`, fold verdict into docs/benchmarks.md.
+# If USABLE < 6 -> append a NOT-RUN-LIVE blocker note citing
+# indexd's hardcoded minRecoveryProbability=99.99%.
 # -----------------------------------------------------------------------------
 THESIS_SECTION=""
 if [[ -n "${INDEXD_ADMIN_PASSWORD:-}" ]]; then
@@ -301,7 +296,7 @@ if [[ -n "${INDEXD_ADMIN_PASSWORD:-}" ]]; then
       VERDICT="FAIL"
     fi
     cat > "$THESIS_SECTION" <<EOF
-## Thesis (Phase 1 range-download validation)
+## Thesis ( range-download validation)
 
 **Verdict:** ${VERDICT} — measured $(date -u +%Y-%m-%dT%H:%M:%SZ), ${USABLE_INT} usable Zen hosts.
 64 MiB range-download sector-scoping test ran via \`make thesis\` (PLAN 01-06 harness).
@@ -309,7 +304,7 @@ See \`bench/thesis/REPORT.md\` for the per-trial breakdown and \`bench/thesis/ru
 EOF
   else
     cat > "$THESIS_SECTION" <<EOF
-## Thesis (Phase 1 range-download validation)
+## Thesis ( range-download validation)
 
 **Status: NOT RUN LIVE** — Sia Zen testnet had only ${USABLE_INT} usable hosts on $(date -u +%Y-%m-%d) (measured via \`indexd /api/hosts\`). \`indexd\` hardcodes \`minRecoveryProbability = 99.99%\` in \`go.sia.tech/indexd/slabs/slabs.go\`, which requires a usable-host count that Zen currently does not sustain (no 3-host redundancy scheme reaches 99.99% — 1-of-3 parity maxes out at ~98.43% recovery probability).
 

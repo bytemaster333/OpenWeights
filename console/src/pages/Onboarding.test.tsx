@@ -16,8 +16,7 @@ import { OnboardingPage } from "./Onboarding"
  * Onboarding page tests — wired against a real `useCreateKey` mutation that
  * goes through a mocked `casFetch`. This exercises the exact code path
  * users hit (no bespoke mock of the hook), while still isolating us from
- * CAS.
- */
+ * CAS.*/
 
 type CreatedKeyFixture = {
   id: string
@@ -48,7 +47,7 @@ function renderOnboarding() {
     path: "/onboarding",
     component: OnboardingPage,
   })
-  // Dashboard target for navigate() click tests.
+  // Dashboard target for navigate click tests.
   const dashboardRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/dashboard",

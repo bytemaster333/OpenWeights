@@ -18,15 +18,14 @@ import { AssetsPage } from "./Assets"
  * through the real code path.
  *
  * Test plan:
- *   1. Renders empty state when CAS returns `{xorbs: []}`.
- *   2. Initial load fires GET /admin/xorbs with no query params + GET
- *      /admin/keys for the filter dropdown.
- *   3. Typing a 4-char prefix is NOT forwarded to CAS (still 8-hex rule
- *      server-side) but narrows the list client-side.
- *   4. Typing a full 8-char hex prefix is forwarded as `hash_prefix=...`
- *      after debounce + writes `?hash_prefix=...` to the URL.
- *   5. Renders a row per xorb with the pin-state badge + truncated hash.
- */
+ * 1. Renders empty state when CAS returns `{xorbs: []}`.
+ * 2. Initial load fires GET /admin/xorbs with no query params + GET
+ * /admin/keys for the filter dropdown.
+ * 3. Typing a 4-char prefix is NOT forwarded to CAS (still 8-hex rule
+ * server-side) but narrows the list client-side.
+ * 4. Typing a full 8-char hex prefix is forwarded as `hash_prefix=...`
+ * after debounce + writes `?hash_prefix=...` to the URL.
+ * 5. Renders a row per xorb with the pin-state badge + truncated hash.*/
 
 type FakeXorb = {
   hash: string
@@ -104,8 +103,7 @@ function renderAssets(initialEntries: string[] = ["/assets"]) {
 /**
  * Shared CAS mock. Returns keys + xorbs + (when called with admin/me) a
  * minimal session user so `<UserMenu>` doesn't blow up. Route-dispatches on
- * the first positional arg.
- */
+ * the first positional arg.*/
 function mockCasFetch(xorbs: FakeXorb[], keys = FIXTURE_KEYS) {
   return vi.spyOn(api, "casFetch").mockImplementation(async (path: string) => {
     if (path.startsWith("/admin/keys")) {

@@ -1,33 +1,28 @@
 #!/usr/bin/env bash
-# Plan 05-02 — CI-only test-key issuance helper.
-#
+#CI-only test-key issuance helper.
 # Mints a fresh SiaHub API key by INSERTing directly into the `api_keys`
 # table via `docker exec siahub-postgres psql`. Avoids modifying the frozen
-# CAS Rust binary (Phase 2 convention: amendments only via `N.X-*-PLAN.md`).
-#
+# CAS Rust binary ( convention: amendments only via `N.X-*-PLAN.md`).
 # SECURITY: This script is CI/dev-only. It bypasses the OAuth flow required
 # by `POST /admin/keys`. NEVER run it against a production Postgres — the
 # ci-test user it creates (`id=999999999`) would become an undetected
 # permanent admin. The CI workflow tears down the stack immediately after.
-#
 # Matches the on-disk shape emitted by handlers/admin/keys.rs::create_key:
-#   - 32 random bytes → base64url-NO-padding (43-char plaintext)
-#   - SHA-256(plaintext) → stored as raw BYTEA in api_keys.key_hash
-#   - masked_prefix = first 8 chars + "..."
-#   - scopes = {<db-scope>}   where --scope maps via the console contract:
-#        read  → 'download'
-#        write → 'upload'
-#        admin → 'admin'
-#
+# - 32 random bytes → base64url-NO-padding (43-char plaintext)
+# - SHA-256(plaintext) → stored as raw BYTEA in api_keys.key_hash
+# - masked_prefix = first 8 chars + "..."
+# - scopes = {<db-scope>} where --scope maps via the console contract:
+# read → 'download'
+# write → 'upload'
+# admin → 'admin'
 # Usage:
-#   bash scripts/issue-test-key.sh --scope write
-#     → prints the 43-char plaintext key to stdout (exit 0)
-#
+# bash scripts/issue-test-key.sh --scope write
+# → prints the 43-char plaintext key to stdout (exit 0)
 # Env:
-#   SIAHUB_POSTGRES_PASSWORD   required; matches ops/.env seed
-#   COMPOSE_PG_SERVICE         optional; default 'postgres' (container name
-#                              resolved by `docker compose ps`). Override if
-#                              running against a non-Compose Postgres.
+# SIAHUB_POSTGRES_PASSWORD required; matches ops/.env seed
+# COMPOSE_PG_SERVICE optional; default 'postgres' (container name
+# resolved by `docker compose ps`). Override if
+# running against a non-Compose Postgres.
 
 set -euo pipefail
 

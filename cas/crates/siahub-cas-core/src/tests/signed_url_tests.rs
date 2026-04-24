@@ -1,16 +1,13 @@
-//! Plan 02-08 Task 3 — cross-language signed-URL test vectors.
-//!
+//! Task 3 — cross-language signed-URL test vectors.
 //! These tests load `conformance/fixtures/signed_url_vectors.json` and assert
 //! that `UrlSigner::canonical_string` + the HMAC signing + `mint_v1` + `verify`
-//! all round-trip byte-identically against the committed vectors. Phase 3's
+//! all round-trip byte-identically against the committed vectors. 's
 //! Go gateway consumes the same JSON as its verification target — any drift
-//! between Rust mint output and this fixture is a Phase 2 bug; any drift
-//! between Go verify output and this fixture is a Phase 3 bug.
-//!
+//! between Rust mint output and this fixture is a bug; any drift
+//! between Go verify output and this fixture is a bug.
 //! Fixture regeneration:
-//!   cargo run -p siahub-cas-core --example generate_signed_url_vectors -- \
-//!       ../conformance/fixtures/signed_url_vectors.json
-//!
+//! cargo run -p siahub-cas-core --example generate_signed_url_vectors -- \
+//! ../conformance/fixtures/signed_url_vectors.json
 //! (Path is relative to `cas/` workspace root.)
 
 use base64::Engine as _;
@@ -84,7 +81,7 @@ fn gateway_base() -> Url {
 fn fixture_has_required_vectors() {
     let vectors = load_vectors();
     let names: Vec<&str> = vectors.iter().map(|v| v.name.as_str()).collect();
-    // Plan 02-08 Task 3 acceptance criterion: ≥3 scenarios covering the three
+    // Task 3 acceptance criterion: ≥3 scenarios covering the three
     // range flavors (none, with-range, zero-byte-range). Rotation vector is
     // the bonus fourth scenario.
     assert!(
@@ -365,8 +362,8 @@ fn signer_rejects_bad_key_length() {
 }
 
 // ---------------------------------------------------------------------------
-// Plan 03-07 — `mint_v1_multi_range` (V2 flip minter, RECEIVED §G item 2).
-// Canonical `r=s1-e1,s2-e2,...` replaces the Phase 2 bounding approximation.
+//`mint_v1_multi_range` (V2 flip minter, RECEIVED §G item 2).
+// Canonical `r=s1-e1,s2-e2,...` replaces the bounding approximation.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -506,7 +503,7 @@ fn mint_v1_multi_range_panics_on_empty_segments() {
 fn url_minter_trait_delegates_mint_v1_multi_range() {
     // The trait method goes through UrlMinter — not UrlSigner directly.
     // Ensures 02-06/V2 callers that hold `&dyn UrlMinter` can invoke the
-    // Phase 3 flip path.
+    // flip path.
     let signer = UrlSigner::new(
         "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
         None,
@@ -527,7 +524,7 @@ fn url_minter_trait_delegates_mint_v1_multi_range() {
 
 #[test]
 fn url_minter_trait_delegates() {
-    // Ensures 02-06 can depend on the trait rather than the concrete type.
+    // Ensures can depend on the trait rather than the concrete type.
     let signer = UrlSigner::new(
         "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
         None,

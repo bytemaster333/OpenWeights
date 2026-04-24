@@ -1,11 +1,9 @@
 // Package main — merklehash_test.go.
-//
 // Canary-suite for the Go port of xet-core's DataHash algorithm. Mirrors the
 // three tests in `conformance/tests/p1_hash_canary.rs` verbatim and adds two
 // more that exercise the streaming + byte-parity paths.
-//
 // If any test in this file fails, DO NOT ship the gateway — hash parity with
-// the Rust CAS is load-bearing for cache-verify (GATE-07). Re-open the A4
+// the Rust CAS is load-bearing for cache-verify. Re-open the A4
 // probe and investigate.
 package main
 

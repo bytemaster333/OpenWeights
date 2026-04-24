@@ -40,6 +40,8 @@ export type ActivityRow = {
 export type StatsResponse = {
   total_bytes_stored: number
   total_bytes_served: number
+  /** COUNT of `event='download'` rows attributed to the caller's content. */
+  total_downloads: number
   /** `[0, 1]` — UI multiplies by 100 for percent display. */
   cache_hit_rate: number
   provider_count: number

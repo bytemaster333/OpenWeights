@@ -129,3 +129,45 @@
     @apply font-mono;
   }
 }
+
+/* Leaflet dark-theme overrides — the default `.leaflet-popup-content-wrapper`
+ * is opaque white, which fights the Console's dark surface. Rebind the popup
+ * + tip + attribution strip to the token palette. Zoom controls stay the
+ * default Leaflet button chrome (shadcn-shaped buttons inside the map are
+ * more trouble than they're worth). */
+.leaflet-container {
+  background-color: var(--color-muted, #111);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background-color: var(--color-popover, #111);
+  color: var(--color-popover-foreground, #eee);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.5);
+  border: 1px solid var(--color-border, #333);
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-family: var(--font-mono);
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--color-muted-foreground, #999);
+}
+
+.leaflet-control-attribution {
+  background-color: rgb(0 0 0 / 0.6) !important;
+  color: var(--color-muted-foreground, #999) !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--color-foreground, #eee) !important;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background-color: var(--color-background, #111) !important;
+  color: var(--color-foreground, #eee) !important;
+  border-color: var(--color-border, #333) !important;
+}

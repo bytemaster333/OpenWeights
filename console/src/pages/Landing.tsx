@@ -9,18 +9,17 @@ import { CAS_URL } from "@/lib/api"
 /**
  * Landing page (route `/`). Primary entry point for unauthenticated users.
  *
- * AUTH-01, AUTH-02: sole authentication surface is the "Sign in with GitHub"
+ *, : sole authentication surface is the "Sign in with GitHub"
  * button, which performs a plain same-site navigation to CAS
  * `/auth/github/start`. CAS mints an OAuth state nonce, stores it in
  * `oauth_state` (TTL 10m), and 302s to GitHub — the browser, not the
  * console, crosses the cross-origin boundary.
  *
- * P14 surfacing: when the callback fails, CAS's `CallbackError` emits a
+ * surfacing: when the callback fails, CAS's `CallbackError` emits a
  * stable `code` (`oauth_state_mismatch`, `oauth_code_missing`,
  * `github_token_exchange_failed`). The callback handler appends
  * `?error=<code>` to the redirect URL so this page can render a friendly
- * banner; see `OAuthErrorBanner` for the code → copy map.
- */
+ * banner; see `OAuthErrorBanner` for the code → copy map.*/
 export function LandingPage() {
   const search = useSearch({ strict: false }) as { error?: string }
   const errorCode = isOAuthErrorCode(search.error) ? search.error : undefined
@@ -52,10 +51,9 @@ export function LandingPage() {
         <CardContent>
           <Button asChild>
             {/*
-              A plain `<a href>` (not TanStack `<Link>`) — the destination
-              is CAS, a different origin. React-router-style client
-              navigation would no-op against a same-SPA route table.
-            */}
+ A plain `<a href>` (not TanStack `<Link>`) — the destination
+ is CAS, a different origin. React-router-style client
+ navigation would no-op against a same-SPA route table.*/}
             <a href={`${CAS_URL}/auth/github/start`}>
               <GithubLogo data-icon="inline-start" weight="fill" />
               Sign in with GitHub

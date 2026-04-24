@@ -1,18 +1,15 @@
-//! Plan 02-09 Task 5 — reconciler boundary tests (Postgres-free).
-//!
+//! Task 5 — reconciler boundary tests (Postgres-free).
 //! The full DB-backed reconciler sweep tests (reconcile_once against seeded
-//! xorbs/shards rows) live in Plan 02-10's conformance crate where
+//! xorbs/shards rows) live in 's conformance crate where
 //! testcontainers Postgres is already wired. This file asserts the
 //! boundary-layer invariants that do NOT need a live database:
-//!
-//!   * The `ReconcilerMetrics` trait contract is honored by the real
-//!     `Metrics` struct (each method bumps the expected series exactly once).
-//!   * The `NoopMetrics` helper in the storage crate is a true no-op.
-//!   * The `MAX_PIN_ATTEMPTS` / `RECONCILER_TICK` / `STUCK_THRESHOLD`
-//!     constants match the D-15 policy (so a silent change would trip a
-//!     review).
-//!
-//! When Plan 02-10 lands, it adds the five DB-backed tests from the plan
+//! * The `ReconcilerMetrics` trait contract is honored by the real
+//! `Metrics` struct (each method bumps the expected series exactly once).
+//! * The `NoopMetrics` helper in the storage crate is a true no-op.
+//! * The `MAX_PIN_ATTEMPTS` / `RECONCILER_TICK` / `STUCK_THRESHOLD`
+//! constants match the policy (so a silent change would trip a
+//! review).
+//! When lands, it adds the five DB-backed tests from the plan
 //! (pinning→pinned, orphaned-after-5, skip-recent, idempotent double-run,
 //! shard mirror).
 
@@ -25,7 +22,7 @@ use siahub_cas_storage::reconciler::{
 };
 
 // ---------------------------------------------------------------------------
-// D-15 policy constants — silent change → review prompt via test diff.
+// policy constants — silent change → review prompt via test diff.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -84,7 +81,7 @@ fn noop_metrics_never_panics_under_trait_dispatch() {
 #[test]
 fn metrics_orphaned_series_names_are_stable() {
     // Ops alerting keys on the exact series names (Plan Task 2 /
-    // D-15 "alert on >0"). Any typo in Metrics::new() would make this test
+    // "alert on >0"). Any typo in Metrics::new would make this test
     // surface the drift by text search instead of at alert-time.
     let m = Metrics::new();
     m.xorb_orphaned_total.inc();

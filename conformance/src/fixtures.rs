@@ -1,9 +1,7 @@
 //! Fixture loaders for `xet-team/xet-spec-reference-files @ 18bf9173fb...`.
-//!
 //! Every loader returns `Err(FixturesError::NotCloned)` when the expected file
 //! is absent on disk; tests surface this as an `eprintln!` + early-return (not
 //! a failure) so `cargo test` is green on a fresh clone without LFS.
-//!
 //! See `conformance/fixtures/README.md` for the one-time `git lfs clone`
 //! command.
 
@@ -85,9 +83,8 @@ pub fn reference_shard_path() -> Result<PathBuf, FixturesError> {
 }
 
 /// Load the reference xorb bytes + expected hash hex.
-///
 /// Returns `(bytes, expected_hex)`. Does NOT verify the hash — that's a
-/// consumer concern (the P1 canary test + handler-side merkle verify do it).
+/// consumer concern (the canary test + handler-side merkle verify do it).
 pub fn load_reference_xorb() -> Result<(Vec<u8>, String), FixturesError> {
     let p = reference_xorb_path();
     if !p.exists() {

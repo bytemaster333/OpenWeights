@@ -1,53 +1,42 @@
-//! V2 reconstruction handler — PROTO-06, feature-flagged 501 per D-18.
-//!
+//! V2 reconstruction handler —, feature-flagged 501 per .
 //! Route: `GET /v2/reconstructions/{file_id}`.
-//!
-//! ## The flag gate (notes.md gotcha #3 — load-bearing)
-//!
+//! ## The flag gate (.md — load-bearing)
 //! - `V2_RECONSTRUCTION_ENABLED=false` (default): handler returns
-//!   `501 Not Implemented` with body `{"error":"V2 reconstruction disabled"}`.
-//! - `V2_RECONSTRUCTION_ENABLED=true` (Phase 3 flips `.env`): handler runs the
-//!   full V2 response builder below.
-//!
+//! `501 Not Implemented` with body `{"error":"V2 reconstruction disabled"}`.
+//! - `V2_RECONSTRUCTION_ENABLED=true` ( flips `.env`): handler runs the
+//! full V2 response builder below.
 //! **Why:** xet-core's `RemoteClient::get_reconstruction_with_version_override`
 //! (VERIFIED RESEARCH §2.6) tries V2 first and falls back to V1 on `404 OR 501`.
 //! A well-formed V2 response that points at a gateway which does NOT serve
 //! `Content-Type: multipart/byteranges` (RFC 7233) causes xet-core to issue
 //! multi-range `Range:` headers, receive a concatenated body, fail to parse,
 //! and silently corrupt the download. The 501 stub forces the V1 path
-//! (single-range gateway-safe) until Phase 3 GATE-03 proves the gateway's
+//! (single-range gateway-safe) until proves the gateway's
 //! multipart serving is correct.
-//!
-//! ## Ordering contract (threat model T-02-07-01, T-02-07-02)
-//!
+//! ## Ordering contract (threat model T-02-, T-02-07-02)
 //! 1. Auth extractor runs FIRST (const-generic `AuthScoped<{SCOPE_DOWNLOAD}>`):
-//!    missing/invalid bearer → 401, wrong scope → 403. **Unauth clients do
-//!    NOT see 501** — that would leak the V2 endpoint's existence.
+//! missing/invalid bearer → 401, wrong scope → 403. **Unauth clients do
+//! NOT see 501** — that would leak the V2 endpoint's existence.
 //! 2. Rate-limit check runs SECOND: even flag-off requests consume a download
-//!    bucket token, preventing flag-bypass DoS scans.
+//! bucket token, preventing flag-bypass DoS scans.
 //! 3. Flag gate runs THIRD: if disabled, return 501 (with auth + rate-limit
-//!    already charged).
+//! already charged).
 //! 4. Only after the flag is ON does the handler parse the path + touch the DB.
-//!
 //! ## Code path (flag=true)
-//!
 //! The V2 response structurally mirrors V1's fetch_info but emits, per xorb,
 //! ONE URL covering ALL merged byte ranges via a multi-range descriptor. This
 //! matches xet-core's `QueryReconstructionResponseV2` wire contract: each xorb
 //! fetch_info entry carries a `{url, ranges:[{chunks, bytes}, ...]}` shape
 //! rather than one entry per merged range.
-//!
 //! The merged-ranges data comes from `coalesce::coalesce_terms_by_xorb` — the
 //! SAME output V1 consumes. The ONE `-1` end-exclusive → end-inclusive
-//! conversion site stays in `coalesce.rs`; V2 does NOT duplicate it (P4).
-//!
+//! conversion site stays in `coalesce.rs`; V2 does NOT duplicate it.
 //! ## Wire shape note
-//!
 //! `xet_core_structures = 1.5.1` does NOT re-export a `cas_types` module
-//! (verified in Plan 02-06 SUMMARY). Wire types are locally defined against
-//! the documented V2 contract; Plan 02-10 conformance validates byte-shape
+//! (verified in SUMMARY). Wire types are locally defined against
+//! the documented V2 contract; conformance validates byte-shape
 //! compatibility by round-tripping through `xet_client::RemoteClient` once
-//! the Phase 3 gateway's multi-range serving is online.
+//! the gateway's multi-range serving is online.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -77,12 +66,12 @@ use crate::signed_url::UrlMinter;
 
 // -------------------------------------------------------------------------
 // V2 wire types — documented contract from RESEARCH §2.6. xet_core_structures
-// 1.5.1 does not re-export these (see 02-06 SUMMARY); defined locally. The
+// 1.5.1 does not re-export these (see SUMMARY); defined locally. The
 // conformance crate (02-10) validates compatibility.
 // -------------------------------------------------------------------------
 
 /// One covering range inside a xorb — pairs the chunk-index range (end-EXCLUSIVE
-/// per P4) with the byte range (end-INCLUSIVE HTTP Range) that the multi-range
+/// per ) with the byte range (end-INCLUSIVE HTTP Range) that the multi-range
 /// URL grants access to.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RangeSegment {
@@ -93,10 +82,9 @@ pub struct RangeSegment {
 }
 
 /// V2 fetch_info value: ONE signed URL per xorb, carrying all coalesced ranges.
-///
-/// The gateway (Phase 3) interprets the URL's multi-range `r=s1-e1,s2-e2,...`
+/// The gateway interprets the URL's multi-range `r=s1-e1,s2-e2,...`
 /// query param and serves `Content-Type: multipart/byteranges` (RFC 7233).
-/// Only enable this path AFTER GATE-03 confirms that response format.
+/// Only enable this path AFTER confirms that response format.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct XorbFetchInfoV2 {
     /// Signed gateway URL stamping the union of all `ranges[].url_range`
@@ -108,7 +96,6 @@ pub struct XorbFetchInfoV2 {
 }
 
 /// V2 response shape — `QueryReconstructionResponseV2`.
-///
 /// Diverges from V1 only in the value type of `fetch_info`: one entry per
 /// xorb (not per merged range), carrying a single URL with embedded
 /// multi-range descriptors.
@@ -127,7 +114,6 @@ pub struct QueryReconstructionResponseV2 {
 // -------------------------------------------------------------------------
 
 /// Body emitted alongside the 501 when the V2 flag is off.
-///
 /// xet-core's `get_reconstruction_with_version_override` treats 501 as
 /// "V2 unavailable, fall back to V1" regardless of body, but keeping the
 /// body stable lets ops tooling distinguish the flag-off 501 from any
@@ -146,8 +132,7 @@ pub(crate) fn v2_flag_off_response() -> Response {
 // Handler
 // -------------------------------------------------------------------------
 
-/// `GET /v2/reconstructions/{file_id_hex}` — PROTO-06, feature-flagged 501.
-///
+/// `GET /v2/reconstructions/{file_id_hex}` —, feature-flagged 501.
 /// Extraction order (auth → rate-limit → flag-gate → DB) enforced by the
 /// function body below; altering it would either (a) leak V2 existence to
 /// unauth clients (T-02-07-01) or (b) open flag-bypass DoS (T-02-07-02).
@@ -160,7 +145,7 @@ where
     S: ReconstructionState,
 {
     // (1) Rate-limit (download class) — runs BEFORE the flag gate so a
-    //     flag-off-but-authenticated DoS cannot enumerate file_ids for free.
+    // flag-off-but-authenticated DoS cannot enumerate file_ids for free.
     crate::rate_limit::check(
         &st.redis(),
         RateLimitClass::Download,
@@ -169,21 +154,21 @@ where
     )
     .await?;
 
-    // (2) Flag gate. D-18 default is `false`; Phase 3 GATE-03 flips `.env`.
-    //     Return 501 BEFORE any hex parse / DB read — no leaky signal that
-    //     file_id would exist if the flag were on.
+    // (2) Flag gate. default is `false`; flips `.env`.
+    // Return 501 BEFORE any hex parse / DB read — no leaky signal that
+    // file_id would exist if the flag were on.
     if !st.v2_reconstruction_enabled() {
         return Ok(v2_flag_off_response());
     }
 
-    // (3) Parse hex → MerkleHash (P1 — NEVER hand-roll hex). A malformed hex
-    //     on this path now returns 400 (already past auth + rate-limit); the
-    //     501 flag-off branch above never reaches this parse.
+    // (3) Parse hex → MerkleHash ( — NEVER hand-roll hex). A malformed hex
+    // on this path now returns 400 (already past auth + rate-limit); the
+    // 501 flag-off branch above never reaches this parse.
     let file_id = MerkleHash::from_hex(&file_id_hex)
         .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
 
-    // (4) DB fetch — zero Sia I/O (D-13). Pinned-only JOIN filter excludes
-    //     non-pinned xorbs → 404 on any non-pinned reference (D-15).
+    // (4) DB fetch — zero Sia I/O. Pinned-only JOIN filter excludes
+    // non-pinned xorbs → 404 on any non-pinned reference.
     let file_id_bytes: [u8; 32] = file_id.into();
     let row = recon_q::get_reconstruction(st.pool(), &file_id_bytes)
         .await?
@@ -194,7 +179,7 @@ where
     let resp = build_v2_response(&row, st.url_signer().as_ref(), ctx.api_key_id, now_unix);
 
     // (6) Meter — same event as V1 (the flag distinction is not interesting
-    //     for billing; both paths are a reconstruction query).
+    // for billing; both paths are a reconstruction query).
     record_usage_reconstruction_v2(st.pool(), &ctx.api_key_id, ctx.user_id, &file_id_bytes)
         .await;
 
@@ -206,19 +191,17 @@ where
 // -------------------------------------------------------------------------
 
 /// Assemble a `QueryReconstructionResponseV2` from a DB row + signer.
-///
-/// Pure — takes no state, does no I/O. Zero Sia I/O (D-13). Structurally the
+/// Pure — takes no state, does no I/O. Zero Sia I/O. Structurally the
 /// same pipeline as V1's `build_response`, but emits one `XorbFetchInfoV2`
 /// per xorb (not one `FetchInfoEntry` per merged range).
-///
 /// Key invariants:
-///   * `terms` — same as V1: one entry per DB term row in DB order.
-///     Chunk indices are END-EXCLUSIVE (P4).
-///   * `fetch_info[xorb].url` — SINGLE signed URL carrying ALL merged ranges
-///     via a multi-range descriptor. Range field `r=s1-e1,s2-e2,...`.
-///   * `fetch_info[xorb].ranges[i].url_range` — END-INCLUSIVE HTTP Range byte
-///     offsets produced by `coalesce::coalesce_terms_by_xorb` (the ONE
-///     conversion site; NOT duplicated here).
+/// * `terms` — same as V1: one entry per DB term row in DB order.
+/// Chunk indices are END-EXCLUSIVE.
+/// * `fetch_info[xorb].url` — SINGLE signed URL carrying ALL merged ranges
+/// via a multi-range descriptor. Range field `r=s1-e1,s2-e2,...`.
+/// * `fetch_info[xorb].ranges[i].url_range` — END-INCLUSIVE HTTP Range byte
+/// offsets produced by `coalesce::coalesce_terms_by_xorb` (the ONE
+/// conversion site; NOT duplicated here).
 pub(crate) fn build_v2_response(
     row: &recon_q::ReconstructionRow,
     signer: &dyn UrlMinter,
@@ -239,7 +222,7 @@ pub(crate) fn build_v2_response(
         })
         .collect();
 
-    // P4 coalescing — SAME call as V1. This is where the `-1` conversion
+    // coalescing — SAME call as V1. This is where the `-1` conversion
     // lives; V2 does NOT duplicate it.
     let coalesced = coalesce::coalesce_terms_by_xorb(&row.terms);
 
@@ -276,7 +259,7 @@ pub(crate) fn build_v2_response(
             // Recover the chunk-range union for every term whose byte span
             // falls fully inside this merged END-INCLUSIVE byte range. Same
             // local-bridge idiom as V1 (+1 to compare against END-EXCLUSIVE
-            // term spans); NOT a P4 conversion site — no END-INCLUSIVE byte
+            // term spans); NOT a conversion site — no END-INCLUSIVE byte
             // range is produced by this read.
             let merged_end_exclusive = br.end_inclusive + 1;
             let mut chunk_start: Option<u32> = None;
@@ -304,15 +287,13 @@ pub(crate) fn build_v2_response(
         }
 
         // Mint the ONE signed URL covering ALL segments.
-        //
-        // Phase 3 flip (RECEIVED §G item 2, Plan 03-07): Plan 02-08's
-        // `mint_v1` Phase 2 approximation stamped the BOUNDING range only.
+        // flip (RECEIVED §G item 2): 's
+        // `mint_v1` approximation stamped the BOUNDING range only.
         // Now that the Go gateway serves RFC 7233 `multipart/byteranges`
-        // (GATE-03 / Plan 03-04), the minter emits the exact segments list
+        // ( / ), the minter emits the exact segments list
         // via `mint_v1_multi_range` → canonical `r=s1-e1,s2-e2,...`. The
         // gateway's parser accepts the comma-separated form; existing
         // single-segment V1 URLs still mint via `mint_v1` (unchanged).
-        //
         // Segments here are guaranteed non-empty: a xorb appears in
         // `fetch_info` iff `coalesce_terms_by_xorb` emitted ≥1 byte range
         // for it. `mint_v1_multi_range` panics on empty input — that branch
@@ -323,8 +304,8 @@ pub(crate) fn build_v2_response(
     }
 
     QueryReconstructionResponseV2 {
-        // Phase 2 always serves whole-file reconstructions at the CAS level.
-        // Phase 3 gateway handles file-level Range: headers.
+        // always serves whole-file reconstructions at the CAS level.
+        // gateway handles file-level Range: headers.
         offset_into_first_range: 0,
         terms,
         fetch_info,
@@ -333,11 +314,10 @@ pub(crate) fn build_v2_response(
 
 /// Compute the BOUNDING (start, end_inclusive) covering every segment.
 /// Returns `None` if there are no segments (no URL needs minting).
-///
-/// Phase 3 flip: no longer called by `build_v2_response` (superseded by
+/// flip: no longer called by `build_v2_response` (superseded by
 /// `mint_v1_multi_range`). Retained as `#[allow(dead_code)]` so the prior
-/// inline unit tests (which pinned the Phase 2 approximation) keep passing
-/// — deleting them would shrink the Phase 2 baseline test count for no
+/// inline unit tests (which pinned the approximation) keep passing
+///deleting them would shrink the baseline test count for no
 /// safety gain.
 #[allow(dead_code)]
 fn bounding_range(segments: &[(u64, u64)]) -> Option<(u64, u64)> {
@@ -369,7 +349,7 @@ struct TermSpanV2 {
 }
 
 // -------------------------------------------------------------------------
-// Metering — D-17 synchronous usage_log INSERT (event='reconstruction').
+// Metering — synchronous usage_log INSERT (event='reconstruction').
 // -------------------------------------------------------------------------
 
 async fn record_usage_reconstruction_v2(
@@ -411,7 +391,7 @@ mod inline_tests {
 
     #[test]
     fn v2_disabled_body_shape_is_stable() {
-        // Phase 3 gateway + ops tooling may match on this literal; don't
+        // gateway + ops tooling may match on this literal; don't
         // rephrase without bumping the cross-language fixture.
         let b = v2_disabled_body();
         assert_eq!(b["error"], "V2 reconstruction disabled");

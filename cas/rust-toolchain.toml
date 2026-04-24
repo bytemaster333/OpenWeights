@@ -1,5 +1,5 @@
 [toolchain]
-# Plan 02-01 pins 1.85 (edition 2024 minimum), but transitive dependencies
+# pins 1.85 (edition 2024 minimum), but transitive dependencies
 # resolved at workspace creation (konst 0.4.3, darling 0.23, icu_* 2.2.0,
 # serde_with 3.18, sysinfo 0.38, time 0.3.47) require rustc >= 1.89.
 # We pin to 1.89 — the first stable rustc that can build the whole dep graph

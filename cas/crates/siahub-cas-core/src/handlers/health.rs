@@ -1,20 +1,16 @@
-//! `GET /health` — readiness-gated liveness + DB probe (Plan 02-09 Task 4).
-//!
-//! Evolution from Plan 02-01 (always-200) to Plan 02-09 (readiness-gated):
-//!
-//!   * `state.ready` is an `Arc<AtomicBool>` flipped to `true` by `main.rs`
-//!     only after (a) migrations applied AND (b) the Sia adapter's builder
-//!     handshake returned OK (P6 App Key self-check — PITFALLS P6).
-//!   * While `ready == false`, this handler returns 503 `{"status":"not_ready"}`.
-//!   * Once ready, the handler also runs a lightweight `SELECT 1` against the
-//!     pool to catch a transient DB blip (e.g., Postgres cycle) — failure →
-//!     503 `{"status":"db_down"}`.
-//!
+//! `GET /health` — readiness-gated liveness + DB probe ( Task 4).
+//! Evolution from (always-200) to (readiness-gated):
+//! * `state.ready` is an `Arc<AtomicBool>` flipped to `true` by `main.rs`
+//! only after (a) migrations applied AND (b) the Sia adapter's builder
+//! handshake returned OK ( App Key self-check — PITFALLS ).
+//! * While `ready == false`, this handler returns 503 `{"status":"not_ready"}`.
+//! * Once ready, the handler also runs a lightweight `SELECT 1` against the
+//! pool to catch a transient DB blip (e.g., Postgres cycle) — failure →
+//! 503 `{"status":"db_down"}`.
 //! Docker Compose + Caddy both treat ONLY 200 as healthy (default); 503
 //! correctly keeps dependent services from marking us `service_healthy`.
-//!
 //! The response body stays intentionally minimal ({"status": String}). A
-//! richer variant under /admin/health is Phase 4's CONSOLE-11 responsibility.
+//! richer variant under /admin/health is 's responsibility.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,10 +36,10 @@ pub trait HealthState: Clone + Send + Sync + 'static {
     fn pool(&self) -> &PgPool;
 }
 
-/// PROTO-01 + Plan 02-09 Task 4:
-///   * 503 `{"status":"not_ready"}` before boot completes.
-///   * 503 `{"status":"db_down"}` if the post-boot `SELECT 1` probe errors.
-///   * 200 `{"status":"ok"}` otherwise. `cache-control: no-store` always.
+/// + Task 4:
+/// * 503 `{"status":"not_ready"}` before boot completes.
+/// * 503 `{"status":"db_down"}` if the post-boot `SELECT 1` probe errors.
+/// * 200 `{"status":"ok"}` otherwise. `cache-control: no-store` always.
 pub async fn health<S: HealthState>(State(st): State<S>) -> (StatusCode, HeaderMap, Json<HealthResponse>) {
     let mut h = HeaderMap::new();
     h.insert("cache-control", "no-store".parse().unwrap());

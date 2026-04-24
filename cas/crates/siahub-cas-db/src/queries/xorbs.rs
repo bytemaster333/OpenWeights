@@ -1,25 +1,21 @@
 //! xorbs table queries — insert_pending / set_pin_state / get_sia_object_id / exists_pinned.
-//!
-//! The state machine (CONTEXT D-15):
-//!
+//! The state machine (CONTEXT ):
 //! ```text
-//!     insert_pending(INSERT pin_state='pinning' ON CONFLICT DO NOTHING)
-//!       ├─ Ok(true)   → caller performs sdk.upload_and_pin, then
-//!       │               set_pin_state('pinned', Some(real_id))
-//!       │               (on Sia failure: leave 'pinning'; reconciler retries)
-//!       └─ Ok(false)  → dedup path, caller returns {was_inserted: false}
+//! insert_pending(INSERT pin_state='pinning' ON CONFLICT DO NOTHING)
+//! ├─ Ok(true) → caller performs sdk.upload_and_pin, then
+//! │ set_pin_state('pinned', Some(real_id))
+//! │ (on Sia failure: leave 'pinning'; reconciler retries)
+//! └─ Ok(false) → dedup path, caller returns {was_inserted: false}
 //! ```
-//!
-//! Plan 02-09 reconciler sweeps rows stuck in 'uploading' or 'pinning' older
+//! reconciler sweeps rows stuck in 'uploading' or 'pinning' older
 //! than 5 minutes; after 5 attempts it transitions to 'orphaned'.
-//!
 //! NOTE on typed enums: we use runtime-checked `sqlx::query_as` / `sqlx::query`
 //! with string bind ("pinning", "pinned", ...) because binding a `sqlx::Type`
 //! custom enum via `query!` requires the macro to observe the Postgres schema
 //! at compile time — that is handled by the `cargo sqlx prepare --workspace`
 //! step. In this crate's current state the `.sqlx/` cache is empty; we keep
 //! the runtime-checked path so `cargo build` succeeds with `SQLX_OFFLINE=true`
-//! without needing a live DB. Plan 02-09 may upgrade these to compile-checked
+//! without needing a live DB. may upgrade these to compile-checked
 //! `query!` calls once the offline cache is regenerated.
 
 use sqlx::PgPool;
@@ -30,8 +26,7 @@ use crate::types::XorbPinState;
 /// Attempt to claim the xorb hash. Returns `Ok(true)` on fresh INSERT,
 /// `Ok(false)` when the hash already exists (dedup — caller returns
 /// `{was_inserted: false}` with no Sia I/O).
-///
-/// Initial `pin_state` is schema-default `'pinning'` (Plan 02-02, D-15
+/// Initial `pin_state` is schema-default `'pinning'` (
 /// deviation). `sia_object_id` is left NULL until the upload+pin succeeds;
 /// Migration 0004 relaxed the NOT NULL constraint specifically to make this
 /// possible (see that file's comment).
@@ -62,7 +57,6 @@ pub async fn insert_pending(
 /// Update `pin_state`. When `sia_object_id` is provided, it is written (or
 /// overwrites NULL); when `None`, the existing column value is retained via
 /// `COALESCE`. Also bumps `pin_attempts` and stamps `last_pin_attempt_at`.
-///
 /// The pin_state column is a Postgres enum; we pass it as its lowercase text
 /// representation (matching `#[sqlx(type_name = "xorb_pin_state", rename_all
 /// = "lowercase")]`).
@@ -98,7 +92,7 @@ pub async fn set_pin_state(
 
 /// Return the `sia_object_id` for the xorb **only if** it is in the `pinned`
 /// state. Any other state (uploading / pinning / orphaned) returns `None` so
-/// reconstruction queries naturally 404 for not-yet-durable xorbs (D-15).
+/// reconstruction queries naturally 404 for not-yet-durable xorbs.
 pub async fn get_sia_object_id(
     pool: &PgPool,
     xorb_hash: &[u8; 32],
@@ -111,13 +105,13 @@ pub async fn get_sia_object_id(
     .fetch_optional(pool)
     .await?;
 
-    // Outer Option = row present?  Inner Option = column NULL?  Collapse both:
+    // Outer Option = row present? Inner Option = column NULL? Collapse both:
     // a `pinned` row SHOULD never have NULL sia_object_id, but be defensive.
     Ok(row.and_then(|(id,)| id))
 }
 
 /// `true` iff the xorb has been successfully pinned to Sia. Used by Plan
-/// 02-05 shard cross-check (P18) and by Plan 02-06 reconstruction filter.
+/// shard cross-check and by reconstruction filter.
 pub async fn exists_pinned(
     pool: &PgPool,
     xorb_hash: &[u8; 32],

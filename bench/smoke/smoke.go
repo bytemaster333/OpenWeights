@@ -1,4 +1,4 @@
-// Package main — 1 MiB round-trip smoke test against live indexd (Phase 1 SC-3).
+// Package main — 1 MiB round-trip smoke test against live indexd ( SC-3).
 // Uploads, pins, full-downloads, range-downloads, and byte-compares a 1 MiB
 // random fixture. Invoked by `make smoke` and by the bootstrap wizard at its
 // final step; NOT unit-tested against live network (unit test just ensures
@@ -62,8 +62,8 @@ func main() {
 	// takes Object by value (Gotcha 32 — do NOT pass &obj to PinObject).
 	obj := siastorage.NewEmptyObject()
 	// Zen testnet has ~3 usable hosts; default erasure coding wants 30. Use
-	// 2-data-1-parity redundancy so Phase 1 smoke + thesis can run while
-	// testnet host count recovers. Phase 5/6 mainnet drops this override.
+	// 2-data-1-parity redundancy so smoke + thesis can run while
+	// testnet host count recovers. /6 mainnet drops this override.
 	if err := client.Upload(ctx, &obj, bytes.NewReader(fixture), siastorage.WithRedundancy(1, 2)); err != nil {
 		logger.Error("upload", "err", err)
 		os.Exit(1)

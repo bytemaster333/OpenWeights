@@ -1,30 +1,26 @@
-//! V1 reconstruction handlers — PROTO-05 (single) + PROTO-07 (batch).
-//!
+//! V1 reconstruction handlers — (single) + (batch).
 //! Routes:
-//!   * `GET /v1/reconstructions/{file_id}`       → `query_reconstruction_v1`
-//!   * `GET /v1/reconstructions?file_id=A&...`   → `query_reconstructions_batch_v1`
-//!   * `GET /reconstructions?file_id=A&...`      → `query_reconstructions_batch_v1`
-//!     (dual-path — xet-core's `RemoteClient::batch_get_reconstruction`
-//!     constructs `"{endpoint}/reconstructions?"` without `/v1`.)
-//!
+//! * `GET /v1/reconstructions/{file_id}` → `query_reconstruction_v1`
+//! * `GET /v1/reconstructions?file_id=A&...` → `query_reconstructions_batch_v1`
+//! * `GET /reconstructions?file_id=A&...` → `query_reconstructions_batch_v1`
+//! (dual-path — xet-core's `RemoteClient::batch_get_reconstruction`
+//! constructs `"{endpoint}/reconstructions?"` without `/v1`.)
 //! Pitfall ownership (CONTEXT §5):
-//!   * **P4** — `fetch_info` coalescing into minimal covering ranges per xorb.
-//!     Delegated to `crate::coalesce::coalesce_terms_by_xorb`, the ONE
-//!     conversion site.
-//!   * **D-13 invariant** — zero Sia I/O on this path. Handler only consults
-//!     Postgres (reconstruction_{files,terms} JOIN pinned xorbs).
-//!   * **D-15** — reconstruction JOIN filters to `pin_state='pinned'` so
-//!     non-pinned xorbs surface as 404 rather than confusing partial
-//!     responses.
-//!   * **D-17** — `usage_log` INSERT with `event='reconstruction'` runs
-//!     synchronously in the handler path (Phase 2 metering).
-//!
+//! * **P4** — `fetch_info` coalescing into minimal covering ranges per xorb.
+//! Delegated to `crate::coalesce::coalesce_terms_by_xorb`, the ONE
+//! conversion site.
+//! * ** invariant** — zero Sia I/O on this path. Handler only consults
+//! Postgres (reconstruction_{files,terms} JOIN pinned xorbs).
+//! * **** — reconstruction JOIN filters to `pin_state='pinned'` so
+//! non-pinned xorbs surface as 404 rather than confusing partial
+//! responses.
+//! * **** — `usage_log` INSERT with `event='reconstruction'` runs
+//! synchronously in the handler path ( metering).
 //! Wire shape (xet-core `QueryReconstructionResponse` V1, sourced from
 //! FEATURES.md line 36 + RESEARCH §2.5 + PATTERNS.md §reconstruction.rs).
-//!
 //! `xet_core_structures = 1.5.1` does NOT re-export `cas_types`. The types
 //! below are locally defined and matched against the HF xet protocol docs;
-//! Plan 02-10's conformance crate will validate byte-shape compatibility by
+//! 's conformance crate will validate byte-shape compatibility by
 //! round-tripping fixtures through `xet_client::RemoteClient::query_reconstruction`.
 
 use std::collections::BTreeMap;
@@ -54,8 +50,7 @@ use crate::signed_url::UrlMinter;
 
 /// END-EXCLUSIVE chunk-index range. Appears in `terms[].range` and
 /// `fetch_info[xorb][i].range`.
-///
-/// Note: both `start` AND `end` are chunk indices (not bytes). xet-core walks
+/// both `start` AND `end` are chunk indices (not bytes). xet-core walks
 /// fetch_info by matching `fi.range.start == term.range.end` (PITFALLS P4
 /// line 94); keeping this END-EXCLUSIVE is a correctness requirement.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -104,7 +99,7 @@ pub struct QueryReconstructionResponse {
 
 /// Batch response: map of file_id_hex → single response. Missing file_ids
 /// are omitted per xet-core's `batch_get_reconstruction` expectation
-/// (validated at Plan 02-10).
+/// (validated at ).
 pub type BatchQueryReconstructionResponse = BTreeMap<String, QueryReconstructionResponse>;
 
 /// Query params for batch endpoint: repeated `file_id=<hex>` entries.
@@ -120,21 +115,19 @@ pub struct BatchQueryParams {
 // -------------------------------------------------------------------------
 
 /// Minimum state surface the reconstruction handlers consume.
-///
-/// Mirrors the `XorbUploadState` pattern from Plan 02-04. Binary's AppState
+/// Mirrors the `XorbUploadState` pattern from . Binary's AppState
 /// implements this; handler stays decoupled from the concrete type.
-///
 /// `url_signer` is a `dyn UrlMinter` trait object so:
-///   - Plan 02-08 provides the concrete `UrlSigner` (HMAC-SHA256) now.
-///   - Tests can inject a stub that emits `"TBD"` URLs without HMAC wiring.
+/// - provides the concrete `UrlSigner` (HMAC-SHA256) now.
+/// - Tests can inject a stub that emits `"TBD"` URLs without HMAC wiring.
 pub trait ReconstructionState: AuthStateRef {
     fn redis(&self) -> Arc<fred::clients::Client>;
     fn rate_limit_defaults(&self) -> RateLimitDefaults;
     fn url_signer(&self) -> Arc<dyn UrlMinter>;
 
-    /// D-18 flag gate for V2 reconstruction. Phase 2 default is `false`;
-    /// Phase 3 GATE-03 flips this to `true` via `.env` only (no code change).
-    /// notes.md gotcha #3 — enabling V2 before the gateway serves
+    /// flag gate for V2 reconstruction. default is `false`;
+    /// flips this to `true` via `.env` only (no code change).
+    /// .md — enabling V2 before the gateway serves
     /// `multipart/byteranges` silently corrupts xet-core downloads. Kept on
     /// the trait (not Config directly) so handler tests can pin both branches
     /// without booting a full binary.
@@ -145,7 +138,7 @@ pub trait ReconstructionState: AuthStateRef {
 // Handlers
 // -------------------------------------------------------------------------
 
-/// `GET /v1/reconstructions/{file_id_hex}` — PROTO-05.
+/// `GET /v1/reconstructions/{file_id_hex}` — .
 pub async fn query_reconstruction_v1<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
@@ -154,7 +147,7 @@ pub async fn query_reconstruction_v1<S>(
 where
     S: ReconstructionState,
 {
-    // (1) Parse hex → MerkleHash — P1 (NEVER hand-roll hex).
+    // (1) Parse hex → MerkleHash — (NEVER hand-roll hex).
     let file_id = MerkleHash::from_hex(&file_id_hex)
         .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
 
@@ -167,9 +160,9 @@ where
     )
     .await?;
 
-    // (3) DB fetch — zero Sia I/O (D-13). Pinned-only JOIN filter excludes
-    //     non-pinned xorbs; if every term's xorb is non-pinned, this returns
-    //     None → 404 (D-15).
+    // (3) DB fetch — zero Sia I/O. Pinned-only JOIN filter excludes
+    // non-pinned xorbs; if every term's xorb is non-pinned, this returns
+    // None → 404.
     let file_id_bytes: [u8; 32] = file_id.into();
     let row = recon_q::get_reconstruction(st.pool(), &file_id_bytes)
         .await?
@@ -189,8 +182,7 @@ where
 }
 
 /// `GET /v1/reconstructions?file_id=A&file_id=B` AND
-/// `GET /reconstructions?file_id=A&file_id=B` — PROTO-07.
-///
+/// `GET /reconstructions?file_id=A&file_id=B` — .
 /// Dual-path: xet-core's `batch_get_reconstruction` calls
 /// `{endpoint}/reconstructions?` (no `/v1`) per RESEARCH §2.5, while the
 /// OpenAPI spec lists `/v1/reconstructions?`. Register both.
@@ -214,7 +206,7 @@ where
     }
 
     // (2) Rate-limit (once per batch request, not per file_id — aligns with
-    //     xet-core's single HTTP call → single bucket decrement).
+    // xet-core's single HTTP call → single bucket decrement).
     crate::rate_limit::check(
         &st.redis(),
         RateLimitClass::Download,
@@ -227,7 +219,7 @@ where
     let rows = recon_q::get_reconstructions_batch(st.pool(), &file_ids).await?;
 
     // (4) Build batch response (BTreeMap: deterministic; missing file_ids
-    //     simply absent).
+    // simply absent).
     let signer = st.url_signer();
     let kid = ctx.api_key_id;
     let now_unix = unix_now();
@@ -241,7 +233,7 @@ where
         out.insert(hex, resp);
 
         // Meter each file as a distinct reconstruction event (per-file
-        // counter is what CONSOLE-03..08 expects — one row per file_id).
+        // counter is what ..08 expects — one row per file_id).
         crate::metering::log_on_err(
             "usage_log insert (reconstruction, batch) failed",
             crate::metering::record_reconstruction(st.pool(), &ctx, &fid_bytes).await,
@@ -256,7 +248,7 @@ where
 // -------------------------------------------------------------------------
 
 /// Per-term xorb span bundle — both byte and chunk ranges are END-EXCLUSIVE
-/// (P4). Used internally by `build_response` to recover chunk-range unions
+///. Used internally by `build_response` to recover chunk-range unions
 /// per merged byte range without fanning a 4-tuple through the function.
 #[derive(Debug, Clone, Copy)]
 struct TermSpan {
@@ -271,8 +263,7 @@ struct TermSpan {
 }
 
 /// Assemble a `QueryReconstructionResponse` from a DB row + signer.
-///
-/// Pure — takes no state, does no I/O. Zero Sia I/O (D-13). The ONLY work
+/// Pure — takes no state, does no I/O. Zero Sia I/O. The ONLY work
 /// here beyond coalescing is calling `signer.mint_v1` for each merged range.
 pub(crate) fn build_response(
     row: &recon_q::ReconstructionRow,
@@ -281,7 +272,7 @@ pub(crate) fn build_response(
     now_unix: u64,
 ) -> QueryReconstructionResponse {
     // Terms list: one per DB term row, in DB order. chunk indices are
-    // END-EXCLUSIVE (P4 — same as in reconstruction_terms + xet-core wire).
+    // END-EXCLUSIVE ( — same as in reconstruction_terms + xet-core wire).
     let terms: Vec<ReconstructionTerm> = row
         .terms
         .iter()
@@ -296,15 +287,15 @@ pub(crate) fn build_response(
         })
         .collect();
 
-    // P4 coalescing: merge overlapping/contiguous byte spans per xorb.
+    // coalescing: merge overlapping/contiguous byte spans per xorb.
     // The coalesce module is the ONLY end-exclusive → end-inclusive
     // conversion site; here we just consume its output.
     let coalesced = coalesce::coalesce_terms_by_xorb(&row.terms);
 
     // Collect per-xorb term spans — needed to reconstruct the chunk-range
     // union for each merged byte range.
-    //   * byte_start..byte_end   — END-EXCLUSIVE byte span in xorb.
-    //   * chunk_start..chunk_end — END-EXCLUSIVE chunk-index span.
+    // * byte_start..byte_end — END-EXCLUSIVE byte span in xorb.
+    // * chunk_start..chunk_end — END-EXCLUSIVE chunk-index span.
     let mut chunk_spans_per_xorb: BTreeMap<[u8; 32], Vec<TermSpan>> = BTreeMap::new();
     for t in &row.terms {
         chunk_spans_per_xorb
@@ -332,12 +323,11 @@ pub(crate) fn build_response(
         for br in byte_ranges {
             // Recover the chunk-range union for every term whose byte span
             // falls fully inside this merged (end-INCLUSIVE) byte range.
-            //
             // Byte spans in `term_spans` are END-EXCLUSIVE; merged `br` is
             // END-INCLUSIVE. We bridge by adding 1 to `br.end_inclusive` to
             // recover an END-EXCLUSIVE comparison bound. This is a LOCAL
             // read, NOT a conversion back to end-exclusive for a byte-range
-            // output, so it is NOT a P4 conversion site.
+            // output, so it is NOT a conversion site.
             let merged_end_exclusive = br.end_inclusive + 1;
             let mut chunk_start: Option<u32> = None;
             let mut chunk_end: Option<u32> = None;
@@ -375,8 +365,8 @@ pub(crate) fn build_response(
     }
 
     QueryReconstructionResponse {
-        // Phase 2 always serves whole-file reconstructions. HTTP Range
-        // header handling on the file level is Phase 3 gateway concern.
+        // always serves whole-file reconstructions. HTTP Range
+        // header handling on the file level is gateway concern.
         offset_into_first_range: 0,
         terms,
         fetch_info,
@@ -384,7 +374,7 @@ pub(crate) fn build_response(
 }
 
 // -------------------------------------------------------------------------
-// Metering — routed through `crate::metering` (Plan 02-09 / D-17).
+// Metering — routed through `crate::metering` ( / ).
 // Event='reconstruction' writes file_id into the usage_log.file_id column;
 // no local insert helper remains here — the facade is the only call-site.
 // -------------------------------------------------------------------------

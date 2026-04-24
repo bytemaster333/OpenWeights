@@ -3246,6 +3246,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "siahub-cas-register"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "sia_storage",
+ "tokio",
+]
+
+[[package]]
 name = "siahub-cas-storage"
 version = "0.1.0"
 dependencies = [

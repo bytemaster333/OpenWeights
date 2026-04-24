@@ -5,18 +5,16 @@ import { describe, expect, it } from "vitest"
 /**
  * `useKeys` is exercised end-to-end via `Onboarding.test.tsx` (real hook,
  * mocked `casFetch`). This file adds a single grep-style source guard that
- * enforces D-45: the hook source MUST NOT reference `localStorage` or
+ * enforces : the hook source MUST NOT reference `localStorage` or
  * `sessionStorage` — the plaintext `CreatedKey.plaintext_key` lives only in
- * React state bounded by the `<OneTimeKeyModal>`.
- */
+ * React state bounded by the `<OneTimeKeyModal>`.*/
 
 /**
  * Strip single-line (`//`) and block (`/* ... *\/`) comments so that the
- * D-45 invariants can be checked against executable code only. Comments
+ * invariants can be checked against executable code only. Comments
  * may legitimately mention `localStorage` / `sessionStorage` in the
  * context of "MUST NOT be written to X" — we only care that the code
- * does not reference them.
- */
+ * does not reference them.*/
 function stripComments(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "") // block comments

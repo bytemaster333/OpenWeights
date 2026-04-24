@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
 # bench/lib/write-json.sh
-#
 # Emits the two benchmark artifacts:
-#   - console/public/benchmarks.json  (consumer: console/src/hooks/useStats.ts::useBenchmarks)
-#   - docs/benchmarks.md              (reviewer-readable, D-68: ONLY file permitted under docs/)
-#
+# - console/public/benchmarks.json (consumer: console/src/hooks/useStats.ts::useBenchmarks)
+# - docs/benchmarks.md (reviewer-readable, : ONLY file permitted under docs/)
 # Invocation (positional, all required; pass 'null' for un-measured cells):
-#   write-json.sh <size_bytes> <repo> <revision> <kind> \
-#                 <sh_cold> <sh_warm> <sh_upload> \
-#                 <hf_cold> <hf_warm> \
-#                 <thesis_section_path_or_empty>
-#
+# write-json.sh <size_bytes> <repo> <revision> <kind> \
+# <sh_cold> <sh_warm> <sh_upload> \
+# <hf_cold> <hf_warm> \
+# <thesis_section_path_or_empty>
 # The consumer (BenchmarksPage.tsx) expects THIS shape:
-#   { "generated_at": "<iso8601 or null>",
-#     "rows": [
-#       { "scenario": "cold-cache", "siahub_mbps": <n|null>, "hf_baseline_mbps": <n|null> },
-#       { "scenario": "warm-cache", ... },
-#       { "scenario": "upload",     ... }
-#     ] }
+# { "generated_at": "<iso8601 or null>",
+# "rows": [
+# { "scenario": "cold-cache", "siahub_mbps": <n|null>, "hf_baseline_mbps": <n|null> },
+# { "scenario": "warm-cache", ... },
+# { "scenario": "upload", ... }
+# ] }
 # (We also embed a `fixture` + `methodology` block for humans reading the raw JSON.)
 
 set -euo pipefail

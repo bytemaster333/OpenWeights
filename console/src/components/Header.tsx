@@ -1,28 +1,26 @@
 import { Link } from "@tanstack/react-router"
 
-import { ConformanceBadge } from "@/components/ConformanceBadge"
 import { UserMenu } from "@/components/UserMenu"
 import { useMe } from "@/hooks/useMe"
 
 /**
  * App-chrome header — mounted in the root route so every signed-in page
- * sees it. Self-hides when `useMe()` returns `null` (unauth) so `/` (landing)
- * and `/login` stay chrome-less, matching the 04-03 UX.
+ * sees it. Self-hides when `useMe` returns `null` (unauth) so `/` (landing)
+ * and `/login` stay chrome-less, matching the UX.
  *
  * Layout:
  *
- *   [ SiaHub ]  Assets · Stats · Map · Keys · (Setup)       [ Badge ] [ User ]
+ * [ SiaHub ] Models · Assets · Stats · Map · Keys · Status [ User ]
  *
- * - `Setup` link is admin-only (matches the `<AdminGuard>` wrapping the
- *   route; showing the link to non-admins would be a dead-end).
- * - `ConformanceBadge` + `UserMenu` live in a trailing flex-gap cluster.
+ * - `UserMenu` lives in the trailing right cluster. The conformance badge
+ * was removed when the conformance-harness CI pipeline stopped emitting
+ * a status file — "unknown" chrome is worse than no chrome.
  * - Nav labels use `activeProps` so the current route is foreground-tinted
- *   without a custom hook.
+ * without a custom hook.
  *
- * The `pending` state of `useMe()` renders `null` (not a skeleton) — the
+ * The `pending` state of `useMe` renders `null` (not a skeleton) — the
  * header is chrome, so briefly vanishing is less jarring than a skeleton bar
- * on every navigation.
- */
+ * on every navigation.*/
 export function Header() {
   const { data: user } = useMe()
 
@@ -44,10 +42,17 @@ export function Header() {
           aria-label="Primary"
           data-testid="app-header-nav"
         >
+          <Link to="/models" activeProps={{ className: "text-foreground" }}>
+            Models
+          </Link>
           <Link to="/assets" activeProps={{ className: "text-foreground" }}>
             Assets
           </Link>
-          <Link to="/stats" activeProps={{ className: "text-foreground" }}>
+          <Link
+            to="/stats"
+            activeOptions={{ exact: true }}
+            activeProps={{ className: "text-foreground" }}
+          >
             Stats
           </Link>
           <Link to="/stats/map" activeProps={{ className: "text-foreground" }}>
@@ -56,18 +61,23 @@ export function Header() {
           <Link to="/keys" activeProps={{ className: "text-foreground" }}>
             Keys
           </Link>
-          {user.is_admin && (
-            <Link
-              to="/setup"
-              activeProps={{ className: "text-foreground" }}
-              data-testid="app-header-setup-link"
-            >
-              Setup
-            </Link>
-          )}
+          <Link
+            to="/setup"
+            activeProps={{ className: "text-foreground" }}
+            data-testid="app-header-setup-link"
+          >
+            Status
+          </Link>
+          <a
+            href="https://docs.siahub.app"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground"
+          >
+            Docs
+          </a>
         </nav>
         <div className="ml-auto flex items-center gap-4">
-          <ConformanceBadge />
           <UserMenu user={user} />
         </div>
       </div>

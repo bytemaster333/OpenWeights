@@ -1,13 +1,11 @@
-//! P1 hash-encoding canary — the first test written in Phase 2, the load-bearing
-//! guard against the silent notes.md gotcha #1 ("xet-core does NOT straight-hex-
+//! hash-encoding canary — the first test written in, the load-bearing
+//! guard against the silent .md ("xet-core does NOT straight-hex-
 //! encode merkle hashes; it reverses each 8-byte group before hex-encoding").
-//!
 //! A passing canary means:
-//!   - `xet_core_structures::merklehash::MerkleHash::from_hex` round-trips our
-//!     canonical fixture hash `eea25d6e...`;
-//!   - the codec is NOT straight byte-to-hex (i.e. `format!("{:02x}", b)` over
-//!     raw bytes produces a DIFFERENT string).
-//!
+//! - `xet_core_structures::merklehash::MerkleHash::from_hex` round-trips our
+//! canonical fixture hash `eea25d6e...`;
+//! - the codec is NOT straight byte-to-hex (i.e. `format!("{:02x}", b)` over
+//! raw bytes produces a DIFFERENT string).
 //! If this test ever fails it means either the fixture hash drifted (bump
 //! revision only with a planning step per CONFORMANCE-AUDIT.md) OR the
 //! `xet_core_structures` crate broke its hex codec (the README explicitly
@@ -41,7 +39,7 @@ fn p1_codec_is_not_straight_byte_hex() {
     let h = MerkleHash::from_hex(REF_HEX).unwrap();
 
     // Straight hex of the raw byte representation MUST differ from the
-    // canonical hex — if they're equal, the codec is a no-op and P1 is not
+    // canonical hex — if they're equal, the codec is a no-op and is not
     // mitigated by the crate (we'd be hand-rolling byte-reversal elsewhere
     // without realising it).
     let raw_bytes: [u8; 32] = h.into();

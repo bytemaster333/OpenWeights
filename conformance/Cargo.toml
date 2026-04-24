@@ -9,9 +9,9 @@ license      = "MIT"
 # Standalone crate with NO `[workspace]` block — `conformance/` deliberately
 # orphans itself from `cas/Cargo.toml` so the pinned `xet-client = "=1.5.1"`
 # dev-dep stays out of `cas/`'s resolution graph. Running from repo root:
-#   cd conformance && cargo test
+# cd conformance && cargo test
 # Never add this crate to `cas/Cargo.toml` `[workspace].members` — doing so
-# leaks xet-client into the CAS workspace (T-02-10-06 guard).
+# leaks xet-client into the CAS workspace (T-02- guard).
 
 [[bin]]
 name = "_noop"
@@ -26,16 +26,15 @@ tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 [dev-dependencies]
-# Phase 1 handoff (CONFORMANCE-AUDIT.md + CONTEXT D-22): xet-client + xet-core-structures
+# handoff (CONFORMANCE-AUDIT.md + CONTEXT ): xet-client + xet-core-structures
 # pinned exactly at 1.5.1 so the conformance harness drives the protocol using
 # the official client — the only check that catches mismatches like the
-# `/shards` vs `/v1/shards` gotcha (notes.md gotcha #2) before production.
-#
+# `/shards` vs `/v1/shards` gotcha (.md ) before production.
 # Any bump requires a deliberate planning step (T-02-10-04).
 xet-client          = "=1.5.1"
 xet-core-structures = "=1.5.1"
 
-# Container orchestration for round-trip tests (D-22). Spins Postgres in
+# Container orchestration for round-trip tests. Spins Postgres in
 # Docker; the CAS image is built separately via `make cas-image` and loaded
 # from the local daemon by testcontainers.
 testcontainers         = "0.23"
@@ -52,7 +51,7 @@ hmac      = "0.12"
 subtle    = "2"
 url       = "2"
 
-# Snapshot testing for P4 coalescing JSON shape.
+# Snapshot testing for coalescing JSON shape.
 insta = { version = "1", features = ["json"] }
 
 # Path-deps into the CAS workspace (read-only consumers; conformance never

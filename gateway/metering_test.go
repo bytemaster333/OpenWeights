@@ -1,15 +1,13 @@
 // metering_test.go — Meter unit tests.
-//
 // Unit tests: interface seam + canonical event literal + nil-safety. Live
 // Postgres round-trip coverage lands in the integration suite (same gating
 // pattern as db_test.go: opt in with TEST_POSTGRES_URL).
-//
 // Guard rails enforced here:
-//   - LogDownload with nil Meter or nil DB returns a typed error (not panic).
-//   - Malformed xorb hash is a metered error (insertErrorTot++) instead of a
-//     silent NULL write.
-//   - UsageWriter interface is satisfied by the concrete *Meter so 03-03
-//     call sites can take an interface and substitute fakes.
+// - LogDownload with nil Meter or nil DB returns a typed error (not panic).
+// - Malformed xorb hash is a metered error (insertErrorTot++) instead of a
+// silent NULL write.
+// - UsageWriter interface is satisfied by the concrete *Meter so 03-03
+// call sites can take an interface and substitute fakes.
 package main
 
 import (
@@ -21,7 +19,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// fakeMeter is a trivial UsageWriter for testing that 03-03 handlers pass
+// fakeMeter is a trivial UsageWriter for testing that handlers pass
 // correct args without wiring a DB.
 type fakeMeter struct {
 	mu    sync.Mutex
@@ -82,8 +80,8 @@ func TestLogDownload_MalformedHashErrors(t *testing.T) {
 }
 
 // Canonical event literal lock: the SQL string in LogDownload must contain
-// 'download' (D-29). Reading the source is overkill — instead we use the
-// fakeMeter-through-handler path in 03-03 to verify behaviorally. This test
+// 'download'. Reading the source is overkill — instead we use the
+// fakeMeter-through-handler path in to verify behaviorally. This test
 // simply asserts the fake seam carries the args we expect.
 func TestFakeMeter_CapturesCall(t *testing.T) {
 	t.Parallel()
@@ -101,9 +99,9 @@ func TestFakeMeter_CapturesCall(t *testing.T) {
 	}
 }
 
-// D-29 event-name lock: confirm the SQL literal is 'download'. We grep ONLY
+// event-name lock: confirm the SQL literal is 'download'. We grep ONLY
 // the `INSERT INTO usage_log ... VALUES` region (not the whole file) so
-// explanatory documentation about reserved Phase 2 event slots does not
+// explanatory documentation about reserved event slots does not
 // trip the forbidden-literal check.
 func TestLogDownload_EventLiteralIsDownload(t *testing.T) {
 	t.Parallel()
@@ -131,7 +129,7 @@ func TestLogDownload_EventLiteralIsDownload(t *testing.T) {
 }
 
 // Small helpers: read metering.go from disk so we can assert the SQL
-// literal is what D-29 says it is. Running the test binary's own source
+// literal is what says it is. Running the test binary's own source
 // is fine — `go test` sets the cwd to the package dir.
 func meteringSourceSnippet() []byte {
 	b, err := os.ReadFile("metering.go")

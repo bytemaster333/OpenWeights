@@ -1,17 +1,14 @@
-# Plan 05-02 — Caddy CI overlay.
-#
+#Caddy CI overlay.
 # Stacks on top of `ops/docker-compose.yml` + `ops/docker-compose.ci.yml`:
-#   docker compose \
-#     -f ops/docker-compose.yml \
-#     -f ops/docker-compose.ci.yml \
-#     -f ops/docker-compose.caddy.yml \
-#     up -d
-#
+# docker compose \
+# -f ops/docker-compose.yml \
+# -f ops/docker-compose.ci.yml \
+# -f ops/docker-compose.caddy.yml \
+# up -d
 # Adds a single Caddy reverse proxy on :8090 that fans out to CAS + gateway +
-# console via path prefixes (see ops/Caddyfile.ci). P12 (HTTP/2 Range header
+# console via path prefixes (see ops/Caddyfile.ci). (HTTP/2 Range header
 # integrity through a reverse proxy) is exercised here on the exact code path
-# the production 05-04 deploy will carry.
-#
+# the production deploy will carry.
 # Prod (05-04) will ship a separate ops/Caddyfile + ops/docker-compose.yml
 # Caddy service block (dual-SAN auto Let's Encrypt on `siahub.app` +
 # `cas.siahub.app`); this overlay exists only for CI so PR reviewers + nightly

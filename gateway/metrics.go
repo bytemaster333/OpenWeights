@@ -1,12 +1,10 @@
 // Package main — metrics.go.
-//
 // Wave 1 exposes the Prometheus registry and ONE counter
 // (`gateway_requests_total`). The full metric set (Sia download duration,
 // cache hit/miss, singleflight coalescing, hash-mismatch, bytes served) lands
-// in 03-06. Registry is exported so later plans can register more metrics
+// in . Registry is exported so later plans can register more metrics
 // without touching main.go.
-//
-// D-33: the `/metrics` handler is served on a LOOPBACK-only listener
+// : the `/metrics` handler is served on a LOOPBACK-only listener
 // (`GATEWAY_METRICS_ADDR`, default `127.0.0.1:9100`). Caddy MUST NOT proxy it.
 package main
 
@@ -20,11 +18,10 @@ import (
 
 // Metrics bundles the registry + all counters / histograms. Exported for
 // wiring in main.go and for downstream-plan growth.
-//
-// Cache counters (added in plan 03-05, Wave 3b) live on a set of
+// Cache counters (added in, Wave 3b) live on a set of
 // package-level globals so `cache.go` + `singleflight.go` + `handlers.go`
 // can increment without threading a `*Metrics` through every function.
-// Those globals are lazy-registered on first NewMetrics() call via
+// Those globals are lazy-registered on first NewMetrics call via
 // `registerCacheMetrics` so tests that construct multiple Metrics objects
 // don't double-register (Prometheus panics on duplicate).
 type Metrics struct {

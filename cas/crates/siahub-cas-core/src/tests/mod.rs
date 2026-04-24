@@ -1,8 +1,7 @@
 //! Integration-style tests for siahub-cas-core handlers.
-//!
-//! Plan 02-04 Task 5 — P1 canary + P2 short-circuit + body-cap + hash-parse.
+//! Task 5 — canary + short-circuit + body-cap + hash-parse.
 //! Tests 3/4/7 (happy-path, dedup, Sia-unavailable-via-handler) defer to
-//! Plan 02-10's conformance crate where testcontainers Postgres is wired.
+//! 's conformance crate where testcontainers Postgres is wired.
 
 mod admin_endpoints_tests;
 mod metering_tests;

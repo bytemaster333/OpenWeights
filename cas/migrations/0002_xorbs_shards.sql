@@ -1,23 +1,22 @@
 -- 0002_xorbs_shards.sql — core CAS data model.
--- ARCHITECTURE.md §"Postgres schema sketch" + RESEARCH D-19 deltas
+-- ARCHITECTURE.md §"Postgres schema sketch" + RESEARCH deltas
 -- (hash_prefix_8 generated col + pin_state tracking on both xorbs and shards).
 -- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-siahub-cas-core · Wave: 2
---
--- Hashes are BYTEA (PITFALL P1). xet-core's merkle-hash encoding is
+-- Hashes are BYTEA (PITFALL ). xet-core's merkle-hash encoding is
 -- byte-reversed-per-8-byte-group hex — if anyone ever needs a text view,
 -- decode via `xet_core_structures::merklehash::MerkleHash`, NEVER a plain
 -- `encode(hash, 'hex')`. The hash_prefix_8 generated column below is the ONE
--- hex-encoded view allowed, and only because CONSOLE-04 prefix search is
+-- hex-encoded view allowed, and only because prefix search is
 -- already operating on the display form of the hash.
 
--- === pin-state enum (D-15) — shared by xorbs and shards ===
+-- === pin-state enum — shared by xorbs and shards ===
 -- States:
---   'uploading'  — bytes not yet persisted to Sia
---   'pinning'    — uploaded, pin_object() pending/retrying
---   'pinned'     — pin_object() succeeded; only state served by reconstruction
---   'orphaned'   — 5+ failed pin attempts; ops must manually re-drive or wipe
--- Reconciler tick (60 s, Plan 02-09) advances 'uploading'→'pinning'→'pinned'
--- via sdk.upload() retry + sdk.pin_object(). See RESEARCH §4.3 + PITFALL P7.
+-- 'uploading' — bytes not yet persisted to Sia
+-- 'pinning' — uploaded, pin_object pending/retrying
+-- 'pinned' — pin_object succeeded; only state served by reconstruction
+-- 'orphaned' — 5+ failed pin attempts; ops must manually re-drive or wipe
+-- Reconciler tick (60 s) advances 'uploading'→'pinning'→'pinned'
+-- via sdk.upload retry + sdk.pin_object. See RESEARCH §4.3 + PITFALL .
 DO $$ BEGIN
     CREATE TYPE xorb_pin_state AS ENUM (
         'uploading',
@@ -28,13 +27,13 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- === xorbs ===
--- Primary key: xorb_merkle_hash as raw 32-byte BYTEA (PITFALL P1 — NEVER hex).
+-- Primary key: xorb_merkle_hash as raw 32-byte BYTEA (PITFALL — NEVER hex).
 -- sia_object_id is the Hash256 returned by sdk.upload (RESEARCH §4.1);
 -- content-addressed so retries against a previously-uploaded body yield the
--- same id (Plan 02-09 reconciler relies on this).
--- pin_state + pin_attempts + last_pin_attempt_at implement STORE-05 / D-15.
--- hash_prefix_8 (D-19 item 3) is a GENERATED STORED column — Phase 4
--- CONSOLE-04 prefix search uses it via a plain B-tree index.
+-- same id ( reconciler relies on this).
+-- pin_state + pin_attempts + last_pin_attempt_at implement / .
+-- hash_prefix_8 ( item 3) is a GENERATED STORED column
+-- prefix search uses it via a plain B-tree index.
 CREATE TABLE IF NOT EXISTS xorbs (
     xorb_merkle_hash     BYTEA PRIMARY KEY,
     sia_object_id        BYTEA NOT NULL,
@@ -53,7 +52,7 @@ CREATE INDEX IF NOT EXISTS xorbs_owner_idx
     ON xorbs (owner_user_id, uploaded_at DESC);
 CREATE INDEX IF NOT EXISTS xorbs_key_idx
     ON xorbs (owner_api_key_id, uploaded_at DESC);
--- D-19 item 3 — Phase 4 console prefix search. Unconditional index since
+-- item 3 — console prefix search. Unconditional index since
 -- hash_prefix_8 is generated STORED and therefore non-null for every row.
 CREATE INDEX IF NOT EXISTS xorbs_prefix_idx
     ON xorbs (hash_prefix_8);
@@ -65,10 +64,10 @@ CREATE INDEX IF NOT EXISTS xorbs_pin_sweep_idx
     WHERE pin_state IN ('uploading', 'pinning');
 
 -- === shards ===
--- D-13 option C: INSERT shard + reconstruction_* rows in one tx; THEN call
+-- option C: INSERT shard + reconstruction_* rows in one tx; THEN call
 -- sdk.upload + sdk.pin_object; THEN UPDATE sia_object_id + pin_state='pinned'.
 -- Hence sia_object_id is NULL while pin_state IN ('uploading','pinning').
--- Shard pin-state mirror of xorbs applies D-15 / STORE-05 to shards too.
+-- Shard pin-state mirror of xorbs applies / to shards too.
 CREATE TABLE IF NOT EXISTS shards (
     shard_hash           BYTEA PRIMARY KEY,
     sia_object_id        BYTEA NULL,
@@ -95,19 +94,19 @@ CREATE TABLE IF NOT EXISTS reconstruction_files (
 );
 
 -- === reconstruction_terms ===
--- IMPORTANT comment-invariant (PITFALL P4 — every conversion site
+-- IMPORTANT comment-invariant (PITFALL — every conversion site
 -- annotated in handler code too):
---   xorb_start..xorb_end           — chunk-index range, END-EXCLUSIVE.
---   xorb_byte_start..xorb_byte_end — pre-computed byte offsets in the xorb,
---                                    END-EXCLUSIVE. Per RESEARCH §2.5 these
---                                    are computed once at shard-INSERT time
---                                    from the chunk-length table, avoiding a
---                                    Sia footer re-fetch on every
---                                    reconstruction query.
---   unpacked_start..unpacked_end   — END-EXCLUSIVE byte offsets in the
---                                    reconstructed file.
+-- xorb_start..xorb_end — chunk-index range, END-EXCLUSIVE.
+-- xorb_byte_start..xorb_byte_end — pre-computed byte offsets in the xorb,
+-- END-EXCLUSIVE. Per RESEARCH §2.5 these
+-- are computed once at shard-INSERT time
+-- from the chunk-length table, avoiding a
+-- Sia footer re-fetch on every
+-- reconstruction query.
+-- unpacked_start..unpacked_end — END-EXCLUSIVE byte offsets in the
+-- reconstructed file.
 -- The single `- 1` conversion to end-inclusive byte range lives in
--- coalesce_terms_by_xorb (Plan 02-06); the schema stays end-exclusive.
+-- coalesce_terms_by_xorb; the schema stays end-exclusive.
 CREATE TABLE IF NOT EXISTS reconstruction_terms (
     file_id          BYTEA NOT NULL REFERENCES reconstruction_files(file_id),
     term_index       INT   NOT NULL,

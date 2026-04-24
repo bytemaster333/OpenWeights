@@ -1,14 +1,13 @@
 //! Mock Sia adapter for unit + conformance tests.
-//!
-//! Enabled by `cfg(any(test, feature = "sia-mock"))`. Plan 02-04 Task 5 uses
+//! Enabled by `cfg(any(test, feature = "sia-mock"))`. Task 5 uses
 //! it to assert:
-//!   - P2 short-circuit: merkle-mismatch rejection never increments
-//!     `upload_call_count()` (i.e. the real Sia SDK was never called).
-//!   - Dedup path: duplicate upload returns `{was_inserted: false}` with
-//!     `upload_call_count() == 1` across the two requests.
-//!   - Sia-unavailable path: `inject_unavailable(true)` causes every call to
-//!     return `SiaAdapterError::Unavailable(...)` → handler maps to
-//!     `AppError::SiaUnavailable` → HTTP 503 (PROTO-08).
+//! - short-circuit: merkle-mismatch rejection never increments
+//! `upload_call_count` (i.e. the real Sia SDK was never called).
+//! - Dedup path: duplicate upload returns `{was_inserted: false}` with
+//! `upload_call_count == 1` across the two requests.
+//! - Sia-unavailable path: `inject_unavailable(true)` causes every call to
+//! return `SiaAdapterError::Unavailable(...)` → handler maps to
+//! `AppError::SiaUnavailable` → HTTP 503.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

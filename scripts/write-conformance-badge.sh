@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# Plan 05-01 Task 4 — write console/public/conformance-badge.json.
-#
+# Task 4 — write console/public/conformance-badge.json.
 # Usage: write-conformance-badge.sh <pass|fail>
-#
-# Output shape is frozen by D-72:
-#   { "status":   "pass" | "fail" | "unknown",
-#     "last_run": "<RFC3339 UTC, seconds precision>",
-#     "commit":   "<git sha | 'unknown'>",
-#     "run_url":  "<GH Actions run URL | ''>" }
-#
-# The Phase 4 console hook (console/src/hooks/useConformance.ts) tolerates
+# Output shape is frozen by :
+# { "status": "pass" | "fail" | "unknown",
+# "last_run": "<RFC3339 UTC, seconds precision>",
+# "commit": "<git sha | 'unknown'>",
+# "run_url": "<GH Actions run URL | ''>" }
+# The console hook (console/src/hooks/useConformance.ts) tolerates
 # unknown keys and missing optional fields — status + last_run are the only
 # required shape invariants.
 

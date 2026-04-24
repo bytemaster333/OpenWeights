@@ -32,11 +32,11 @@ async-trait        = "0.1"
 url                = "2"
 subtle             = "2"
 prometheus         = { version = "0.13", default-features = false }
-# Plan 04-01 (Phase 2.1 amendment) — GitHub OAuth token exchange + indexd
+# ( amendment) — GitHub OAuth token exchange + indexd
 # proxy for /admin/stats/map. default-features off keeps the tls stack
 # consistent with sqlx/fred's rustls choice.
 reqwest            = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-# Plan 04-01 — URL-safe random nonce generation for OAuth state + session
+#URL-safe random nonce generation for OAuth state + session
 # IDs + API-key plaintext. CSPRNG via getrandom (already transitive).
 getrandom          = "0.2"
 siahub-cas-proto   = { path = "../siahub-cas-proto" }
@@ -44,11 +44,11 @@ siahub-cas-db      = { path = "../siahub-cas-db" }
 siahub-cas-storage = { path = "../siahub-cas-storage" }
 
 [dev-dependencies]
-# Plan 02-04 Task 5 — P1 canary + P2 short-circuit + happy-path fixtures.
+# Task 5 — canary + short-circuit + happy-path fixtures.
 # The `sia-mock` feature on siahub-cas-storage flips in the in-memory
 # MockSiaAdapter (Sia call counters + inject_unavailable).
 siahub-cas-storage = { path = "../siahub-cas-storage", features = ["sia-mock"] }
 tokio              = { workspace = true, features = ["macros", "test-util"] }
 bytes              = { workspace = true }
-# Plan 02-06 — P4 golden snapshot for fetch_info coalescing.
+#golden snapshot for fetch_info coalescing.
 insta              = { version = "1", features = ["json"] }

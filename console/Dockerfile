@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # siahub-console — multi-stage build: Node 22 (pnpm via corepack) → nginx:alpine static serve.
-# D-36: Node 22 LTS + pnpm 9.x. D-48: /health is a static file in public/ served as-is.
+# : Node 22 LTS + pnpm 9.x. : /health is a static file in public/ served as-is.
 
 FROM node:22-alpine AS build
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN pnpm install --frozen-lockfile
 # Copy the rest of the source.
 COPY . .
 
-# Build-time args inject browser-visible origins (D-55: non-secret).
+# Build-time args inject browser-visible origins (: non-secret).
 ARG VITE_CAS_URL
 ARG VITE_GATEWAY_URL
 ARG VITE_CONFORMANCE_BADGE_URL

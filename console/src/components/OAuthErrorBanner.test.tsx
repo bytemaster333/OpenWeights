@@ -4,11 +4,10 @@ import { afterEach, describe, expect, it } from "vitest"
 import { OAuthErrorBanner, type OAuthErrorCode } from "./OAuthErrorBanner"
 
 /**
- * P14 mitigation — verify every error code emitted by CAS's
+ * mitigation — verify every error code emitted by CAS's
  * `CallbackError::into_response` has console-side copy, and that the error
  * banner surfaces the code + an operator hint. Tests one row per code so
- * when CAS adds a new variant, plan-checker wedges the gap instantly.
- */
+ * when CAS adds a new variant, plan-checker wedges the gap instantly.*/
 
 afterEach(() => cleanup())
 

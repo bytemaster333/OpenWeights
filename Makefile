@@ -1,20 +1,20 @@
 # SiaHub root Makefile.
-# Single entry point for every operator task (CONTEXT D-03 + D-07).
+# Single entry point for every operator task .
 # Targets whose recipes depend on code from later plans emit a clear
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
 
 .PHONY: bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
-        build-readiness-probe help a3-verify \
-        cas-build cas-check cas-clippy cas-run cas-image cas-up \
-        gateway-build gateway-check gateway-vet gateway-run gateway-test gateway-image gateway-up \
-        console-install console-dev console-build console-check console-test console-image console-up \
-        benchmark benchmark-report benchmark-dry-run \
-        integration-hf-roundtrip integration-hf-roundtrip-dry-run integration-hf-roundtrip-down \
-        deploy deploy-smoke preload-fixture
+ build-readiness-probe help a3-verify \
+ cas-build cas-check cas-clippy cas-run cas-image cas-up \
+ gateway-build gateway-check gateway-vet gateway-run gateway-test gateway-image gateway-up \
+ console-install console-dev console-build console-check console-test console-image console-up \
+ benchmark benchmark-report benchmark-dry-run \
+ integration-hf-roundtrip integration-hf-roundtrip-dry-run integration-hf-roundtrip-down \
+ deploy deploy-smoke preload-fixture
 
-GO      := go
+GO := go
 COMPOSE := docker compose -f ops/docker-compose.yml --env-file .env
-BENCH   := cd bench &&
+BENCH := cd bench &&
 
 # -----------------------------------------------------------------------------
 # High-level operator entry points
@@ -22,35 +22,35 @@ BENCH   := cd bench &&
 
 help:
 	@echo "SiaHub Makefile targets:"
-	@echo "  make bootstrap         From-zero-to-running wizard (first-time setup)"
-	@echo "  make bootstrap-reset   Remove .env + ops/indexd.yml for a clean re-bootstrap"
-	@echo "  make up                docker compose up -d"
-	@echo "  make down              docker compose down"
-	@echo "  make thesis            Sia range-download thesis measurement (Phase 1 gate)"
-	@echo "  make smoke             1 MiB round-trip test against live indexd"
-	@echo "  make compose-smoke     Verify Compose healthchecks pass end-to-end"
-	@echo "  make verify            Full suite: unit + thesis + smoke + compose-smoke"
-	@echo "  make test-unit         Fast Go unit tests (no network)"
-	@echo "  make clean             Tear down Compose + remove volumes (DESTRUCTIVE)"
-	@echo "  ---"
-	@echo "  make console-install   pnpm install (D-36; frozen lockfile)"
-	@echo "  make console-dev       pnpm run dev (Vite dev server :5173)"
-	@echo "  make console-build     pnpm run build (tsc + Vite)"
-	@echo "  make console-check     pnpm run check (D-51 CI gate: biome + tsc + vitest)"
-	@echo "  make console-test      pnpm run test (Vitest)"
-	@echo "  make console-image     docker build siahub-console"
-	@echo "  make console-up        docker compose up -d siahub-console"
-	@echo "  ---"
-	@echo "  make benchmark         3-trial median throughput report (Phase 5 gate #4)"
-	@echo "  make benchmark-dry-run Regenerate benchmark artifacts with placeholder nulls"
-	@echo "  ---"
-	@echo "  make integration-hf-roundtrip         HF byte-identical round-trip through Caddy (Phase 5 gate #2)"
-	@echo "  make integration-hf-roundtrip-dry-run Lint harness scripts + validate compose overlay (no stack)"
-	@echo "  make integration-hf-roundtrip-down    Tear down the Caddy-fronted CI stack"
-	@echo "  ---"
-	@echo "  make deploy            Hosted demo deploy (manual; D-61) — pulls + brings stack up + smokes"
-	@echo "  make deploy-smoke      Post-deploy objective smoke (ops/smoke.sh; D-67/D-71)"
-	@echo "  make preload-fixture   Seed the hosted demo with the pinned fixture model (DEMO-04)"
+	@echo " make bootstrap From-zero-to-running wizard (first-time setup)"
+	@echo " make bootstrap-reset Remove .env + ops/indexd.yml for a clean re-bootstrap"
+	@echo " make up docker compose up -d"
+	@echo " make down docker compose down"
+	@echo " make thesis Sia range-download thesis measurement ( gate)"
+	@echo " make smoke 1 MiB round-trip test against live indexd"
+	@echo " make compose-smoke Verify Compose healthchecks pass end-to-end"
+	@echo " make verify Full suite: unit + thesis + smoke + compose-smoke"
+	@echo " make test-unit Fast Go unit tests (no network)"
+	@echo " make clean Tear down Compose + remove volumes (DESTRUCTIVE)"
+	@echo " ---"
+	@echo " make console-install pnpm install (; frozen lockfile)"
+	@echo " make console-dev pnpm run dev (Vite dev server :5173)"
+	@echo " make console-build pnpm run build (tsc + Vite)"
+	@echo " make console-check pnpm run check ( CI gate: biome + tsc + vitest)"
+	@echo " make console-test pnpm run test (Vitest)"
+	@echo " make console-image docker build siahub-console"
+	@echo " make console-up docker compose up -d siahub-console"
+	@echo " ---"
+	@echo " make benchmark 3-trial median throughput report ( gate #4)"
+	@echo " make benchmark-dry-run Regenerate benchmark artifacts with placeholder nulls"
+	@echo " ---"
+	@echo " make integration-hf-roundtrip HF byte-identical round-trip through Caddy ( gate #2)"
+	@echo " make integration-hf-roundtrip-dry-run Lint harness scripts + validate compose overlay (no stack)"
+	@echo " make integration-hf-roundtrip-down Tear down the Caddy-fronted CI stack"
+	@echo " ---"
+	@echo " make deploy Hosted demo deploy (manual; ) — pulls + brings stack up + smokes"
+	@echo " make deploy-smoke Post-deploy objective smoke (ops/smoke.sh; /)"
+	@echo " make preload-fixture Seed the hosted demo with the pinned fixture model "
 
 bootstrap: bench/compose-smoke/readiness/bin/readiness
 	@echo "bootstrap: running wizard (renders ops/indexd.yml + brings up stack + funds wallet + smoke)..."
@@ -65,16 +65,16 @@ down:
 	$(COMPOSE) down
 
 # -----------------------------------------------------------------------------
-# Phase 1 measurement targets
+# measurement targets
 # -----------------------------------------------------------------------------
 
 thesis: bench/compose-smoke/readiness/bin/readiness
 	$(COMPOSE) up -d postgres indexd redis
-	@echo "thesis: running measurement (PASS=0, FAIL=3 informational per D-02)..."
+	@echo "thesis: running measurement (PASS=0, FAIL=3 informational per )..."
 	@set +e; $(BENCH) $(GO) run ./thesis; rc=$$?; \
-	  if [ $$rc -eq 0 ]; then echo "thesis: PASS"; exit 0; \
-	  elif [ $$rc -eq 3 ]; then echo "thesis: FAIL (informational — see bench/thesis/REPORT.md + CONTEXT D-02)"; exit 0; \
-	  else echo "thesis: hard error rc=$$rc"; exit $$rc; fi
+	 if [ $$rc -eq 0 ]; then echo "thesis: PASS"; exit 0; \
+	 elif [ $$rc -eq 3 ]; then echo "thesis: FAIL (informational — see bench/thesis/REPORT.md + CONTEXT )"; exit 0; \
+	 else echo "thesis: hard error rc=$$rc"; exit $$rc; fi
 	@echo "thesis: report written; see bench/thesis/REPORT.md"
 
 smoke:
@@ -85,7 +85,7 @@ compose-smoke: bench/compose-smoke/readiness/bin/readiness
 	$(BENCH) $(GO) test -tags=integration -timeout=35m ./compose-smoke/...
 
 verify: test-unit
-	@echo "verify: running full Phase 1 suite (thesis + smoke + compose-smoke)"
+	@echo "verify: running full suite (thesis + smoke + compose-smoke)"
 	$(MAKE) thesis
 	$(MAKE) compose-smoke
 	$(MAKE) smoke
@@ -119,16 +119,16 @@ bootstrap-reset:
 
 # -----------------------------------------------------------------------------
 # A3 Verification — resolves RESEARCH §3 Assumption A3 before PLAN 07 implements
-# the bootstrap wizard. Writes .planning/phases/01-validation-foundations/01-A3-VERIFICATION.md.
+# the bootstrap wizard. Writes 
 # -----------------------------------------------------------------------------
 
 a3-verify: bench/compose-smoke/readiness/bin/readiness
 	$(COMPOSE) up -d postgres indexd redis
 	@echo "a3-verify: waiting for indexd readiness..."
-	@until $(COMPOSE) ps --format json | grep -q '"Health":"healthy"'; do sleep 10; echo "  waiting..."; done
+	@until $(COMPOSE) ps --format json | grep -q '"Health":"healthy"'; do sleep 10; echo " waiting..."; done
 	@echo "a3-verify: running probe (timeout 30s for approval)..."
 	$(BENCH) $(GO) run -tags=a3probe ./bootstrap
-	@echo "a3-verify: see .planning/phases/01-validation-foundations/01-A3-VERIFICATION.md"
+	@echo "a3-verify: see "
 
 # -----------------------------------------------------------------------------
 # Destructive
@@ -139,7 +139,7 @@ clean:
 	rm -rf bench/*/runs bench/compose-smoke/readiness/bin ops/indexd.yml
 
 # -----------------------------------------------------------------------------
-# Phase 2: siahub-cas
+# : siahub-cas
 # -----------------------------------------------------------------------------
 .PHONY: cas-build cas-check cas-clippy cas-run cas-image cas-up
 
@@ -162,7 +162,7 @@ cas-up: cas-image
 	docker compose -f ops/docker-compose.yml up -d siahub-cas
 
 # -----------------------------------------------------------------------------
-# Phase 3: siahub-gateway
+# : siahub-gateway
 # Plans 03-01..03-07. Wave 1 scaffold ships /health + stub /xorb/{hash} (501)
 # + HMAC-SHA256 signed-URL verifier (cross-language vectors green).
 # -----------------------------------------------------------------------------
@@ -191,9 +191,9 @@ gateway-up: gateway-image
 	docker compose -f ops/docker-compose.yml up -d siahub-gateway
 
 # -----------------------------------------------------------------------------
-# Phase 4: siahub-console
+# : siahub-console
 # Plans 04-02..04-10. First commit = shadcn init preset b7C9wTXYe (04-02).
-# `console-check` is the CI gate (D-51: biome check + tsc + vitest).
+# `console-check` is the CI gate (: biome check + tsc + vitest).
 # -----------------------------------------------------------------------------
 .PHONY: console-install console-dev console-build console-check console-test console-image console-up
 
@@ -219,8 +219,8 @@ console-up: console-image
 	docker compose -f ops/docker-compose.yml up -d siahub-console
 
 # -----------------------------------------------------------------------------
-# Phase 2: siahub-conformance — Xet protocol end-to-end harness.
-# Plan 02-10 (wave 6). Drives the full CAS via xet_client = "=1.5.1" as a
+# : siahub-conformance — Xet protocol end-to-end harness.
+# (wave 6). Drives the full CAS via xet_client = "=1.5.1" as a
 # dev-dep (never a runtime dep). See conformance/Cargo.toml for the pin
 # rationale + T-02-10-06 guard.
 # -----------------------------------------------------------------------------
@@ -228,11 +228,11 @@ console-up: console-image
 
 conformance-fixtures:
 	@if [ ! -f conformance/fixtures/eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632.xorb ]; then \
-	  echo "Fetching conformance fixtures from xet-team/xet-spec-reference-files@18bf9173fb..."; \
-	  cd conformance && git lfs clone https://huggingface.co/datasets/xet-team/xet-spec-reference-files \
-	    --revision 18bf9173fb2ca80ab3a6fdff81119ff61be7e7dd fixtures/; \
+	 echo "Fetching conformance fixtures from xet-team/xet-spec-reference-files@18bf9173fb..."; \
+	 cd conformance && git lfs clone https://huggingface.co/datasets/xet-team/xet-spec-reference-files \
+	 --revision 18bf9173fb2ca80ab3a6fdff81119ff61be7e7dd fixtures/; \
 	else \
-	  echo "conformance-fixtures: already present (skipping)"; \
+	 echo "conformance-fixtures: already present (skipping)"; \
 	fi
 
 # Unit-level + compile check; never touches Docker.
@@ -248,7 +248,7 @@ conformance-clippy:
 conformance: conformance-fixtures
 	cd conformance && cargo test --release
 
-# Plan 05-01 — mirror what the GH Actions `conformance` workflow runs. Brings
+# — mirror what the GH Actions `conformance` workflow runs. Brings
 # up the Compose stack with the CI overlay (V2_RECONSTRUCTION_ENABLED=true),
 # waits for every service to report healthy, pre-tags `siahub-cas:conformance`
 # for the testcontainers harness, runs the conformance crate, then writes
@@ -272,8 +272,8 @@ conformance-local: conformance-fixtures
 	@echo "conformance-local: PASS — stack still running; 'make down' to tear down."
 
 # -----------------------------------------------------------------------------
-# Phase 5: benchmarks report — 3-trial median harness (D-59).
-# Plan 05-03. Writes console/public/benchmarks.json + docs/benchmarks.md.
+# : benchmarks report — 3-trial median harness .
+# . Writes console/public/benchmarks.json + docs/benchmarks.md.
 # STACK=both (default) | siahub | hf-native.
 # Requires SIAHUB_CAS_URL + SIAHUB_API_KEY in env for SiaHub cells; HF CLI
 # (`hf` or `huggingface-cli`) on PATH.
@@ -293,24 +293,24 @@ benchmark-dry-run:
 	bash bench/run.sh --dry-run
 
 # -----------------------------------------------------------------------------
-# Phase 5: HF byte-identical round-trip integration test (Gate #2).
-# Plan 05-02. Mirrors .github/workflows/hf-roundtrip.yml locally so an
+# : HF byte-identical round-trip integration test (Gate #2).
+# . Mirrors .github/workflows/hf-roundtrip.yml locally so an
 # operator can validate the Caddy-fronted stack end-to-end before pushing
 # to main. Expects .env present (run `make bootstrap` first) AND a fresh
 # Postgres with `siahub` schema — the helper mints a test API key via
 # direct psql INSERT (scripts/issue-test-key.sh).
 #
-# STACK=siahub-ci (default) | custom   - passed to docker compose as an
-#                                          ancillary label; no effect on
-#                                          functionality today.
+# STACK=siahub-ci (default) | custom - passed to docker compose as an
+# ancillary label; no effect on
+# functionality today.
 # -----------------------------------------------------------------------------
 
 # Compose file list shared by the three roundtrip-* targets.
 CADDY_COMPOSE := docker compose \
-                   -f ops/docker-compose.yml \
-                   -f ops/docker-compose.ci.yml \
-                   -f ops/docker-compose.caddy.yml \
-                   --env-file .env
+ -f ops/docker-compose.yml \
+ -f ops/docker-compose.ci.yml \
+ -f ops/docker-compose.caddy.yml \
+ --env-file .env
 
 integration-hf-roundtrip-dry-run:
 	@echo "integration-hf-roundtrip-dry-run: linting harness scripts..."
@@ -324,7 +324,7 @@ integration-hf-roundtrip-dry-run:
 	 SIAHUB_GW_POSTGRES_PASSWORD=dry \
 	 REDIS_PASSWORD=dry \
 	 docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml -f ops/docker-compose.caddy.yml config >/dev/null \
-	   && echo "overlay merges clean"
+	 && echo "overlay merges clean"
 	@echo "integration-hf-roundtrip-dry-run: OK"
 
 integration-hf-roundtrip: integration-hf-roundtrip-dry-run
@@ -334,48 +334,48 @@ integration-hf-roundtrip: integration-hf-roundtrip-dry-run
 	bash scripts/wait-for-stack-healthy.sh
 	@echo "integration-hf-roundtrip: issuing test API key..."
 	@KEY=$$(bash scripts/issue-test-key.sh --scope write); \
-	  if [ -z "$$KEY" ]; then echo "issue-test-key failed"; exit 1; fi; \
-	  . bench/bench.config.sh; \
-	  docker build -t siahub-hf-roundtrip:ci tests/hf-roundtrip; \
-	  docker run --rm --network host \
-	    -e CAS_BASE_URL=http://localhost:8090/cas \
-	    -e GATEWAY_BASE_URL=http://localhost:8090/gateway \
-	    -e SIAHUB_API_KEY="$$KEY" \
-	    -e HF_FIXTURE_REPO \
-	    -e HF_FIXTURE_REVISION \
-	    -e HF_FIXTURE_KIND \
-	    siahub-hf-roundtrip:ci
+	 if [ -z "$$KEY" ]; then echo "issue-test-key failed"; exit 1; fi; \
+	 . bench/bench.config.sh; \
+	 docker build -t siahub-hf-roundtrip:ci tests/hf-roundtrip; \
+	 docker run --rm --network host \
+	 -e CAS_BASE_URL=http://localhost:8090/cas \
+	 -e GATEWAY_BASE_URL=http://localhost:8090/gateway \
+	 -e SIAHUB_API_KEY="$$KEY" \
+	 -e HF_FIXTURE_REPO \
+	 -e HF_FIXTURE_REVISION \
+	 -e HF_FIXTURE_KIND \
+	 siahub-hf-roundtrip:ci
 	@echo "integration-hf-roundtrip: PASS — run 'make integration-hf-roundtrip-down' to tear down."
 
 integration-hf-roundtrip-down:
 	$(CADDY_COMPOSE) down -v
 
 # -----------------------------------------------------------------------------
-# Phase 5: Hosted demo deploy (Plan 05-04, D-61 manual deploy).
+# : Hosted demo deploy (, manual deploy).
 #
 # Autonomous: FALSE. Never invoked from CI. The operator runs these commands
 # while SSH'd into the owner's server AFTER `git pull` brings the repo to the
-# desired HEAD. See .planning/phases/05-ship-v1/05-04-DEPLOY-RUNBOOK.md for the
+# desired HEAD. See for the
 # full 10-step runbook (DNS → .env → staging cert validation → prod deploy →
 # indexd wallet funding → first API key → fixture preload → smoke).
 #
-# The existing `smoke` target (Phase 1 Sia range-download smoke) is NOT
+# The existing `smoke` target ( Sia range-download smoke) is NOT
 # overwritten — hosted-demo smoke is `deploy-smoke` to avoid breaking the
 # Phase-1 wiring that still references `make smoke` via `make verify`.
 # -----------------------------------------------------------------------------
 
 PROD_COMPOSE := docker compose \
-                  -f ops/docker-compose.yml \
-                  -f ops/docker-compose.prod.yml \
-                  --env-file .env
+ -f ops/docker-compose.yml \
+ -f ops/docker-compose.prod.yml \
+ --env-file .env
 
 # Pre-conditions:
-#   - SSH'd into the owner's server.
-#   - `git pull` brought the repo to the commit you want deployed.
-#   - `.env` exists (chmod 0600) with every variable from both
-#     `ops/.env.example` and `ops/.env.prod.example` populated.
-#   - DNS A-records for siahub.app + cas.siahub.app point at this server.
-#   - Ports 80 + 443 reachable from the public internet (Caddy ACME challenge).
+# - SSH'd into the owner's server.
+# - `git pull` brought the repo to the commit you want deployed.
+# - `.env` exists (chmod 0600) with every variable from both
+# `ops/.env.example` and `ops/.env.prod.example` populated.
+# - DNS A-records for siahub.app + cas.siahub.app point at this server.
+# - Ports 80 + 443 reachable from the public internet (Caddy ACME challenge).
 deploy:
 	@test -f .env || (echo "ERROR: .env missing. Copy from ops/.env.prod.example (plus ops/.env.example) and fill in every value." && exit 1)
 	@test -f ops/Caddyfile || (echo "ERROR: ops/Caddyfile missing — did you git pull?" && exit 1)
@@ -391,11 +391,11 @@ deploy:
 	@echo "deploy: stack healthy. Run 'make deploy-smoke' to verify end-to-end reachability."
 
 # Objective post-deploy smoke test against the LIVE hosted demo.
-# Equivalent to the cut DEMO-01 tester-recruitment criterion (D-67).
+# Equivalent to the cut tester-recruitment criterion .
 deploy-smoke:
 	bash ops/smoke.sh $${SIAHUB_DOMAIN:-siahub.app}
 
-# One-shot fixture preload (DEMO-04). Run AFTER a write-scoped API key is
+# One-shot fixture preload . Run AFTER a write-scoped API key is
 # minted in the console. See ops/preload-fixture.sh for pre-conditions.
 preload-fixture:
 	bash ops/preload-fixture.sh

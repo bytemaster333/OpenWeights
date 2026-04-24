@@ -1,22 +1,19 @@
 //! `GET /admin/stats/map` — proxy indexd `/api/hosts?usable=true` and reshape
 //! for the console's Leaflet map.
-//!
-//! Backs CONSOLE-09. Keeps the browser off indexd entirely (D-42, §C
+//! Backs . Keeps the browser off indexd entirely ( §C
 //! invariant — "browser never touches indexd directly"): CAS is the one hop
 //! that holds the `INDEXD_ADMIN_PASSWORD` and can reshape the upstream JSON
 //! into a stable console contract.
-//!
-//! Upstream (probed on Phase 1 live compose stack): indexd serves JSON with
+//! Upstream (probed on live compose stack): indexd serves JSON with
 //! Go-marshal default field names (`PascalCase`). The struct below serde-
 //! renames to tolerate the exact field names observed (`PublicKey`,
 //! `CountryCode`, `Latitude`, `Longitude`, `Usable`, `ContractCount`).
-//!
 //! Failure modes:
-//!   * 502 `{"code":"indexd_unreachable"}` on reqwest failure — helps the
-//!     self-host operator distinguish "SIAHUB_INDEXER_URL misconfigured"
-//!     from "no hosts found".
-//!   * 200 with `{hosts: []}` on no usable hosts (Zen-testnet scarcity
-//!     scenario documented in 01-RESULTS).
+//! * 502 `{"code":"indexd_unreachable"}` on reqwest failure — helps the
+//! self-host operator distinguish "SIAHUB_INDEXER_URL misconfigured"
+//! from "no hosts found".
+//! * 200 with `{hosts: []}` on no usable hosts (Zen-testnet scarcity
+//! scenario documented in 01-RESULTS).
 
 use std::sync::Arc;
 use std::time::Duration;

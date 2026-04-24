@@ -13,7 +13,7 @@ path = "src/main.rs"
 [features]
 default  = []
 # Enables the in-memory MockSiaAdapter escape hatch (SIAHUB_SIA_MOCK=true).
-# Dev-only; notes.md forbids running the binary with this feature in prod.
+# Dev-only; .md forbids running the binary with this feature in prod.
 sia-mock = ["siahub-cas-storage/sia-mock"]
 
 [dependencies]
@@ -31,7 +31,7 @@ thiserror          = { workspace = true }
 sqlx               = { workspace = true }
 fred               = { workspace = true }
 sia_storage        = { workspace = true }
-# Plan 04-01 — shared reqwest client for OAuth token exchange + indexd proxy.
+#shared reqwest client for OAuth token exchange + indexd proxy.
 # default-features off + rustls-tls keeps the TLS stack consistent with
 # sqlx/fred's rustls choice (no native openssl dep).
 reqwest            = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

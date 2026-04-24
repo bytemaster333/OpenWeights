@@ -1,42 +1,37 @@
 #!/usr/bin/env bash
-# Plan 05-02 — P12 range-integrity regression (explicit test).
-#
+#range-integrity regression (explicit test).
 # Cheaper-than-full-round-trip assertion that Caddy does NOT corrupt Range
 # responses. Issues (a) single-range and (b) multi-range GETs through the
 # Caddy reverse proxy at the gateway and checks:
-#
-#   1. HTTP 206 Partial Content status.
-#   2. `Content-Range: bytes <s>-<e>/<total>` on single-range responses.
-#   3. `Content-Type: multipart/byteranges; boundary=<b>` on multi-range
-#      responses. A concatenated body silently corrupts xet-core V2 downloads
-#      (notes.md gotcha #3) — THE load-bearing assertion of this script.
-#   4. The boundary string appears at least twice in the body (one part-open
-#      marker + one close marker).
-#
+# 1. HTTP 206 Partial Content status.
+# 2. `Content-Range: bytes <s>-<e>/<total>` on single-range responses.
+# 3. `Content-Type: multipart/byteranges; boundary=<b>` on multi-range
+# responses. A concatenated body silently corrupts xet-core V2 downloads
+# (.md ) — THE load-bearing assertion of this script.
+# 4. The boundary string appears at least twice in the body (one part-open
+# marker + one close marker).
 # Invocation from CI:
-#   GATEWAY_VIA_CADDY_URL=http://localhost:8090/gateway \
-#   CAS_VIA_CADDY_URL=http://localhost:8090/cas \
-#   SIAHUB_API_KEY=<fresh key> \
-#   bash tests/hf-roundtrip/verify-range-integrity.sh
-#
+# GATEWAY_VIA_CADDY_URL=http://localhost:8090/gateway \
+# CAS_VIA_CADDY_URL=http://localhost:8090/cas \
+# SIAHUB_API_KEY=<fresh key> \
+# bash tests/hf-roundtrip/verify-range-integrity.sh
 # The script mints its own signed URL via CAS /v1/reconstructions given an
 # uploaded xorb hash (harness pre-populates one via a small fixture upload).
 # If SIGNED_URL_PATH is provided directly, the minting step is skipped.
-#
 # Exit codes:
-#   0  single + multi range through Caddy passed all checks
-#   1  any assertion failed
-#   2  pre-condition missing (no signed URL + no xorb to mint one from)
+# 0 single + multi range through Caddy passed all checks
+# 1 any assertion failed
+# 2 pre-condition missing (no signed URL + no xorb to mint one from)
 
 set -euo pipefail
 
 GATEWAY="${GATEWAY_VIA_CADDY_URL:?must point at Caddy path-prefix route, e.g. http://localhost:8090/gateway}"
 
 # Two modes:
-#   (a) direct: caller passes SIGNED_URL_PATH (everything after the gateway base).
-#   (b) mint: caller passes CAS_VIA_CADDY_URL + SIAHUB_API_KEY + XORB_HASH, we
-#       fetch a signed URL from /v1/reconstructions/<hash> and peel the gateway
-#       path out of the returned URL.
+# (a) direct: caller passes SIGNED_URL_PATH (everything after the gateway base).
+# (b) mint: caller passes CAS_VIA_CADDY_URL + SIAHUB_API_KEY + XORB_HASH, we
+# fetch a signed URL from /v1/reconstructions/<hash> and peel the gateway
+# path out of the returned URL.
 URL=""
 if [[ -n "${SIGNED_URL_PATH:-}" ]]; then
   URL="${GATEWAY}/${SIGNED_URL_PATH#/}"
@@ -97,7 +92,7 @@ fi
 echo "  ok: 206 + Content-Range + 16 bytes"
 
 # -----------------------------------------------------------------------------
-# [2/2] Multi-range: Range: bytes=0-7,16-23 → expect 206 + multipart/byteranges
+# [2/2] Multi-range: Range: bytes=0-7, → expect 206 + multipart/byteranges
 # -----------------------------------------------------------------------------
 echo "[2/2] multi-range (P12 load-bearing assertion)"
 HDRS_FILE="$TMP/multi.hdr"
@@ -111,7 +106,7 @@ if ! grep -qE 'HTTP/[12](\.[0-9]+)? 206' "$HDRS_FILE"; then
   exit 1
 fi
 
-# P12 PRIMARY ASSERTION — a concatenated body silently corrupts xet-core.
+# PRIMARY ASSERTION — a concatenated body silently corrupts xet-core.
 if ! grep -qiE '^content-type: multipart/byteranges; boundary=' "$HDRS_FILE"; then
   echo "FAIL (P12): expected 'Content-Type: multipart/byteranges; boundary=<b>' on multi-range" >&2
   echo "            Concatenated body would silently corrupt xet-core V2 downloads." >&2

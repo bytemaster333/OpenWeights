@@ -4,14 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { OneTimeKeyModal } from "./OneTimeKeyModal"
 
 /**
- * OneTimeKeyModal tests — the load-bearing D-45 guarantees:
+ * OneTimeKeyModal tests — the load-bearing guarantees:
  *
- *  1. Plaintext is present in the DOM when `open={true}`.
- *  2. The Copy button writes to `navigator.clipboard`.
- *  3. Closing via `onOpenChange(false)` is a no-op until ack.
- *  4. Clicking "I've saved it" calls `onAck` exactly once.
- *  5. The modal never writes to `localStorage` / `sessionStorage`.
- */
+ * 1. Plaintext is present in the DOM when `open={true}`.
+ * 2. The Copy button writes to `navigator.clipboard`.
+ * 3. Closing via `onOpenChange(false)` is a no-op until ack.
+ * 4. Clicking "I've saved it" calls `onAck` exactly once.
+ * 5. The modal never writes to `localStorage` / `sessionStorage`.*/
 
 beforeEach(() => {
   vi.restoreAllMocks()

@@ -1,6 +1,5 @@
 // ranges_test.go — Parser + single-range writer unit tests.
-//
-// Covers the 11 canonical cases from plan 03-03 Task 1 plus a boundary-drill
+// Covers the 11 canonical cases from Task 1 plus a boundary-drill
 // writer test that pins the HTTP-end-inclusive → SDK-offset+length mapping.
 // If this file's TestWriteSingleRange_BoundaryOffByOne ever fails, treat it
 // as a STOP-THE-LINE event: every stored xorb download is at risk of silent
@@ -39,7 +38,7 @@ func TestParseRange_Valid(t *testing.T) {
 		{"open_form_midpoint", "bytes=50-", 100, []Range{{50, 99}}},
 		{"suffix_last_10", "bytes=-10", 100, []Range{{90, 99}}},
 		{"suffix_larger_than_size_clamps", "bytes=-500", 100, []Range{{0, 99}}},
-		// Multi-spec is ALLOWED through the parser (03-04 uses it); 03-03's
+		// Multi-spec is ALLOWED through the parser ( uses it); 03-03's
 		// handler rejects it at the writer boundary with 501. Parser test just
 		// proves the slice flows through.
 		{"multi_spec_passes_through", "bytes=0-10,20-30", 100, []Range{{0, 10}, {20, 30}}},
@@ -125,7 +124,7 @@ func TestParseRange_Unsatisfiable(t *testing.T) {
 	}
 }
 
-// TestRange_Length documents the `Range.Length()` contract. Length of [0,0]
+// TestRange_Length documents the `Range.Length` contract. Length of [0,0]
 // is 1 byte, NOT 0. Easy to typo; guard with an explicit test.
 func TestRange_Length(t *testing.T) {
 	t.Parallel()
@@ -181,7 +180,6 @@ func TestAllRangesWithin(t *testing.T) {
 // 1 KiB payload must emit EXACTLY 100 bytes (indices 100..199) — NOT 99
 // (classic off-by-one), NOT 101 (wrong direction off-by-one), NOT something
 // starting at 101 (offset misalignment).
-//
 // If this ever fails, the breakage is grant-story-level: every range-serving
 // response corrupts content at the boundary. Treat as STOP-THE-LINE.
 func TestWriteSingleRange_BoundaryOffByOne(t *testing.T) {
@@ -229,7 +227,7 @@ func TestWriteSingleRange_BoundaryOffByOne(t *testing.T) {
 }
 
 // TestWriteSingleRange_SingleByte exercises the zero-length-like edge: a
-// `bytes=0-0` one-byte range. The Length() formula reduces to 1 and the
+// `bytes=0-0` one-byte range. The Length formula reduces to 1 and the
 // body must be exactly payload[0].
 func TestWriteSingleRange_SingleByte(t *testing.T) {
 	t.Parallel()
@@ -330,11 +328,11 @@ func TestParseRangeSentinelsDistinct(t *testing.T) {
 	if errors.Is(ErrBadRange, ErrUnsatisfiable) || errors.Is(ErrUnsatisfiable, ErrBadRange) {
 		t.Fatalf("ErrBadRange and ErrUnsatisfiable must be distinct sentinels")
 	}
-	// Sanity: Error() strings must not be empty.
+	// Sanity: Error strings must not be empty.
 	if ErrBadRange.Error() == "" || ErrUnsatisfiable.Error() == "" {
 		t.Fatalf("sentinel error strings must not be empty")
 	}
-	// Docstring sanity: ErrBadRange message mentions "Range" somewhere —
+	// Docstring sanity: ErrBadRange message mentions "Range" somewhere
 	// keeps a breadcrumb in logs if it ever surfaces.
 	if !strings.Contains(strings.ToLower(ErrBadRange.Error()), "range") {
 		t.Fatalf("ErrBadRange.Error() = %q; want 'Range' substring", ErrBadRange.Error())
@@ -343,21 +341,19 @@ func TestParseRangeSentinelsDistinct(t *testing.T) {
 }
 
 // ============================================================================
-// Multipart/byteranges (RFC 7233 §4.1) tests — plan 03-04.
-//
-// THE SINGLE MOST INTEGRITY-CRITICAL CODE PATH IN PHASE 3 (gotcha #3).
-//
+// Multipart/byteranges (RFC 7233 §4.1) tests — .
+// THE SINGLE MOST INTEGRITY-CRITICAL CODE PATH IN PHASE 3.
 // Strategy:
-//   1. Use Go's `mime/multipart.NewReader` to PARSE the response body back
-//      into parts — this is the same shape xet-core's parser expects, and a
-//      stdlib round-trip is the gold-standard proof of RFC-7233-compliant
-//      framing.
-//   2. Anti-concatenation tripwire: explicitly assert the `--boundary`
-//      markers exist in the serialized body. A regression that emits a raw
-//      concatenation would fail this test hard.
-//   3. Content-Length drift catch: compare the precomputed header length to
-//      `len(body)` — any off-by-CRLF mismatch between the precompute math
-//      and the stdlib writer's actual output trips this.
+// 1. Use Go's `mime/multipart.NewReader` to PARSE the response body back
+// into parts — this is the same shape xet-core's parser expects, and a
+// stdlib round-trip is the gold-standard proof of RFC-7233-compliant
+// framing.
+// 2. Anti-concatenation tripwire: explicitly assert the `--boundary`
+// markers exist in the serialized body. A regression that emits a raw
+// concatenation would fail this test hard.
+// 3. Content-Length drift catch: compare the precomputed header length to
+// `len(body)` — any off-by-CRLF mismatch between the precompute math
+// and the stdlib writer's actual output trips this.
 // ============================================================================
 
 // deterministicMultipartPayload returns a byte slice where byte i = (i * 67
@@ -511,12 +507,11 @@ func TestMultipartRanges_ContentLengthMatches(t *testing.T) {
 	}
 }
 
-// TestMultipartRanges_NotConcatenated is the GOTCHA #3 ANTI-REGRESSION guard.
+// TestMultipartRanges_NotConcatenated is the ANTI-REGRESSION guard.
 // A raw-concatenated body would contain the bytes of both ranges back-to-back
 // and NO boundary markers. This test asserts the presence of the boundary
 // literal AND the closing delimiter in the serialized body.
-//
-// If this test ever fails, STOP THE LINE — grant story-breaking defect.
+// If this test ever fails, STOP THE LINE — -breaking defect.
 func TestMultipartRanges_NotConcatenated(t *testing.T) {
 	t.Parallel()
 	total := int64(100)
@@ -704,7 +699,7 @@ func TestMultipartRanges_ManyRanges(t *testing.T) {
 
 // TestMultipartRanges_ClosingDelimiter — asserts the RFC-mandated closing
 // `--<b>--` delimiter is present AND is the LAST non-CRLF token of the body.
-// If mw.Close() were ever accidentally removed (or replaced with a plain
+// If mw.Close were ever accidentally removed (or replaced with a plain
 // boundary instead of the closing delimiter), xet-core's parser wouldn't
 // know the stream ended and would read past the intended boundary.
 func TestMultipartRanges_ClosingDelimiter(t *testing.T) {

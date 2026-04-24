@@ -1,20 +1,18 @@
-//! Plan 02-04 Task 5 — handler-level tests.
-//!
+//! Task 5 — handler-level tests.
 //! These tests run entirely in-process (no Docker / Postgres / Redis) by
 //! invoking `compute_xorb_hash_from_footer` directly and driving the
 //! `SiaAdapter` trait through [`MockSiaAdapter`]. Full-path tests that need a
 //! live Postgres (happy-path DB row assertion, dedup across requests,
-//! SiaUnavailable→503 with pin_state fallback) live in Plan 02-10's
+//! SiaUnavailable→503 with pin_state fallback) live in 's
 //! conformance crate where testcontainers is already wired — see this plan's
 //! SUMMARY for the split rationale.
-//!
 //! Coverage mapped back to the plan:
-//!   - Test 1 (P1 canary): `p1_canary_*`
-//!   - Test 2 (P2 short-circuit + 0 Sia I/O): `p2_corrupt_footer_short_circuits`
-//!     and `p2_flipped_chunk_hash_is_mismatch`
-//!   - Test 5 (bad hex): `hash_parse_failure_rejects_early`
-//!   - Test 6 (body > cap): `body_cap_constant_matches_plan`
-//!   - Tests 3/4/7 (happy, dedup, 503) deferred to 02-10 (conformance)
+//! - Test 1 ( canary): `p1_canary_*`
+//! - Test 2 ( short-circuit + 0 Sia I/O): `p2_corrupt_footer_short_circuits`
+//! and `p2_flipped_chunk_hash_is_mismatch`
+//! - Test 5 (bad hex): `hash_parse_failure_rejects_early`
+//! - Test 6 (body > cap): `body_cap_constant_matches_plan`
+//! - Tests 3/4/7 (happy, dedup, 503) deferred to (conformance)
 
 use std::io::Cursor;
 use std::sync::Arc;
@@ -32,10 +30,10 @@ use siahub_cas_storage::{SiaAdapter, mock::MockSiaAdapter};
 use crate::errors::AppError;
 
 // ---------------------------------------------------------------------------
-// P1 canary — reference fixture hash round-trips through the merklehash crate.
+// canary — reference fixture hash round-trips through the merklehash crate.
 // Mirrors the inline `inline_tests::p1_canary_reference_hash_round_trips` but
 // is also kept here so the integration-style test module documents the P1
-// contract alongside the P2 contract.
+// contract alongside the contract.
 // ---------------------------------------------------------------------------
 
 const REF_HEX: &str =
@@ -55,9 +53,9 @@ fn p1_canary_ref_hex_round_trips_via_merklehash() {
 fn p1_canary_only_call_site_is_crate_codec() {
     // This test ENFORCES that no code in this crate is hand-rolling hex for
     // MerkleHash. The assertion is a documentation barrier — if anyone ever
-    // inserts `format!("{:02x}", b)` over MerkleHash::as_bytes(), we want the
+    // inserts `format!("{:02x}", b)` over MerkleHash::as_bytes, we want the
     // review to notice a mismatch. Since on little-endian hosts the straight
-    // hex of as_bytes() happens to match .hex(), we compare the bytes via
+    // hex of as_bytes happens to match .hex, we compare the bytes via
     // the SHA-256 prefix (a mild deterrent, not cryptographic proof).
     use sha2::{Digest, Sha256};
     let h = MerkleHash::from_hex(REF_HEX).unwrap();
@@ -75,17 +73,16 @@ fn p1_canary_only_call_site_is_crate_codec() {
 }
 
 // ---------------------------------------------------------------------------
-// P2 — merkle verification MUST short-circuit BEFORE any Sia I/O, and the
+//merkle verification MUST short-circuit BEFORE any Sia I/O, and the
 // whole reject path MUST complete in <10 ms against a 64 MiB body.
-//
 // Strategy:
-//   1. Build a valid xorb via `build_raw_xorb` + `SerializedXorbObject`.
-//   2. Corrupt the footer (flip the last 4 bytes = info_length u32) so
-//      `XorbObject::deserialize` returns Err.
-//   3. Parse the path hash separately (it will NOT match anything) and call
-//      `compute_xorb_hash_from_footer`.
-//   4. Assert: Err in <10 ms; MockSiaAdapter counters remain at 0 (we never
-//      got anywhere near the SiaAdapter call path).
+// 1. Build a valid xorb via `build_raw_xorb` + `SerializedXorbObject`.
+// 2. Corrupt the footer (flip the last 4 bytes = info_length u32) so
+// `XorbObject::deserialize` returns Err.
+// 3. Parse the path hash separately (it will NOT match anything) and call
+// `compute_xorb_hash_from_footer`.
+// 4. Assert: Err in <10 ms; MockSiaAdapter counters remain at 0 (we never
+// got anywhere near the SiaAdapter call path).
 // ---------------------------------------------------------------------------
 
 fn build_valid_xorb() -> (MerkleHash, Vec<u8>) {
@@ -145,18 +142,18 @@ async fn p2_corrupt_footer_short_circuits() {
     let res = compute_xorb_hash(&body);
     let elapsed = t0.elapsed();
 
-    // P2 invariant 1: reject within 10 ms.
+    // invariant 1: reject within 10 ms.
     assert!(
         elapsed.as_millis() < 10,
         "P2 short-circuit: corrupt-footer rejection took {}ms; must be <10ms",
         elapsed.as_millis()
     );
-    // P2 invariant 2: deserialize returned an error (400 BadRequest class).
+    // invariant 2: deserialize returned an error (400 BadRequest class).
     match res {
         Err(AppError::BadRequest(msg)) => assert_eq!(msg, "malformed_xorb"),
         other => panic!("expected BadRequest(malformed_xorb), got {:?}", other),
     }
-    // P2 invariant 3: Sia adapter counters are ZERO.
+    // invariant 3: Sia adapter counters are ZERO.
     let m = Arc::as_ptr(&mock);
     // Safety: the Arc points to a MockSiaAdapter we constructed above; the
     // trait object has the same vtable layout. We only peek read-only counters.
@@ -179,12 +176,11 @@ async fn p2_flipped_chunk_hash_is_mismatch() {
     let recomputed = compute_xorb_hash(&body).expect("footer still valid");
     assert_eq!(recomputed, original_expected, "recompute matches on clean body");
 
-    // Now flip one byte in the middle of the chunk data (before the footer) —
+    // Now flip one byte in the middle of the chunk data (before the footer)
     // footer chunk_hashes still claim the OLD hash; a downstream re-hash of
-    // the data would notice. For Plan 02-04 Task 4 the handler only checks
+    // the data would notice. For Task 4 the handler only checks
     // aggregated hash vs path hash, which is derived from chunk_hashes alone.
     // This is the documented v1 scope (see plan §A2 probe "Handler recipe").
-    //
     // We confirm: if the CALLER passes a different expected hash, the handler
     // returns `AppError::HashMismatch`. This is a pure equality check; no Sia
     // I/O would have happened.
@@ -204,9 +200,9 @@ async fn p2_flipped_chunk_hash_is_mismatch() {
 #[test]
 fn hash_parse_failure_rejects_early() {
     // Each case must fail MerkleHash::from_hex:
-    //   - "zz" + "notreallyhex"                         : non-hex chars
-    //   - "ab" + "cd"                                   : too short (length != 64)
-    //   - "ab" + "Z".repeat(62)                         : right length, non-hex chars
+    // - "zz" + "notreallyhex" : non-hex chars
+    // - "ab" + "cd" : too short (length != 64)
+    // - "ab" + "Z".repeat(62) : right length, non-hex chars
     let bad_long = "Z".repeat(62); // 64 total once prefix "ab" is added
     let cases: [(&str, &str); 3] = [
         ("zz", "notreallyhex"),
@@ -227,19 +223,19 @@ fn hash_parse_failure_rejects_early() {
 // Test 6 — body-cap enforced at the handler level. We don't instantiate the
 // full Router here; we assert the MAX_XORB_BYTES constant and show that a
 // payload larger than the cap would be rejected by the bound-check. The
-// real Router-level test lives in Plan 02-10's conformance crate.
+// real Router-level test lives in 's conformance crate.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn body_cap_constant_matches_plan() {
     use crate::handlers::xorbs::MAX_XORB_BYTES;
-    // 64 MiB + 4 KiB per Plan 02-04 Task 4.
+    // 64 MiB + 4 KiB per Task 4.
     assert_eq!(MAX_XORB_BYTES, 64 * 1024 * 1024 + 4096);
 }
 
 // ---------------------------------------------------------------------------
 // MockSiaAdapter contract exercise — the counters + inject_unavailable plumb
-// correctly. Documenting here so Plan 02-10's conformance tests know the
+// correctly. Documenting here so 's conformance tests know the
 // exact surface they can rely on.
 // ---------------------------------------------------------------------------
 

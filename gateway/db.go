@@ -1,20 +1,16 @@
 // Package main — db.go.
-//
 // Postgres access layer for the gateway. W2 replaces the W1 stub with a real
-// `pgxpool.Pool` + the two functions 03-03 / 03-05 / 03-06 consume:
-//
-//   - `LookupXorb(ctx, hashHex) (siaObjectID types.Hash256, size int64, err error)`
-//     queries `xorbs` filtered on `pin_state = 'pinned'`. Rows not pinned (the
-//     `'uploading'` / `'pinning'` / `'orphaned'` states) MUST NOT leak —
-//     serving bytes from an incomplete Sia upload would corrupt downloads.
-//   - `ErrXorbNotFound` is the sentinel the xorb handler maps to 404.
-//
+// `pgxpool.Pool` + the two functions / / consume:
+// - `LookupXorb(ctx, hashHex) (siaObjectID types.Hash256, size int64, err error)`
+// queries `xorbs` filtered on `pin_state = 'pinned'`. Rows not pinned (the
+// `'uploading'` / `'pinning'` / `'orphaned'` states) MUST NOT leak
+// serving bytes from an incomplete Sia upload would corrupt downloads.
+// - `ErrXorbNotFound` is the sentinel the xorb handler maps to 404.
 // RECEIVED §B: the gateway connects as the dedicated `siahub_gw` role created
-// by cas/migrations/0005_siahub_gw_role.sql — not the Phase 2 `siahub` owner.
+// by cas/migrations/0005_siahub_gw_role.sql — not the `siahub` owner.
 // That role has `SELECT` on `xorbs` + `INSERT` on `usage_log` and nothing
 // else; the RO/RW split is at the Postgres role layer, not in this file.
-//
-// CONTEXT §2 + D-27: metering writes go directly to `usage_log` with
+// CONTEXT §2 + : metering writes go directly to `usage_log` with
 // `event='download'` (see metering.go). The pool here is shared between
 // reads (LookupXorb) and the meter writer.
 package main
@@ -33,18 +29,18 @@ import (
 // ErrXorbNotFound is returned by LookupXorb when no row matches the given
 // hash OR the row is not in `pin_state='pinned'`. The xorb handler maps
 // this to HTTP 404 (NOT 403 — 403 is reserved for signed-URL failures per
-// gotcha #8). The plan's top-level deliverable calls this
+// ). The plan's top-level deliverable calls this
 // `ErrXorbNotPinned` — we alias below so either name resolves.
 var ErrXorbNotFound = errors.New("xorb not pinned or unknown")
 
 // ErrXorbNotPinned is an alias for ErrXorbNotFound kept so the plan's
-// deliverable naming resolves at call sites that use either form. Phase 3
+// deliverable naming resolves at call sites that use either form.
 // canonical is `ErrXorbNotFound` because the query semantics ("not found OR
 // not pinned") don't distinguish the two.
 var ErrXorbNotPinned = ErrXorbNotFound
 
 // DB wraps the pgx pool. Exposed as a struct (not `*pgxpool.Pool` directly)
-// so 03-05 can mock at the interface level for tests without a live Postgres.
+// so can mock at the interface level for tests without a live Postgres.
 // The `pool` field is unexported; tests poke it via the `DBPool` helper in
 // db_test.go.
 type DB struct {
@@ -54,12 +50,10 @@ type DB struct {
 // NewDB constructs a pooled connection to Postgres. The connStr is expected
 // to carry `application_name=siahub-gateway` (compose sets this) so the
 // CAS dashboards can distinguish gateway connections from CAS connections.
-//
 // Pool sizing: MaxConns=20 is conservative. The gateway is overwhelmingly
 // IO-bound on Sia downloads, not on Postgres — a tiny lookup per request
 // plus occasional meter batch inserts. Oversizing the pool wastes Postgres
 // slots that CAS and the reconciler need.
-//
 // W2 also `Ping`s to fail fast on bad connection strings instead of surfacing
 // as the first lookup after boot timing-out.
 func NewDB(ctx context.Context, connStr string) (*DB, error) {
@@ -122,12 +116,10 @@ func (d *DB) Pool() *pgxpool.Pool {
 // serving bytes from an `'uploading'`/`'pinning'` row would hand the client
 // a partial xorb (the Sia upload may not have finished) and bypassing the
 // `'orphaned'` state would let 5-failure rows resurface.
-//
 // Hashes in `xorbs.xorb_merkle_hash` are stored as raw 32-byte BYTEA
-// (Phase 2 PITFALL P1 — NEVER hex). The verifier hands us a hex string, so
+// ( PITFALL — NEVER hex). The verifier hands us a hex string, so
 // we decode before the lookup. Invalid hex returns a typed error separate
 // from ErrXorbNotFound so the handler layer can distinguish 400 vs 404.
-//
 // `siaObjectID` comes back as `types.Hash256` because that's what the
 // siastorage SDK consumes directly in `SDK.Object(ctx, objectKey)`. The
 // underlying BYTEA column is 32 bytes; rows with NULL `sia_object_id`

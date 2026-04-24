@@ -99,7 +99,7 @@ func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 		"POSTGRES_SUPERUSER_PASSWORD",
 		"INDEXD_POSTGRES_PASSWORD",
 		"SIAHUB_POSTGRES_PASSWORD",
-		// Phase 3: dedicated minimal-privilege role for siahub-gateway.
+		// : dedicated minimal-privilege role for siahub-gateway.
 		// See cas/migrations/0005_siahub_gw_role.sql.
 		"SIAHUB_GW_POSTGRES_PASSWORD",
 		"INDEXD_ADMIN_PASSWORD",

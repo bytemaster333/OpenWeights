@@ -1,18 +1,16 @@
 //! Canonical `AppError` taxonomy and `IntoResponse` mapping.
-//!
-//! Status-code guarantees (from Plan 02-03 + CONTEXT D-20/D-21):
-//!   - `Unauthenticated`         → 401  (missing/invalid bearer)
-//!   - `Forbidden`               → 403  (known key, scope mismatch)
-//!   - `NotFound`                → 404
-//!   - `BadRequest(&'static)`    → 400
-//!   - `HashMismatch { e, a }`   → 400  (body has both hex strings — P1)
-//!   - `ShardMissingXorbs { m }` → 400  (body lists missing hashes — P18)
-//!   - `ShardVersionUnsupported` → 400  (body echoes supported header/footer — P19)
-//!   - `RateLimited { retry }`   → 429 + Retry-After header (OPS-04)
-//!   - `SiaUnavailable(source)`  → 503  (DISTINCT from 429 per PROTO-08)
-//!   - `Db(sqlx::Error)`         → 500  (body = "internal"; real err LOGGED only)
-//!   - `Other(anyhow::Error)`    → 500  (body = "internal"; real err LOGGED only)
-//!
+//! Status-code guarantees (from + CONTEXT /):
+//! - `Unauthenticated` → 401 (missing/invalid bearer)
+//! - `Forbidden` → 403 (known key, scope mismatch)
+//! - `NotFound` → 404
+//! - `BadRequest(&'static)` → 400
+//! - `HashMismatch { e, a }` → 400 (body has both hex strings — )
+//! - `ShardMissingXorbs { m }` → 400 (body lists missing hashes — )
+//! - `ShardVersionUnsupported` → 400 (body echoes supported header/footer — )
+//! - `RateLimited { retry }` → 429 + Retry-After header
+//! - `SiaUnavailable(source)` → 503 (DISTINCT from 429 per )
+//! - `Db(sqlx::Error)` → 500 (body = "internal"; real err LOGGED only)
+//! - `Other(anyhow::Error)` → 500 (body = "internal"; real err LOGGED only)
 //! NEVER leak `sqlx::Error` / `anyhow::Error` inner text to clients — they are
 //! logged via `tracing::error!` and the response body is the literal string
 //! `"internal"`.

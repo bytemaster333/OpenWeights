@@ -1,22 +1,18 @@
 //! Regenerate `conformance/fixtures/signed_url_vectors.json` against the
 //! current `UrlSigner::canonical_string` + signing logic.
-//!
 //! Usage:
 //! ```text
 //! cargo run -p siahub-cas-core --example generate_signed_url_vectors -- \
-//!     conformance/fixtures/signed_url_vectors.json
+//! conformance/fixtures/signed_url_vectors.json
 //! ```
-//!
 //! The binary:
-//!   1. Reads the JSON file at the given path (array of vectors).
-//!   2. For each vector, recomputes `canonical_string` + HMAC-SHA256 sig.
-//!   3. Writes the canonical_string + expected_sig_b64url_nopad fields back.
-//!
+//! 1. Reads the JSON file at the given path (array of vectors).
+//! 2. For each vector, recomputes `canonical_string` + HMAC-SHA256 sig.
+//! 3. Writes the canonical_string + expected_sig_b64url_nopad fields back.
 //! Run once after every edit to `UrlSigner::canonical_string` or the vector
 //! inputs. Idempotent — re-running on an already-populated file produces a
 //! byte-identical diff.
-//!
-//! Phase 3 Go gateway consumes these same vectors as its authoritative
+//! Go gateway consumes these same vectors as its authoritative
 //! verification target. Any diff after regeneration MUST be reviewed.
 
 use std::env;

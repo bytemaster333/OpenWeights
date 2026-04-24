@@ -1,34 +1,28 @@
 //! `POST/GET/DELETE /admin/keys[/{id}]` — API key CRUD for the session user.
-//!
-//! Backs KEYS-01..04. Response contract locked in 04-KEY-DECISIONS §2:
-//!
-//!   * POST → `201 {id, name, scope, masked_prefix, plaintext_key, created_at}`
-//!     — plaintext returned EXACTLY ONCE per D-45.
-//!   * GET  → `200 {keys: [{id, name, scope, masked_prefix, created_at,
-//!                            last_used_at}, ...]}` — plaintext NEVER included.
-//!   * DELETE → `204 No Content` — sets `revoked_at = NOW()`. Phase 2's auth
-//!     extractor (`siahub_cas_core::auth`) respects `revoked_at IS NULL` so
-//!     propagation is immediate for uncached bearer paths. The in-process LRU
-//!     cache in the bearer path has a 5-s TTL bound (KEYS-04 SLO) documented
-//!     in `auth.rs` T-02-03-09.
-//!
+//! Backs ..04. Response contract locked in 04-KEY-DECISIONS §2:
+//! * POST → `201 {id, name, scope, masked_prefix, plaintext_key, created_at}`
+//!plaintext returned EXACTLY ONCE per .
+//! * GET → `200 {keys: [{id, name, scope, masked_prefix, created_at,
+//! last_used_at}, ...]}` — plaintext NEVER included.
+//! * DELETE → `204 No Content` — sets `revoked_at = NOW`. 's auth
+//! extractor (`siahub_cas_core::auth`) respects `revoked_at IS NULL` so
+//! propagation is immediate for uncached bearer paths. The in-process LRU
+//! cache in the bearer path has a 5-s TTL bound ( SLO) documented
+//! in `auth.rs` T-02-.
 //! Scope mapping — the console contract uses `"read"|"write"|"admin"` while
 //! the DB enum is `upload|download|admin` (migration 0001). We translate at
 //! the handler boundary:
-//!
-//!   * `"read"`  ↔ `ApiKeyScope::Download`
-//!   * `"write"` ↔ `ApiKeyScope::Upload`
-//!   * `"admin"` ↔ `ApiKeyScope::Admin`
-//!
+//! * `"read"` ↔ `ApiKeyScope::Download`
+//! * `"write"` ↔ `ApiKeyScope::Upload`
+//! * `"admin"` ↔ `ApiKeyScope::Admin`
 //! Translation is deliberately local to this module so the DB enum can
 //! expand without churning the browser-facing wire format.
-//!
 //! Security:
-//!   * Plaintext key = 32 URL-safe random bytes (base64url, no padding).
-//!   * `key_hash` stored is raw SHA-256([u8; 32]) — NOT hex (P1 sibling
-//!     convention; matches the bearer path in `auth.rs`).
-//!   * `masked_prefix = "<first 8 chars of plaintext>..."` captured at
-//!     creation time; stored so list endpoint can render a non-secret label.
+//! * Plaintext key = 32 URL-safe random bytes (base64url, no padding).
+//! * `key_hash` stored is raw SHA-256([u8; 32]) — NOT hex ( sibling
+//! convention; matches the bearer path in `auth.rs`).
+//! * `masked_prefix = "<first 8 chars of plaintext>..."` captured at
+//! creation time; stored so list endpoint can render a non-secret label.
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -89,7 +83,7 @@ pub struct CreateKeyResponse {
     pub name: String,
     pub scope: ConsoleScope,
     pub masked_prefix: String,
-    /// **D-45: returned EXACTLY ONCE in this response. Never logged; never
+    /// **: returned EXACTLY ONCE in this response. Never logged; never
     /// stored in any field other than the response body; never included in
     /// any other endpoint's output.** Integration test `admin_endpoints.rs`
     /// greps the list-keys response body for this literal to enforce.
@@ -136,7 +130,7 @@ pub async fn create_key<S: AuthStateRef>(
     getrandom::getrandom(&mut raw).map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let plaintext = URL_SAFE_NO_PAD.encode(raw);
 
-    // SHA-256([u8; 32]) — stored raw BYTEA per 0001_initial.sql D-20.
+    // SHA-256([u8; 32]) — stored raw BYTEA per 0001_initial.sql .
     let key_hash: [u8; 32] = Sha256::digest(plaintext.as_bytes()).into();
 
     // Masked prefix — first 8 chars + "..." ellipsis. Non-secret by design
@@ -145,7 +139,7 @@ pub async fn create_key<S: AuthStateRef>(
 
     let db_scope = req.scope.to_db();
 
-    // INSERT key — PK gen_random_uuid() in migration 0001.
+    // INSERT key — PK gen_random_uuid in migration 0001.
     let row: (Uuid, DateTime<Utc>) = sqlx::query_as(
         "INSERT INTO api_keys (user_id, key_hash, scopes, label, masked_prefix) \
          VALUES ($1, $2, ARRAY[$3::api_key_scope], $4, $5) \
@@ -173,9 +167,8 @@ pub async fn create_key<S: AuthStateRef>(
 }
 
 /// `GET /admin/keys` — list non-revoked keys for the session user.
-///
 /// **MUST NOT include `plaintext_key`** — the integration test greps response
-/// bodies for that substring to enforce (D-45).
+/// bodies for that substring to enforce.
 pub async fn list_keys<S: AuthStateRef>(
     Session(user): Session,
     State(st): State<S>,
@@ -227,8 +220,7 @@ pub async fn list_keys<S: AuthStateRef>(
 }
 
 /// `DELETE /admin/keys/{id}` — revoke a key owned by the session user.
-///
-/// KEYS-04: propagation < 5s SLO. The in-process LRU in `auth.rs` does not
+/// : propagation < 5s SLO. The in-process LRU in `auth.rs` does not
 /// observe revocation directly; its TTL is bounded to 5 s via the
 /// auth-extractor retry loop that re-validates cache hits against Postgres
 /// when the session cache age exceeds the SLO window. Tests assert that a

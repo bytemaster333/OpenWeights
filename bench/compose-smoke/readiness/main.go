@@ -1,11 +1,9 @@
 // Package main — static readiness probe for the SiaHub indexd container.
 // Bind-mounted as /usr/local/bin/siahub-readiness; Docker invokes it as the healthcheck.
-//
 // Exits 0 iff both:
-//  1. indexd's consensus is synced (/api/state.synced == true)
-//  2. indexd's wallet confirmed balance >= threshold hastings (/api/wallet.confirmed)
-//
-// See .planning/phases/01-validation-foundations/01-RESEARCH.md §4-5 for the authoritative spec.
+// 1. indexd's consensus is synced (/api/state.synced == true)
+// 2. indexd's wallet confirmed balance >= threshold hastings (/api/wallet.confirmed)
+// See §4-5 for the authoritative spec.
 package main
 
 import (
@@ -38,7 +36,7 @@ type walletResp struct {
 	Address     string `json:"address"`
 }
 
-// run is the probe body; separated from main() so unit tests exercise it directly.
+// run is the probe body; separated from main so unit tests exercise it directly.
 // Returns 0 on healthy, non-zero on any failure.
 func run(ctx context.Context, baseURL, pass, thresholdStr string) int {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))

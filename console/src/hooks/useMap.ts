@@ -3,16 +3,15 @@ import { useQuery } from "@tanstack/react-query"
 import { casFetch } from "@/lib/api"
 
 /**
- * Per-host shape returned by CAS `GET /admin/stats/map` (see 04-01 Task 6).
+ * Per-host shape returned by CAS `GET /admin/stats/map` (see Task 6).
  *
- * D-42 flow: browser → CAS `/admin/stats/map` → CAS proxies indexd
+ * flow: browser → CAS `/admin/stats/map` → CAS proxies indexd
  * `/api/hosts?usable=true` (admin-auth'd, internal network only) →
  * CAS re-shapes into this canonical form. The browser never talks to indexd
  * directly; `INDEXD_ADMIN_PASSWORD` stays server-side.
  *
  * `lat` / `lon` come from indexd's GeoLite2-City.mmdb lookup at startup;
- * `country_code` is ISO 3166-1 alpha-2 (may be null for private-IP hosts).
- */
+ * `country_code` is ISO 3166-1 alpha-2 (may be null for private-IP hosts).*/
 export type MapHost = {
   public_key: string
   country_code: string | null
@@ -27,10 +26,9 @@ type MapResponse = { hosts: MapHost[] }
 /**
  * TanStack Query hook for the geomap page.
  *
- * Refetch cadence is 60s (D-47 allows 10s for `/stats`; hosts change on the
+ * Refetch cadence is 60s ( allows 10s for `/stats`; hosts change on the
  * hour-scale, so 60s is polite toward both the CAS and the indexd cache).
- * Background refetch is disabled so hidden tabs don't burn CPU.
- */
+ * Background refetch is disabled so hidden tabs don't burn CPU.*/
 export function useMapHosts() {
   return useQuery<MapHost[]>({
     queryKey: ["map-hosts"],

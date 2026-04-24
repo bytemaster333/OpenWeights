@@ -1,8 +1,16 @@
-import { CheckIcon, CopyIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
+import {
+  CheckIcon,
+  CircleNotchIcon,
+  CloudCheckIcon,
+  CloudSlashIcon,
+  CopyIcon,
+  DatabaseIcon,
+  MagnifyingGlassIcon,
+  WarningIcon,
+} from "@phosphor-icons/react"
 import { Link } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
-import { UserMenu } from "@/components/UserMenu"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,64 +30,72 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAssets } from "@/hooks/useAssets"
+import { type Xorb, useAssets } from "@/hooks/useAssets"
 import { useKeys } from "@/hooks/useKeys"
-import { useMe } from "@/hooks/useMe"
+import { formatBytes, formatRelative } from "@/lib/format"
 
 /**
- * `/assets` page (CONSOLE-03, CONSOLE-04, CONSOLE-05).
+ * `/assets` — operator-facing xorb catalog.
  *
- * Admin-scoped xorb catalog. Operators use this page for:
+ * Revamped layout:
  *
- *   1. Auditing what's stored — "is this 64 MiB spike from key `sia_live_c0`
- *      or `sia_live_7e`?" (04-CONTEXT §4.6 demo scenario).
- *   2. Troubleshooting stuck uploads — rows with `pin_state="pinning"` that
- *      never transition to `pinned` are the canonical Phase 3 bug signal.
- *   3. Verifying the "bytes are on Sia" claim — each row's `sia_object_id`
- *      is a click away from `indexd` and, ultimately, from proof that the
- *      xorb rides on Sia hosts rather than centralized storage.
- *
- * URL binding (CONSOLE-04/-05):
- *   - `?hash_prefix=<1..64 hex>` — free-form hex fragment. 8-char inputs
- *     go to CAS as `hash_prefix`; everything else is client-side narrowing.
- *   - `?api_key_id=<uuid>` — UUID of the owning key. Missing/empty = all.
- *
- * Search input is debounced through a 250ms timer so that a user typing
- * "deadbeef" doesn't fire 8 CAS requests; only the settled value flips to
- * the query-key + the URL.
- */
+ * 1. Summary strip (total count + bytes + per-pin-state breakdown).
+ * 2. Filter row (hash prefix + API key).
+ * 3. Rows = {hash, size, pin state, uploaded, key}. Pin state carries
+ * a descriptive label + icon so the `pinning` / `orphaned` cases
+ * explain themselves without the user opening the detail page.*/
 
 const SEARCH_DEBOUNCE_MS = 250
 const HASH_TRUNC = 16
 const KEY_ID_TRUNC = 8
 
-function formatBytes(n: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"]
-  let v = n
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i += 1
-  }
-  return `${v.toFixed(v < 10 && i > 0 ? 2 : 0)} ${units[i]}`
+type PinMeta = {
+  label: string
+  icon: React.ComponentType<{ size?: number; weight?: "regular" | "bold" | "fill" | "light" | "thin" | "duotone" }>
+  variant: "default" | "secondary" | "destructive" | "outline"
+  hint: string
 }
 
-function pinStateVariant(s: string): "default" | "secondary" | "destructive" | "outline" {
+function pinMeta(s: string): PinMeta {
   switch (s) {
     case "pinned":
-      return "default"
-    case "orphaned":
-      return "destructive"
+      return {
+        label: "Pinned on Sia",
+        icon: CloudCheckIcon,
+        variant: "default",
+        hint: "Bytes acknowledged by at least one Sia storage host.",
+      }
     case "pinning":
+      return {
+        label: "Sia-pending",
+        icon: CircleNotchIcon,
+        variant: "secondary",
+        hint: "Uploaded to CAS; waiting for Sia host contracts. Reconciler retries automatically.",
+      }
     case "uploading":
-      return "secondary"
+      return {
+        label: "Uploading",
+        icon: CircleNotchIcon,
+        variant: "secondary",
+        hint: "Bytes are still arriving at the CAS.",
+      }
+    case "orphaned":
+      return {
+        label: "Orphaned",
+        icon: CloudSlashIcon,
+        variant: "destructive",
+        hint: "Reconciler exhausted its retry budget. Manual re-drive needed once Sia hosts are available.",
+      }
     default:
-      return "outline"
+      return {
+        label: s,
+        icon: WarningIcon,
+        variant: "outline",
+        hint: "Unknown pin state.",
+      }
   }
 }
 
-/** Small copy-hash button. Uses the same "Copied" flash pattern as the
- * onboarding env-block card but trimmed for inline table use. */
 function CopyHashButton({ hash }: { hash: string }) {
   const [copied, setCopied] = useState(false)
   useEffect(() => {
@@ -100,30 +116,66 @@ function CopyHashButton({ hash }: { hash: string }) {
         navigator.clipboard
           .writeText(hash)
           .then(() => setCopied(true))
-          .catch(() => {
-            // Clipboard denied — swallow; user can still select manually.
-          })
+          .catch(() => {})
       }}
     >
-      {copied ? <CheckIcon data-icon="inline-start" /> : <CopyIcon data-icon="inline-start" />}
+      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
       <span className="sr-only">Copy hash</span>
     </Button>
   )
 }
 
-export function AssetsPage() {
-  const { data: user } = useMe()
+// ---------------------------------------------------------------------------
+// Summary strip
+// ---------------------------------------------------------------------------
 
-  // Live search value (what the user is typing), plus the debounced value
-  // that actually flows into `useAssets` + the URL (on settle).
+function SummaryStrip({ xorbs }: { xorbs: Xorb[] }) {
+  const totalBytes = xorbs.reduce((n, x) => n + x.size_bytes, 0)
+  const byState = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const x of xorbs) m[x.pin_state] = (m[x.pin_state] ?? 0) + 1
+    return m
+  }, [xorbs])
+
+  const cards = [
+    { label: "Xorbs", value: xorbs.length.toString(), hint: "total" },
+    { label: "Bytes", value: formatBytes(totalBytes), hint: "uploaded" },
+    {
+      label: "Sia-pinned",
+      value: (byState["pinned"] ?? 0).toString(),
+      hint: "on hosts",
+    },
+    {
+      label: "Pending / orphaned",
+      value: ((byState["pinning"] ?? 0) + (byState["orphaned"] ?? 0)).toString(),
+      hint: "awaiting hosts",
+    },
+  ]
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {cards.map((c) => (
+        <div key={c.label} className="rounded border bg-muted/10 p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            {c.label}
+          </div>
+          <div className="mt-1 text-2xl font-semibold">{c.value}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{c.hint}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
+export function AssetsPage() {
   const [hashPrefix, setHashPrefix] = useState("")
   const [debouncedPrefix, setDebouncedPrefix] = useState("")
   const [apiKeyId, setApiKeyId] = useState<string | null>(null)
 
-  // Initialize filter state from URL on first mount, then keep URL in sync.
-  // `useSearch` from TanStack Router is type-strict; we read raw
-  // `window.location.search` so we don't have to wire `validateSearch`
-  // into the route (keeps `router.tsx` deviation-free — see 04-CONTEXT §6).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const hp = params.get("hash_prefix") ?? ""
@@ -133,27 +185,19 @@ export function AssetsPage() {
       setDebouncedPrefix(hp)
     }
     if (kid) setApiKeyId(kid)
-    // Only on mount — downstream URL changes are driven by state, not the
-    // other way around. If the user clicks a deep link, the page remounts.
   }, [])
 
-  // Debounce the search input. The effect runs on every keystroke but only
-  // the last-set timer wins.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedPrefix(hashPrefix.trim()), SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [hashPrefix])
 
-  // Reflect the settled filter state back to the URL so that reloads +
-  // shareable links preserve the view (CONSOLE-04/-05 spec).
   useEffect(() => {
     const params = new URLSearchParams()
     if (debouncedPrefix) params.set("hash_prefix", debouncedPrefix)
     if (apiKeyId) params.set("api_key_id", apiKeyId)
     const q = params.toString()
     const target = `${window.location.pathname}${q ? `?${q}` : ""}`
-    // Only push when actually different — avoids polluting history with
-    // duplicate entries under StrictMode double-invoke.
     if (target !== `${window.location.pathname}${window.location.search}`) {
       window.history.replaceState({}, "", target)
     }
@@ -166,8 +210,6 @@ export function AssetsPage() {
     error,
   } = useAssets({ hashPrefix: debouncedPrefix, apiKeyId })
 
-  // Lookup table so the table cell can render the key's friendly
-  // `masked_prefix` instead of the raw UUID.
   const keyLabel = useMemo(() => {
     const m = new Map<string, string>()
     for (const k of keys) m.set(k.id, k.masked_prefix)
@@ -175,16 +217,24 @@ export function AssetsPage() {
   }, [keys])
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <h1 className="font-heading text-2xl font-medium tracking-tight">Assets</h1>
-        {user ? <UserMenu user={user} /> : null}
+    <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+      <header>
+        <div className="flex items-center gap-3">
+          <DatabaseIcon size={22} weight="light" className="text-muted-foreground" />
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">Assets</h1>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Every xorb on this deployment. Click a hash to see its repo.
+        </p>
       </header>
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
+      <SummaryStrip xorbs={xorbs} />
+
+      <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
           <MagnifyingGlassIcon
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <Input
@@ -215,76 +265,91 @@ export function AssetsPage() {
         </Select>
       </div>
 
-      <Table data-testid="assets-table">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[34%]">Hash</TableHead>
-            <TableHead>Size</TableHead>
-            <TableHead>Pin state</TableHead>
-            <TableHead>Uploaded</TableHead>
-            <TableHead>Key</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {isPending &&
-            Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={`skeleton-${i.toString()}`}>
-                <TableCell colSpan={5}>
-                  <Skeleton className="h-5 w-full" />
+      <div className="rounded border">
+        <Table data-testid="assets-table">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[30%]">Hash</TableHead>
+              <TableHead>Size</TableHead>
+              <TableHead>Pin state</TableHead>
+              <TableHead>Uploaded</TableHead>
+              <TableHead>Key</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isPending &&
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={`skeleton-${i.toString()}`}>
+                  <TableCell colSpan={5}>
+                    <Skeleton className="h-5 w-full" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            {error && !isPending && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-destructive" data-testid="assets-error">
+                  Failed to load assets: {error.message}
                 </TableCell>
               </TableRow>
-            ))}
-          {error && !isPending && (
-            <TableRow>
-              <TableCell colSpan={5} className="text-destructive" data-testid="assets-error">
-                Failed to load assets: {error.message}
-              </TableCell>
-            </TableRow>
-          )}
-          {!isPending && !error && xorbs.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} className="text-muted-foreground" data-testid="assets-empty">
-                No xorbs match the current filter.
-              </TableCell>
-            </TableRow>
-          )}
-          {!isPending &&
-            !error &&
-            xorbs.map((x) => (
-              <TableRow key={x.hash}>
-                <TableCell className="font-mono text-sm">
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to="/assets/$hash"
-                      params={{ hash: x.hash }}
-                      className="underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground"
-                      data-testid={`asset-link-${x.hash.slice(0, 8)}`}
-                    >
-                      {x.hash.slice(0, HASH_TRUNC)}…
-                    </Link>
-                    <CopyHashButton hash={x.hash} />
-                  </div>
-                </TableCell>
-                <TableCell>{formatBytes(x.size_bytes)}</TableCell>
-                <TableCell>
-                  <Badge variant={pinStateVariant(x.pin_state)}>{x.pin_state}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(x.uploaded_at).toLocaleString()}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {keyLabel.get(x.uploader_key_id) ??
-                    `${x.uploader_key_id.slice(0, KEY_ID_TRUNC)}…`}
+            )}
+            {!isPending && !error && xorbs.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="py-10 text-center text-muted-foreground"
+                  data-testid="assets-empty"
+                >
+                  No xorbs match the current filter.
                 </TableCell>
               </TableRow>
-            ))}
-        </TableBody>
-      </Table>
+            )}
+            {!isPending &&
+              !error &&
+              xorbs.map((x) => {
+                const pm = pinMeta(x.pin_state)
+                const Icon = pm.icon
+                return (
+                  <TableRow key={x.hash}>
+                    <TableCell className="font-mono text-sm">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/assets/$hash"
+                          params={{ hash: x.hash }}
+                          className="underline decoration-muted-foreground/40 underline-offset-2 hover:decoration-foreground"
+                          data-testid={`asset-link-${x.hash.slice(0, 8)}`}
+                        >
+                          {x.hash.slice(0, HASH_TRUNC)}…
+                        </Link>
+                        <CopyHashButton hash={x.hash} />
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatBytes(x.size_bytes)}</TableCell>
+                    <TableCell>
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title={pm.hint}
+                      >
+                        <Icon size={14} weight="light" />
+                        <Badge variant={pm.variant}>{pm.label}</Badge>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatRelative(x.uploaded_at)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {keyLabel.get(x.uploader_key_id) ??
+                        `${x.uploader_key_id.slice(0, KEY_ID_TRUNC)}…`}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+          </TableBody>
+        </Table>
+      </div>
 
       {!isPending && !error && xorbs.length >= 500 && (
-        <p className="mt-4 text-xs text-muted-foreground" data-testid="assets-pagination-note">
-          Showing the first 500 rows. Narrow with search or the key filter; pagination beyond the
-          first page is deferred to Phase 5.
+        <p className="mt-2 text-xs text-muted-foreground" data-testid="assets-pagination-note">
+          Showing the first 500 rows. Narrow with search or the key filter.
         </p>
       )}
     </main>

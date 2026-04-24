@@ -1,33 +1,27 @@
 //! HMAC-SHA256 signed gateway URL minter + verifier.
-//!
 //! Wire contract (ARCHITECTURE.md §"Canonical string for signing",
-//! RESEARCH §5.1, CONTEXT D-14):
-//!
+//! RESEARCH §5.1, CONTEXT ):
 //! ```text
 //! canonical = "v1\n<xorb_hash_hex>\n<exp>\n<r_or_empty>\n<kid>"
-//! sig       = base64url_nopad( HMAC_SHA256(key, canonical) )
-//! URL       = <gateway_base>/xorb/<xorb_hash_hex>?exp=<exp>&kid=<kid>&sig=<sig>[&r=<s>-<e>]
+//! sig = base64url_nopad( HMAC_SHA256(key, canonical) )
+//! URL = <gateway_base>/xorb/<xorb_hash_hex>?exp=<exp>&kid=<kid>&sig=<sig>[&r=<s>-<e>]
 //! ```
-//!
 //! Field order in the canonical string is FIXED: `version`, `hash`, `exp`,
-//! `range`, `kid`. The separator is EXACTLY one LF (0x0A) between each field —
+//! `range`, `kid`. The separator is EXACTLY one LF (0x0A) between each field
 //! never CRLF, never a colon, never whitespace. Query parameter order in the
 //! minted URL is NOT load-bearing (HMAC runs over the canonical string, not the
 //! URL bytes).
-//!
-//! Rotation: `key_prev` is an optional second HMAC key accepted by `verify()`
-//! but never used by `mint_v1()`. Operators swap `.env` entries + rolling
-//! restart; the 2h default TTL (D-14) means any rotation wider than 2h
+//! Rotation: `key_prev` is an optional second HMAC key accepted by `verify`
+//! but never used by `mint_v1`. Operators swap `.env` entries + rolling
+//! restart; the 2h default TTL means any rotation wider than 2h
 //! guarantees no in-flight signed URL is orphaned.
-//!
-//! Consumer contract (Phase 3 gateway):
-//!  - Expired URL  → return **HTTP 403** (notes.md gotcha #8; NOT 401, NOT 410).
-//!    xet-core's `refresh_url` retry path keys specifically on 403.
-//!  - Bad signature → HTTP 403.
-//!  - Malformed URL → HTTP 400.
-//!
+//! Consumer contract ( gateway):
+//! - Expired URL → return **HTTP 403** (.md ; NOT 401, NOT 410).
+//! xet-core's `refresh_url` retry path keys specifically on 403.
+//! - Bad signature → HTTP 403.
+//! - Malformed URL → HTTP 400.
 //! Cross-language vectors: `conformance/fixtures/signed_url_vectors.json`
-//! pins byte-identical canonical-string + signature outputs so the Phase 3 Go
+//! pins byte-identical canonical-string + signature outputs so the Go
 //! gateway's verifier cannot silently drift from this module.
 
 use base64::Engine as _;
@@ -39,7 +33,7 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 /// Signing key must decode to exactly 32 bytes. This is a hard invariant on the
-/// wire format — keep in lockstep with Phase 3 gateway's key-material check.
+/// wire format — keep in lockstep with gateway's key-material check.
 pub const SIGNING_KEY_LEN: usize = 32;
 
 /// Canonical-string version prefix. Reserved so the scheme can rotate to `v2`
@@ -59,7 +53,7 @@ pub enum SignerError {
 }
 
 /// Errors surfaced by `UrlSigner::verify`. Map these 1:1 to gateway HTTP codes
-/// (Phase 3): `Expired` + `BadSignature` → 403, `Malformed` → 400.
+///: `Expired` + `BadSignature` → 403, `Malformed` → 400.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum VerifyErr {
     #[error("url is malformed: {0}")]
@@ -70,7 +64,7 @@ pub enum VerifyErr {
     BadSignature,
 }
 
-/// The decoded, verified URL payload returned on a successful `verify()` call.
+/// The decoded, verified URL payload returned on a successful `verify` call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyOk {
     pub xorb_hash_hex: String,
@@ -83,7 +77,6 @@ pub struct VerifyOk {
 }
 
 /// HMAC-SHA256 signed URL minter + verifier.
-///
 /// Construct once at boot; `Clone` is cheap (both `Hmac<Sha256>` keys are
 /// `Clone`). Thread-safe; use `Arc<UrlSigner>` across handler tasks.
 #[derive(Clone)]
@@ -134,8 +127,7 @@ impl UrlSigner {
 
     /// Build the canonical string that the HMAC runs over. Exposed so the
     /// cross-language test vector fixture can be byte-compared against Rust
-    /// output (and the Phase 3 Go verifier against its Go output).
-    ///
+    /// output (and the Go verifier against its Go output).
     /// Field order is FIXED and load-bearing. Do not reorder.
     pub fn canonical_string(
         version: &str,
@@ -163,18 +155,17 @@ impl UrlSigner {
     }
 
     /// Mint a signed gateway URL.
-    ///
     /// Arguments:
-    ///   - `xorb_hash`: the merkle hash of the xorb being served. Path-encoded
-    ///     as 64-char lowercase hex per notes.md gotcha #1 (byte-reversal per
-    ///     8-byte group is handled by `MerkleHash::hex`).
-    ///   - `range`: optional `(start, end_inclusive)` HTTP-byte range. When
-    ///     present the gateway MUST reject `Range:` headers outside this
-    ///     interval. When absent the URL grants access to the entire xorb.
-    ///   - `kid`: the API key id (UUID) authorizing the mint. Logged by the
-    ///     gateway for per-key usage attribution.
-    ///   - `now_unix`: clock reading for `exp = now + default_ttl_secs`.
-    ///     Injected so tests can pin the value.
+    /// - `xorb_hash`: the merkle hash of the xorb being served. Path-encoded
+    /// as 64-char lowercase hex (byte-reversal per
+    /// 8-byte group is handled by `MerkleHash::hex`).
+    /// - `range`: optional `(start, end_inclusive)` HTTP-byte range. When
+    /// present the gateway MUST reject `Range:` headers outside this
+    /// interval. When absent the URL grants access to the entire xorb.
+    /// - `kid`: the API key id (UUID) authorizing the mint. Logged by the
+    /// gateway for per-key usage attribution.
+    /// - `now_unix`: clock reading for `exp = now + default_ttl_secs`.
+    /// Injected so tests can pin the value.
     pub fn mint_v1(
         &self,
         xorb_hash: &MerkleHash,
@@ -204,18 +195,16 @@ impl UrlSigner {
     }
 
     /// Mint a signed gateway URL granting access to MULTIPLE non-contiguous
-    /// byte ranges of a single xorb. Phase 3 V2 flip (RECEIVED §G item 2):
-    /// replaces the Phase 2 bounding-range approximation with a segments-form
+    /// byte ranges of a single xorb. V2 flip (RECEIVED §G item 2):
+    /// replaces the bounding-range approximation with a segments-form
     /// descriptor that the Go gateway parses into `[]Range` and serves as
-    /// RFC 7233 `multipart/byteranges` (notes.md gotcha #3).
-    ///
+    /// RFC 7233 `multipart/byteranges` (.md ).
     /// Canonical string format: SAME v1 algorithm as `mint_v1`; the `r` field
     /// is the joined segments string `s1-e1,s2-e2,...` (comma-separated, no
     /// spaces, each `s`/`e` ASCII decimals, `e` inclusive). Single-segment
-    /// input (`segments.len() == 1`) produces a canonical identical to the
+    /// input (`segments.len == 1`) produces a canonical identical to the
     /// equivalent `mint_v1(Some((s,e)))` — no `r` field split. This keeps
     /// the verifier's canonical-string computation path uniform.
-    ///
     /// # Panics
     /// Panics if `segments` is empty. Empty multi-range is meaningless; the
     /// V2 builder already guarantees at least one segment per xorb (a xorb
@@ -261,12 +250,11 @@ impl UrlSigner {
         url.to_string()
     }
 
-    /// Verify a signed URL. Phase 3 Go gateway mirrors this logic and is
+    /// Verify a signed URL. Go gateway mirrors this logic and is
     /// conformance-checked against `conformance/fixtures/signed_url_vectors.json`.
-    ///
     /// On success returns `VerifyOk` with the parsed payload. Status-code
     /// mapping for the gateway: `Expired` + `BadSignature` → 403, `Malformed`
-    /// → 400 (notes.md gotcha #8).
+    /// → 400 (.md ).
     pub fn verify(&self, url_str: &str, now_unix: u64) -> Result<VerifyOk, VerifyErr> {
         let url = url::Url::parse(url_str).map_err(|_| VerifyErr::Malformed("parse"))?;
         let path = url.path();
@@ -355,7 +343,7 @@ impl UrlSigner {
     }
 }
 
-/// Shared abstract trait for downstream consumers (Plan 02-06 reconstruction
+/// Shared abstract trait for downstream consumers ( reconstruction
 /// handler). Lets callers depend on behavior, not a concrete HMAC key type,
 /// which keeps the seam open for a future pluggable signer (e.g., KMS-backed).
 pub trait UrlMinter: Send + Sync {
@@ -375,10 +363,9 @@ pub trait UrlMinter: Send + Sync {
     ) -> String;
 
     /// Mint a signed `GET` URL granting access to multiple non-contiguous
-    /// byte ranges of a single xorb. Used by V2 reconstruction (Phase 3
-    /// GATE-03 multi-range serving). Canonical string encodes the joined
+    /// byte ranges of a single xorb. Used by V2 reconstruction (
+    /// multi-range serving). Canonical string encodes the joined
     /// `s1-e1,s2-e2,...` string in the `r` field.
-    ///
     /// Panics if `segments` is empty.
     fn mint_v1_multi_range(
         &self,

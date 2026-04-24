@@ -1,55 +1,47 @@
 // Package main — cache.go.
-//
-// Whole-xorb disk LRU cache for the gateway (D-28 / GATE-06 / GATE-07 /
-// GATE-08 / PITFALL P11). Semantics:
-//
-//   - Key:   xorb_hash_hex (64 lowercase hex chars). D-30.
-//   - Value: on-disk file at `<root>/xorbs/<prefix>/<hash>.bin`, where
-//            `<prefix>` is the first 2 hex chars. Prefix-sharding keeps
-//            directory entry counts low on filesystems that degrade above
-//            ~10k dirents per directory (ext4 with dir_index, xfs, apfs).
-//   - Size:  size-based eviction against a configurable byte budget
-//            (default 100 GiB via `CACHE_SIZE_BYTES` → `Config.CacheSizeBytes`).
-//            LRU by Open()/Put() timestamp; Put also moves to MRU.
-//
-// Write discipline (GATE-07 / P11):
-//
-//   1. Open/create `<final>.tmp`.
-//   2. `io.TeeReader(src, MerkleHasher)` → `io.Copy` into tmp. Streaming;
-//      no whole-xorb RAM buffer (GATE-08).
-//   3. `f.Sync()` — force the data to disk BEFORE the rename. Prevents a
-//      torn-write scenario after `rename` where a crash leaves the entry
-//      indexed but with stale/zero content.
-//   4. Compare `MerkleHasher.Hex()` against the caller-supplied `hash`
-//      argument. If they disagree, delete tmp, increment
-//      `gateway_cache_hash_mismatch_total`, return error. Caller MUST NOT
-//      serve the bytes. This is the core defense against cache poisoning.
-//   5. `os.Rename(tmp, final)` — atomic on POSIX same-filesystem. After
-//      this point, concurrent readers can Open() the final file.
-//
+// Whole-xorb disk LRU cache for the gateway ( / / /
+// / PITFALL ). Semantics:
+// - Key: xorb_hash_hex (64 lowercase hex chars). .
+// - Value: on-disk file at `<root>/xorbs/<prefix>/<hash>.bin`, where
+// `<prefix>` is the first 2 hex chars. Prefix-sharding keeps
+// directory entry counts low on filesystems that degrade above
+// ~10k dirents per directory (ext4 with dir_index, xfs, apfs).
+// - Size: size-based eviction against a configurable byte budget
+// (default 100 GiB via `CACHE_SIZE_BYTES` → `Config.CacheSizeBytes`).
+// LRU by Open/Put timestamp; Put also moves to MRU.
+// Write discipline ( / ):
+// 1. Open/create `<final>.tmp`.
+// 2. `io.TeeReader(src, MerkleHasher)` → `io.Copy` into tmp. Streaming;
+// no whole-xorb RAM buffer.
+// 3. `f.Sync` — force the data to disk BEFORE the rename. Prevents a
+// torn-write scenario after `rename` where a crash leaves the entry
+// indexed but with stale/zero content.
+// 4. Compare `MerkleHasher.Hex` against the caller-supplied `hash`
+// argument. If they disagree, delete tmp, increment
+// `gateway_cache_hash_mismatch_total`, return error. Caller MUST NOT
+// serve the bytes. This is the core defense against cache poisoning.
+// 5. `os.Rename(tmp, final)` — atomic on POSIX same-filesystem. After
+// this point, concurrent readers can Open the final file.
 // Boot posture:
-//
-//   - Phase 3 boots with a cold in-memory index. Even if files from a
-//     previous run remain on disk, they are NOT rehydrated into the LRU —
-//     they would be served correctly IF the cache was queried by exact
-//     path, but the index is the sole truth source and they remain
-//     invisible until evicted by a `cleanup` helper (not implemented for
-//     v1). Rationale: a rehydration scan implies we trust on-disk bytes
-//     without a merkle re-verify; that contradicts GATE-07.
-//     Post-v1 work: an "index rebuild + verify" pass on startup.
-//
+// - boots with a cold in-memory index. Even if files from a
+// previous run remain on disk, they are NOT rehydrated into the LRU
+// they would be served correctly IF the cache was queried by exact
+// path, but the index is the sole truth source and they remain
+// invisible until evicted by a `cleanup` helper (not implemented for
+// v1). Rationale: a rehydration scan implies we trust on-disk bytes
+// without a merkle re-verify; that contradicts .
+// Post-v1 work: an "index rebuild + verify" pass on startup.
 // Concurrency:
-//
-//   - The in-memory index + LRU list are guarded by `mu`. Critical sections
-//     stay short — file I/O happens OUTSIDE the lock. Open() grabs `mu`
-//     only to bump LRU position; the subsequent `os.Open` is lock-free.
-//   - Put() does all I/O lock-free, then takes `mu` at the END for LRU
-//     bookkeeping + eviction.
-//   - The singleflight group in `singleflight.go` guarantees that concurrent
-//     cold-misses for the SAME hash collapse onto one Put, so the "two
-//     Puts race for one hash" path is effectively dead — but we still
-//     handle it correctly (last writer wins; previous file is unlinked
-//     only after rename).
+// - The in-memory index + LRU list are guarded by `mu`. Critical sections
+// stay short — file I/O happens OUTSIDE the lock. Open grabs `mu`
+// only to bump LRU position; the subsequent `os.Open` is lock-free.
+// - Put does all I/O lock-free, then takes `mu` at the END for LRU
+// bookkeeping + eviction.
+// - The singleflight group in `singleflight.go` guarantees that concurrent
+// cold-misses for the SAME hash collapse onto one Put, so the "two
+// Puts race for one hash" path is effectively dead — but we still
+// handle it correctly (last writer wins; previous file is unlinked
+// only after rename).
 package main
 
 import (
@@ -65,14 +57,14 @@ import (
 	"go.sia.tech/core/types"
 )
 
-// ErrCacheMiss is the canonical sentinel Open() returns when the hash has no
+// ErrCacheMiss is the canonical sentinel Open returns when the hash has no
 // entry in the in-memory index. Handler code relies on this with
 // `errors.Is(err, ErrCacheMiss)`.
 var ErrCacheMiss = errors.New("cache miss")
 
 // ErrCacheHashMismatch is returned by Put when the streamed body's merkle
 // hash disagrees with the supplied hash key. Handler code MUST respond 502
-// and MUST NOT serve the partial bytes — per PITFALL P11.
+// and MUST NOT serve the partial bytes — per PITFALL .
 var ErrCacheHashMismatch = errors.New("cache: streamed body hash != declared hash")
 
 // ErrCacheSizeMismatch — the streamed body was shorter/longer than the size
@@ -100,11 +92,10 @@ type Cache struct {
 }
 
 // NewCache prepares the on-disk root directory and returns an empty cache.
-//
-//   - `dir` is the cache root. `<dir>/xorbs/` is created at boot.
-//   - `maxBytes` is the total-size cap. Put() triggers eviction when
-//     bytesUsed > maxBytes. A value <= 0 is treated as "unbounded" (only
-//     useful in tests).
+// - `dir` is the cache root. `<dir>/xorbs/` is created at boot.
+// - `maxBytes` is the total-size cap. Put triggers eviction when
+// bytesUsed > maxBytes. A value <= 0 is treated as "unbounded" (only
+// useful in tests).
 func NewCache(dir string, maxBytes int64) (*Cache, error) {
 	if dir == "" {
 		return nil, errors.New("cache: dir must be non-empty")
@@ -130,7 +121,6 @@ func (c *Cache) pathFor(hash string) string {
 // Open returns a read-only *os.File over the cached xorb plus its byte
 // size. Caller MUST Close the returned file (the closer is the caller's
 // responsibility — keeps the fd lifetime aligned with the reader).
-//
 // Updates LRU position on hit. Returns ErrCacheMiss on miss.
 func (c *Cache) Open(hash string) (*os.File, int64, error) {
 	c.mu.Lock()
@@ -175,13 +165,11 @@ func (c *Cache) Open(hash string) (*os.File, int64, error) {
 
 // Put atomically inserts a xorb into the cache. Discipline: tmp → fsync →
 // hash-verify → rename → LRU update → evict.
-//
 // `hash` is the 64-char hex key. `size` is the exact expected byte count
 // (from Postgres). `src` is a streaming reader for the bytes — typically
 // an io.Pipe consuming from SiaAdapter.Download. The function drains `src`
 // to EOF before returning (caller-side pipe-writer close is part of the
 // contract).
-//
 // Returns the final on-disk path on success. On hash mismatch:
 // ErrCacheHashMismatch (no partial state, metric incremented). On size
 // mismatch: ErrCacheSizeMismatch. On any other I/O error: wrapped error;
@@ -215,7 +203,7 @@ func (c *Cache) Put(hash string, size int64, src io.Reader) (string, error) {
 		_ = os.Remove(tmp)
 	}
 
-	// Streaming copy with a Tee'd hasher — GATE-08 streaming, zero whole-
+	// Streaming copy with a Tee'd hasher — streaming, zero whole-
 	// xorb buffering in RAM. BLAKE3 over multi-GiB streams is disk-bound,
 	// not CPU-bound, on modern hardware.
 	hasher := NewMerkleHasher()
@@ -242,7 +230,7 @@ func (c *Cache) Put(hash string, size int64, src io.Reader) (string, error) {
 		return "", fmt.Errorf("cache: close tmp: %w", err)
 	}
 
-	// Hash-verify. LOAD-BEARING — this is the GATE-07 gate.
+	// Hash-verify. LOAD-BEARING — this is the gate.
 	got := hasher.Hex()
 	if got != hash {
 		_ = os.Remove(tmp)
@@ -327,15 +315,13 @@ func (c *Cache) Stats() Stats {
 
 // FetchAndCache pulls a whole xorb from Sia and writes it into the cache
 // atomically + hash-verified. Returns the hash on success.
-//
 // Wiring: called via `MissCoalescer.Do(hash, ...)` so concurrent cold-miss
 // requests for the same xorb collapse onto one underlying Sia download
-// (D-30 / GATE-09). The singleflight key is the xorb hash, NOT the HTTP
-// Range — we always fetch the whole object (D-28).
-//
+// ( / ). The singleflight key is the xorb hash, NOT the HTTP
+// Range — we always fetch the whole object.
 // The io.Pipe pattern decouples the SDK writer from the cache consumer in
 // one streaming pass: the Sia adapter writes into `pw`, the cache's TeeReader
-// consumes from `pr`, and bytes never materialise fully in RAM (GATE-08).
+// consumes from `pr`, and bytes never materialise fully in RAM.
 func (c *Cache) FetchAndCache(ctx context.Context, hash string, siaID types.Hash256, size int64, sia SiaDownloader) (string, error) {
 	pr, pw := io.Pipe()
 	errCh := make(chan error, 1)

@@ -2,15 +2,12 @@
 // +build a3probe
 
 // Package main — A3 verification probe.
-//
 // Built only under `-tags=a3probe`. Invoked once in Wave 2 to resolve RESEARCH §3
 // Assumption A3: does admin-API connect-key pre-creation let Builder.WaitForApproval
 // short-circuit, or does the bootstrap still need a manual approval click?
-//
-// Outcome written to .planning/phases/01-validation-foundations/01-A3-VERIFICATION.md.
+// Outcome written to
 // PLAN 07's bootstrap wizard reads this file to choose Option A (connect-key) or
 // Option B (re-implement deriveAppKey).
-//
 // Usage: cd bench && go run -tags=a3probe ./bootstrap
 package main
 

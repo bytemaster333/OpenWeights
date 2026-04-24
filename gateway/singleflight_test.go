@@ -1,6 +1,5 @@
 // Package main — singleflight_test.go.
-//
-// Validates the GATE-09 / P10 coalescing invariant: 100 concurrent cold-miss
+// Validates the / coalescing invariant: 100 concurrent cold-miss
 // requests for the SAME xorb hash collapse into exactly ONE underlying
 // fetch. Also covers error-propagation semantics and distinct-hash
 // concurrency (no cross-hash blocking).
@@ -16,7 +15,7 @@ import (
 	"time"
 )
 
-// TestMissCoalescer_100Concurrent — the load-bearing GATE-09 assertion.
+// TestMissCoalescer_100Concurrent — the load-bearing assertion.
 // 100 goroutines racing into Do(hash, fn) for the same hash → fn runs
 // exactly ONCE, every goroutine gets the same result, coalesced counter
 // goes up (≥ 1; plan's "at least one follower joined" signal).
@@ -30,7 +29,7 @@ func TestMissCoalescer_100Concurrent(t *testing.T) {
 		calls.Add(1)
 		// Simulate a slow Sia fetch so followers have time to queue up
 		// behind the leader. 50ms is long enough that 100 goroutines
-		// starting concurrently all reach Do() before fn returns.
+		// starting concurrently all reach Do before fn returns.
 		time.Sleep(50 * time.Millisecond)
 		return "/cache/abc.bin", nil
 	}

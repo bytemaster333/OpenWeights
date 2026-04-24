@@ -9,13 +9,12 @@ import { AdminGuard } from "./AdminGuard"
  * `<AdminGuard>` tests.
  *
  * The component's contract:
- *  - isPending → render the neutral "Loading…" placeholder (same copy as
- *    AuthGuard so stacked guards look continuous).
- *  - not admin → render the "Admins only" message and NOT the children.
- *  - admin → render the children.
+ * - isPending → render the neutral "Loading…" placeholder (same copy as
+ * AuthGuard so stacked guards look continuous).
+ * - not admin → render the "Admins only" message and NOT the children.
+ * - admin → render the children.
  *
- * CAS enforces `is_admin` server-side; this guard is pure UX.
- */
+ * CAS enforces `is_admin` server-side; this guard is pure UX.*/
 
 type MeHookShape = ReturnType<typeof useMeMod.useMe>
 
@@ -70,7 +69,7 @@ describe("<AdminGuard>", () => {
   })
 
   it("renders 'Admins only' for an unauthenticated user (data=null)", () => {
-    // useMe() returns null on 401 — AdminGuard should treat this as a deny
+    // useMe returns null on 401 — AdminGuard should treat this as a deny
     // rather than crashing on `user.is_admin`.
     mockMe({ data: null, isPending: false })
     render(

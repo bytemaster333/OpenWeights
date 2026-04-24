@@ -11,8 +11,7 @@ import { CAS_URL } from "@/lib/api"
  * `/auth/github/start`, which handles the OAuth round-trip.
  *
  * Uses `window.location.href` (not TanStack `<Link>`/`navigate`) because
- * the destination is a different origin — client-side routing would fail.
- */
+ * the destination is a different origin — client-side routing would fail.*/
 export function LoginPage() {
   useEffect(() => {
     window.location.href = `${CAS_URL}/auth/github/start`

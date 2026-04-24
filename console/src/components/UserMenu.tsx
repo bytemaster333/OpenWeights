@@ -7,9 +7,9 @@ import { logout } from "@/lib/api"
 
 /**
  * Header user menu. Renders the signed-in GitHub handle + avatar, and a
- * "Sign out" button that hits CAS `POST /auth/logout` (AUTH-05).
+ * "Sign out" button that hits CAS `POST /auth/logout`.
  *
- * **P13 (email nullability) contract:**
+ * ** (email nullability) contract:**
  *
  * This component NEVER renders `user.email`. GitHub users with a `noreply`
  * email surface as `null`, and even when an email is set it is PII we have
@@ -17,8 +17,7 @@ import { logout } from "@/lib/api"
  * a GitHub-native handle that every user has.
  *
  * Tests in `UserMenu.test.tsx` lock this: a snapshot scan for `null`,
- * `@users.noreply.github.com`, and a regex email pattern MUST all miss.
- */
+ * `@users.noreply.github.com`, and a regex email pattern MUST all miss.*/
 export function UserMenu({ user }: { user: SessionUser }) {
   const qc = useQueryClient()
 
@@ -52,7 +51,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
           <User weight="regular" className="size-3.5" />
         </span>
       )}
-      {/* P13: always `@{login}`; NEVER `{email}`. */}
+      {/* : always `@{login}`; NEVER `{email}`.*/}
       <span className="font-mono text-xs" data-testid="user-menu-handle">
         @{user.login}
       </span>

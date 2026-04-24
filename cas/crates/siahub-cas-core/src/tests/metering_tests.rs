@@ -1,21 +1,18 @@
-//! Plan 02-09 Task 5 — metering facade tests.
-//!
+//! Task 5 — metering facade tests.
 //! The full DB round-trip tests (asserting `SELECT COUNT(*) FROM usage_log
 //! WHERE event='xorb_upload'` increments by 1 after a successful POST) live
-//! in Plan 02-10's conformance crate, alongside the other Postgres-backed
+//! in 's conformance crate, alongside the other Postgres-backed
 //! handler tests (same split rationale documented in `tests/xorbs_tests.rs`
 //! and `tests/shards_tests.rs`). This file exercises the surface-level
 //! invariants that do NOT require a live Postgres:
-//!
-//!   * The facade re-exports three public functions with the expected
-//!     signatures (xorb_upload, shard_upload, reconstruction).
-//!   * `log_on_err` swallows errors without panicking (so a transient DB
-//!     failure cannot take down a handler).
-//!   * The shard_version_rejected_total counter increments through the
-//!     handler's error-mapping path on a P19 rejection (no DB needed).
-//!
+//! * The facade re-exports three public functions with the expected
+//! signatures (xorb_upload, shard_upload, reconstruction).
+//! * `log_on_err` swallows errors without panicking (so a transient DB
+//! failure cannot take down a handler).
+//! * The shard_version_rejected_total counter increments through the
+//! handler's error-mapping path on a rejection (no DB needed).
 //! Tests 6/7/8 from plan Task 5 (usage_log row present after each handler
-//! type's success path) require testcontainers Postgres — deferred to 02-10.
+//! type's success path) require testcontainers Postgres — deferred to .
 
 use crate::metering;
 use crate::metrics::Metrics;
@@ -43,7 +40,7 @@ fn log_on_err_is_a_noop_on_success() {
 }
 
 // ---------------------------------------------------------------------------
-// P19 shard-version-rejected counter — Plan 02-09 Task 2 wired.
+// shard-version-rejected counter — Task 2 wired.
 // ---------------------------------------------------------------------------
 
 #[test]

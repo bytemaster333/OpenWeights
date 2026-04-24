@@ -1,18 +1,15 @@
-//! Redis-backed per-API-key token-bucket rate limit (OPS-04, CONTEXT D-21).
-//!
-//! Error discrimination (PROTO-08):
-//!   * bucket empty         → `AppError::RateLimited { retry_after }` → 429 + Retry-After
-//!   * Sia unavailable      → `AppError::SiaUnavailable(..)`          → 503
-//!   * Redis unavailable    → `AppError::Other(anyhow!(..))`          → 500
-//!
-//! Key shape (load-bearing — Plans 02-04..09 depend on it):
-//!   `rl:{class}:{api_key_id}`        (milli-tokens remaining)
-//!   `rl:{class}:{api_key_id}:ts`     (last-refill unix-ms)
-//!
-//! Defaults (D-21, env-overridable via the caller's config):
-//!   upload:   100 req/min → (capacity=100, refill=100/60 ≈ 1.6667 req/sec)
-//!   download: 100 req/min → same
-//!   admin:    600 req/min → (capacity=600, refill=600/60 = 10.0 req/sec)
+//! Redis-backed per-API-key token-bucket rate limit ( CONTEXT ).
+//! Error discrimination:
+//! * bucket empty → `AppError::RateLimited { retry_after }` → 429 + Retry-After
+//! * Sia unavailable → `AppError::SiaUnavailable(..)` → 503
+//! * Redis unavailable → `AppError::Other(anyhow!(..))` → 500
+//! Key shape (load-bearing — Plans ..09 depend on it):
+//! `rl:{class}:{api_key_id}` (milli-tokens remaining)
+//! `rl:{class}:{api_key_id}:ts` (last-refill unix-ms)
+//! Defaults ( env-overridable via the caller's config):
+//! upload: 100 req/min → (capacity=100, refill=100/60 ≈ 1.6667 req/sec)
+//! download: 100 req/min → same
+//! admin: 600 req/min → (capacity=600, refill=600/60 = 10.0 req/sec)
 
 use anyhow::anyhow;
 use fred::clients::Client;
@@ -43,7 +40,7 @@ impl RateLimitClass {
     }
 }
 
-/// Per-class capacity + refill defaults (D-21).
+/// Per-class capacity + refill defaults.
 #[derive(Debug, Clone, Copy)]
 pub struct RateLimitDefaults {
     pub upload_capacity: u32,
@@ -120,7 +117,6 @@ async fn eval_bucket(
 }
 
 /// Compute Retry-After seconds given milli-tokens remaining and refill rate.
-///
 /// Retry-After = ceil( (1000 - remaining_mt) / (refill_per_sec * 1000) )
 /// (time for the bucket to accumulate one more full token).
 fn retry_after_secs(remaining_mt: i64, refill_per_sec: f64) -> u64 {
@@ -135,10 +131,9 @@ fn retry_after_secs(remaining_mt: i64, refill_per_sec: f64) -> u64 {
 }
 
 /// Check-and-take one token from the `(class, api_key_id)` bucket.
-///
-/// Returns `Ok(())` on allow, `Err(AppError::RateLimited)` on deny with a
+/// Returns `Ok` on allow, `Err(AppError::RateLimited)` on deny with a
 /// populated `Retry-After` hint. Redis failures bubble up as `AppError::Other`
-/// (500) — deliberately NOT 503 (reserved for Sia unavailability per PROTO-08).
+/// (500) — deliberately NOT 503 (reserved for Sia unavailability per ).
 pub async fn check(
     redis: &Client,
     class: RateLimitClass,
@@ -217,7 +212,7 @@ mod tests {
 
     #[test]
     fn key_shape_is_rl_class_uuid() {
-        // Check the format we commit to — Plans 02-04..09 depend on this string.
+        // Check the format we commit to — Plans ..09 depend on this string.
         let id = Uuid::nil();
         let bucket_key = format!("rl:{}:{}", RateLimitClass::Upload.name(), id);
         let ts_key = format!("rl:{}:{}:ts", RateLimitClass::Upload.name(), id);

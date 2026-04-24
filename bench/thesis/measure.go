@@ -34,14 +34,13 @@ type Report struct {
 
 // computeVerdict sorts trial inbound bytes and returns min/median/max +
 // verdict ("PASS" if median ≤ passCeiling; "FAIL" otherwise).
-//
 // INVARIANT: requires an ODD number of trials. A panic on even-length is
-// intentional — our per-D-01 design uses 3 trials and the "lower-middle"
+// intentional — our per- design uses 3 trials and the "lower-middle"
 // median convention silently shifts to "upper-middle" at even lengths,
 // which would corrupt the verdict. If a future change legitimately moves
 // to an even trial count, the author MUST decide lower- vs upper-middle
 // at that moment rather than inheriting whatever bytes[len/2] happens to
-// return. See CONTEXT D-01 + RESEARCH §2.
+// return. See CONTEXT + RESEARCH §2.
 func computeVerdict(trials []Trial, passCeiling uint64) (min, median, max uint64, verdict string) {
 	if len(trials) == 0 || len(trials)%2 == 0 {
 		panic(fmt.Sprintf("computeVerdict: requires odd number of trials (got %d)", len(trials)))

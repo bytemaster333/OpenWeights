@@ -7,15 +7,14 @@ import type { SessionUser } from "./useMe"
 
 // Compile-time check: if anyone ever tries to tighten SessionUser.email to
 // `string`, this line fails with "Type 'null' is not assignable to type
-// 'string'". That is the P13 regression guard in type form.
+// 'string'". That is the regression guard in type form.
 const _p13TypeProof: SessionUser["email"] = null
 void _p13TypeProof
 
 /**
  * `useMe` tests — run the hook's `queryFn` directly (not via `renderHook`),
  * since the only logic worth covering is the 200 / 401 / other-error triage.
- * React Query machinery is already well-tested upstream; we assert our wrap.
- */
+ * React Query machinery is already well-tested upstream; we assert our wrap.*/
 
 async function runQueryFn(): Promise<SessionUser | null> {
   // Re-import to pick up fresh mocks (vi.spyOn within each `it`).
@@ -85,7 +84,7 @@ describe("useMe", () => {
     const noreply: SessionUser = {
       id: 12345,
       login: "ghost",
-      email: null, // P13: the crux
+      email: null, // : the crux
       avatar_url: null,
       is_admin: false,
     }
@@ -94,7 +93,7 @@ describe("useMe", () => {
     const got = await runQueryFn()
     expect(got).not.toBeNull()
     expect(got!.email).toBeNull()
-    // Identity key is numeric id — AUTH-03. Compile-time forced below.
+    // Identity key is numeric id — . Compile-time forced below.
     expect(typeof got!.id).toBe("number")
   })
 })

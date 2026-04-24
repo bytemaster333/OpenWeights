@@ -7,20 +7,19 @@ import { ApiError, casFetch } from "@/lib/api"
  * `cas/crates/siahub-cas-core/src/handlers/admin/me.rs`) and enforces three
  * load-bearing invariants at the type level:
  *
- * - **AUTH-03**: `id` is the GitHub numeric id (`i64`). It is the primary
- *   key for all relational foreign references in the CAS schema. Never use
- *   `email` or `login` as an identity key.
+ * - ****: `id` is the GitHub numeric id (`i64`). It is the primary
+ * key for all relational foreign references in the CAS schema. Never use
+ * `email` or `login` as an identity key.
  * - **P13**: `email` is `string | null`. GitHub users with a `noreply`
- *   configuration surface with a null email; the console renders `@{login}`
- *   in both the null case and the `@users.noreply.github.com` case.
+ * configuration surface with a null email; the console renders `@{login}`
+ * in both the null case and the `@users.noreply.github.com` case.
  * - `avatar_url` is also nullable — some users have no avatar. The UI should
- *   fall back to a login-initial badge (future work) when null.
- */
+ * fall back to a login-initial badge (future work) when null.*/
 export type SessionUser = {
-  /** AUTH-03: GitHub numeric id, NOT email. */
+  /** : GitHub numeric id, NOT email.*/
   id: number
   login: string
-  /** P13: may be null or `@users.noreply.github.com`. Never rendered raw. */
+  /** : may be null or `@users.noreply.github.com`. Never rendered raw.*/
   email: string | null
   avatar_url: string | null
   is_admin: boolean
@@ -38,9 +37,8 @@ type MeResponse = { user: SessionUser }
  * crashes) or future Sonner toasts (feature plans) can surface them.
  *
  * `refetchInterval` is intentionally omitted: session liveness is tracked
- * server-side via the rolling cookie TTL (D-50); polling `/admin/me` from
- * every authenticated page would burn CPU for zero user-observable benefit.
- */
+ * server-side via the rolling cookie TTL; polling `/admin/me` from
+ * every authenticated page would burn CPU for zero user-observable benefit.*/
 export function useMe() {
   return useQuery<SessionUser | null, ApiError>({
     queryKey: ["me"],

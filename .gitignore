@@ -1,25 +1,60 @@
-# Env secrets (NEVER commit)
+# secrets
 .env
-.env.*.local
-# Generated from ops/indexd.yml.tmpl by `make bootstrap` — contains recovery phrase + admin password
+.env.*
+!.env.example
 ops/indexd.yml
 
-# Go build artifacts
-bench/compose-smoke/readiness/bin/
+# planning / scratch
+.planning/
+custom-test/
+PROJECT.md
+REQUIREMENTS.md
+ROADMAP.md
+STATE.md
+notes.md
+devs-sia-storage.md
+project.md
+
+# all markdown docs except root readme
+**/*.md
+!README.md
+!docs-site/src/content/docs/**/*.md
+!docs-site/src/content/docs/**/*.mdx
+
+# cas/gateway/conformance build artifacts
+cas/crates/*/target/
+gateway/gateway
+hf-proxy/hf-proxy
+conformance/target/
+
+# docker runtime state
+ops/docker-compose.override.yml
+
+# recovery artifacts
+.recovery-backup-*/
+.recovery-manifest.json
+
+# builds
+cas/target/
 bench/**/runs/
+bench/compose-smoke/readiness/bin/
 gateway/bin/
-# Bootstrap wizard binary (compiled by `make bootstrap`)
+hf-proxy/bin/
 /bin/
+console/dist/
+console/node_modules/
+docs-site/dist/
+docs-site/node_modules/
+docs-site/.astro/
 *.test
 *.out
 
-# IDE
+# ide / os
 .idea/
 .vscode/
 *.swp
 .DS_Store
 
-# Docker
+# docker volumes / caches
 ops/data/
-cas/target/
 .cache/

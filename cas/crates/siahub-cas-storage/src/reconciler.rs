@@ -1,7 +1,5 @@
-//! Pin-state reconciler (Plan 02-09, STORE-05, D-15).
-//!
+//! Pin-state reconciler.
 //! ## What this module does
-//!
 //! A background Tokio task ticks every 60 s; on each tick it scans `xorbs`
 //! and `shards` for rows stuck in `pin_state IN ('uploading', 'pinning')`
 //! whose `last_pin_attempt_at` is older than 5 min (or NULL, which means
@@ -9,20 +7,16 @@
 //! advance them toward `'pinned'`. After 5 failed attempts the row is
 //! transitioned to `'orphaned'` and the matching Prometheus counter is
 //! bumped so ops can alert on it.
-//!
 //! ## `'uploading'` post-crash policy (documented v1 behavior)
-//!
 //! A handler that crashes between `INSERT pin_state='pinning'` and the Sia
 //! SDK call has no way to recover the bytes — the xorb body is in-flight to
 //! Sia, but the row never received a `sia_object_id`. For xorb uploads the
-//! schema default is `'pinning'` (Plan 02-04 / migration 0002), not
+//! schema default is `'pinning'` ( / migration 0002), not
 //! `'uploading'`, so this case is extremely narrow. But if a row is ever
 //! observed in `pin_state='uploading'` by the reconciler, it is transitioned
 //! DIRECTLY to `'orphaned'` on the first sweep — we cannot re-run
 //! `sdk.upload(bytes)` without the bytes. Ops intervention required.
-//!
-//! ## Idempotency (T-02-09-03 mitigation)
-//!
+//! ## Idempotency (T-02- mitigation)
 //! The reconciler's UPDATE is not wrapped in `SELECT ... FOR UPDATE`. If a
 //! handler wins a race and flips a row to `'pinned'` between our SELECT and
 //! UPDATE, our UPDATE still fires and bumps `pin_attempts` — but because
@@ -30,9 +24,7 @@
 //! the handler just wrote. Re-running `pin_only` against an already-pinned
 //! object is a no-op at the Sia layer. Worst-case: pin_attempts counter
 //! drifts by at most 1.
-//!
 //! ## No cycle with siahub-cas-core
-//!
 //! This module defines the [`ReconcilerMetrics`] trait locally and takes it
 //! as a generic. `siahub-cas-core`'s `Metrics` struct implements this trait.
 //! If we imported `Metrics` directly we would form a dependency cycle
@@ -46,7 +38,7 @@ use sqlx::PgPool;
 
 use crate::sia::{SiaAdapter, SiaAdapterError};
 
-/// Tick interval for the reconciler loop (D-15 policy).
+/// Tick interval for the reconciler loop ( policy).
 pub const RECONCILER_TICK: Duration = Duration::from_secs(60);
 
 /// Upper bound on rows swept per tick. Keeps a runaway reconciler from
@@ -54,18 +46,16 @@ pub const RECONCILER_TICK: Duration = Duration::from_secs(60);
 /// nothing is lost.
 pub const RECONCILER_BATCH: i64 = 20;
 
-/// Per-row attempt cap before a row is transitioned to `'orphaned'` (D-15).
+/// Per-row attempt cap before a row is transitioned to `'orphaned'`.
 pub const MAX_PIN_ATTEMPTS: i32 = 5;
 
-/// Rows are only re-attempted if `last_pin_attempt_at < NOW() - this` (or NULL).
+/// Rows are only re-attempted if `last_pin_attempt_at < NOW - this` (or NULL).
 /// Prevents a tight loop when a Sia partition lasts minutes.
 pub const STUCK_THRESHOLD: &str = "5 minutes";
 
 /// Outbound metrics signal for the reconciler.
-///
 /// Implemented by `siahub_cas_core::metrics::Metrics` — the two crates meet
 /// here so storage does not import core.
-///
 /// All four methods are `&self` + no-fail: these are pure counter bumps.
 pub trait ReconcilerMetrics: Send + Sync + 'static {
     fn inc_sweep(&self);
@@ -233,7 +223,6 @@ where
     // 'pinning' state: if we have a sia_object_id, retry `pin_only`. On
     // success transition to 'pinned'; on failure bump attempts (or orphan
     // at the cap).
-    //
     // If sia_object_id is NULL (handler recorded a Sia-upload failure and
     // left the row for us), we have no id to pin. We still bump attempts so
     // the row eventually hits the cap and orphans — that's the correct ops
@@ -404,7 +393,7 @@ async fn orphan_shard(pool: &PgPool, hash: &[u8; 32]) -> Result<(), sqlx::Error>
 }
 
 /// Log-safe lowercase hex of a 32-byte hash. Only used in tracing fields;
-/// NEVER on the wire (notes.md §1 — use MerkleHash::hex for wire strings).
+/// NEVER on the wire (.md §1 — use MerkleHash::hex for wire strings).
 fn hex(h: &[u8; 32]) -> String {
     use std::fmt::Write;
     let mut s = String::with_capacity(64);

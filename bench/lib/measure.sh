@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # bench/lib/measure.sh <label> <cmd ...>
-#
 # Runs <cmd> once, emits elapsed-seconds on stdout (format: %.3f).
 # Caller is responsible for cache/state setup BETWEEN trials (see
 # prep_clean_state in bench/run.sh). On any non-zero exit from <cmd>,
 # stderr of <cmd> is dumped and this script exits with the same code.
-#
 # Env: BENCH_STDERR_LOG (optional) — path to append wrapped-command stderr.
-#      Defaults to /tmp/bench_stderr.<pid>.
+# Defaults to /tmp/bench_stderr.<pid>.
 
 set -euo pipefail
 

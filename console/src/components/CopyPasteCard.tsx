@@ -10,19 +10,18 @@ import { cn } from "@/lib/utils"
  *
  * - `title`: human label shown above the block ("1. Set Xet env vars").
  * - `body`: the literal text that lands on the clipboard AND in the
- *   rendered `<pre>`. For onboarding, this includes the plaintext API key
- *   inlined into the `HF_XET_DATA_CUSTOM_HEADERS` env var.
+ * rendered `<pre>`. For onboarding, this includes the plaintext API key
+ * inlined into the `HF_XET_DATA_CUSTOM_HEADERS` env var.
  * - `hint`: optional footer line, e.g. "Replace <your-repo> with your own."
  *
- * Lifecycle note (D-45): the plaintext key reaches this component **only**
+ * Lifecycle note: the plaintext key reaches this component **only**
  * as part of `body: string` (by reference via `useState` in `OnboardingPage`).
- * Nothing here writes to `localStorage` / `sessionStorage` / analytics.
- */
+ * Nothing here writes to `localStorage` / `sessionStorage` / analytics.*/
 export type CopyPasteCardProps = {
   title: string
   body: string
   hint?: string
-  /** Optional data-testid for integration tests. */
+  /** Optional data-testid for integration tests.*/
   testId?: string
 }
 

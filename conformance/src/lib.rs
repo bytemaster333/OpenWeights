@@ -1,18 +1,15 @@
-//! `siahub-conformance` — the Phase 2 Xet-protocol end-to-end conformance
+//! `siahub-conformance` — the Xet-protocol end-to-end conformance
 //! harness. Drives the CAS via `xet_client = "=1.5.1"` (dev-dep only; see
-//! `Cargo.toml` for the pin rationale + T-02-10-06 guard).
-//!
+//! `Cargo.toml` for the pin rationale + T-02- guard).
 //! This library crate intentionally stays minimal — it holds ONLY the
 //! pure-CPU fixture loaders and process-wide helpers. All test harness code
 //! that touches `xet_client`, `testcontainers`, `reqwest`, or `sqlx` lives
 //! under `tests/common/` so the dev-only deps never leak into the library
 //! dep graph (T-02-10-06).
-//!
 //! Integration tests (`tests/*.rs`) import:
-//!   - `siahub_conformance::fixtures::*` from here (lib crate);
-//!   - `crate::common::{spawn, schema_check}` from the per-test binary
-//!     (via `mod common;` in each `tests/*.rs`).
-//!
+//! - `siahub_conformance::fixtures::*` from here (lib crate);
+//! - `crate::common::{spawn, schema_check}` from the per-test binary
+//! (via `mod common;` in each `tests/*.rs`).
 //! Tests skip with `eprintln!` — never fail — when Docker / fixtures are
 //! absent.
 

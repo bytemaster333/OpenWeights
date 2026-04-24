@@ -1,19 +1,18 @@
-//! V2 reconstruction is feature-flagged 501 by default (D-18). These tests
+//! V2 reconstruction is feature-flagged 501 by default. These tests
 //! cover:
-//!   1. `GET /v2/reconstructions/{file_id}` returns 501 when the CAS ships
-//!      with `V2_RECONSTRUCTION_ENABLED=false` (Phase 2 default).
-//!   2. `xet_client::Client::get_reconstruction(file_id, None)` transparently
-//!      falls back to V1 on 501 — proves the contract in RESEARCH §2.6.
-//!   3. **(Plan 03-07 — V2 flip)**: with `V2_RECONSTRUCTION_ENABLED=true`,
-//!      `GET /v2/reconstructions/{file_id}` returns 200 carrying the V2
-//!      shape — per-xorb single URL with segments-form `r=s1-e1,s2-e2`.
-//!      This is the CAS-side half of the Phase 3 V2 flip (RECEIVED §G
-//!      items 2 + 4). The *gateway-side* multi-range `multipart/byteranges`
-//!      round-trip is deferred to Phase 5 E2E gates — it requires the Go
-//!      gateway binary running alongside the CAS container, which this
-//!      crate's harness does not yet spawn (spawn.rs is CAS-only by design;
-//!      a full gateway+CAS harness is future work).
-//!
+//! 1. `GET /v2/reconstructions/{file_id}` returns 501 when the CAS ships
+//! with `V2_RECONSTRUCTION_ENABLED=false` ( default).
+//! 2. `xet_client::Client::get_reconstruction(file_id, None)` transparently
+//! falls back to V1 on 501 — proves the contract in RESEARCH §2.6.
+//! 3. **( — V2 flip)**: with `V2_RECONSTRUCTION_ENABLED=true`,
+//! `GET /v2/reconstructions/{file_id}` returns 200 carrying the V2
+//! shape — per-xorb single URL with segments-form `r=s1-e1,s2-e2`.
+//! This is the CAS-side half of the V2 flip (RECEIVED §G
+//! items 2 + 4). The *gateway-side* multi-range `multipart/byteranges`
+//! round-trip is deferred to E2E gates — it requires the Go
+//! gateway binary running alongside the CAS container, which this
+//! crate's harness does not yet spawn (spawn.rs is CAS-only by design;
+//! a full gateway+CAS harness is future work).
 //! Skips if Docker / siahub-cas image unavailable.
 
 use std::sync::Arc;
@@ -180,25 +179,23 @@ async fn xet_client_falls_back_from_v2_501_to_v1() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// **Plan 03-07 (V2 flip) — CAS-side multi-range reconstruction integration.**
-///
+/// ** (V2 flip) — CAS-side multi-range reconstruction integration.**
 /// Spins the CAS with `V2_RECONSTRUCTION_ENABLED=true` (via
 /// `spawn_cas_v2_enabled`), seeds a file whose terms coalesce into ≥2
 /// non-contiguous byte segments within ONE xorb, hits
 /// `GET /v2/reconstructions/{file_id}`, and asserts:
-///   * status 200 (not 501)
-///   * response shape is V2 (`fetch_info: { <xorb_hex>: { url, ranges: [...] } }`)
-///   * the signed URL's `r=` query param carries the segments form
-///     `s1-e1,s2-e2` — the Phase 3 `mint_v1_multi_range` output that the
-///     Go gateway parses into `[]Range` and serves as multipart/byteranges.
-///
-/// **Runtime pairing deferred to Phase 5.** The *gateway-side* multi-range
+/// * status 200 (not 501)
+/// * response shape is V2 (`fetch_info: { <xorb_hex>: { url, ranges: [...] } }`)
+/// * the signed URL's `r=` query param carries the segments form
+/// `s1-e1,s2-e2` — the `mint_v1_multi_range` output that the
+/// Go gateway parses into `[]Range` and serves as multipart/byteranges.
+/// **Runtime pairing deferred to .** The *gateway-side* multi-range
 /// byte-compare round-trip (fetch the signed URL, parse multipart, assert
 /// each part matches the expected xorb slice) needs the Go gateway binary
 /// running alongside the CAS container — that wiring is out of scope for
-/// Plan 03-07 per the plan's "Do not modify gateway/*; gateway is done"
-/// rule and is slated for Phase 5 E2E gates. This test compiles, asserts
-/// the CAS-side contract, and is the compile-time tripwire the Phase 5
+/// per the plan's "Do not modify gateway/*; gateway is done"
+/// rule and is slated for E2E gates. This test compiles, asserts
+/// the CAS-side contract, and is the compile-time tripwire the
 /// harness extends when it lands.
 #[tokio::test]
 async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
@@ -213,11 +210,11 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
     // ONE xorb (shape matches `flag_on_build_v2_response_produces_per_xorb_single_url`
     // in cas/crates/siahub-cas-core/src/tests/reconstruction_v2_tests.rs).
     // Terms:
-    //   term0: xorb_a bytes [1024, 4096)  chunks [0, 8)
-    //   term1: xorb_a bytes [3072, 8192)  chunks [6, 16)   → merges with term0 → [1024, 8192)
-    //   term2: xorb_a bytes [12288, 16384) chunks [24, 32) → disjoint → segment [12288, 16384)
+    // term0: xorb_a bytes [1024, 4096) chunks [0, 8)
+    // term1: xorb_a bytes [3072, 8192) chunks [6, 16) → merges with term0 → [1024, 8192)
+    // term2: xorb_a bytes [12288, 16384) chunks [24, 32) → disjoint → segment [12288, 16384)
     // END-INCLUSIVE segments stamped into URL:
-    //   (1024, 8191) + (12288, 16383)
+    // (1024, 8191) + (12288, 16383)
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(2)
         .connect(&harness.pg_url)
@@ -302,9 +299,9 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
     }
     pool.close().await;
 
-    // Compute the hex the CAS's codec would produce for `file_id_bytes` —
+    // Compute the hex the CAS's codec would produce for `file_id_bytes`
     // MerkleHash::from_slice does the canonical byte-reversal-per-8-byte
-    // group encoding (notes.md gotcha #1).
+    // group encoding (.md ).
     let file_id = MerkleHash::from_slice(&file_id_bytes)
         .map_err(|e| anyhow::anyhow!("file_id not a MerkleHash: {e}"))?;
     let file_id_hex = format!("{file_id:x}");
@@ -350,8 +347,8 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
     );
 
     // Parse the URL, extract `r=`, assert it's the segments form (comma
-    // between two `S-E` pairs). This is the CAS-side proof that Phase 3's
-    // mint_v1_multi_range has landed; Phase 5 will pair this with gateway-
+    // between two `S-E` pairs). This is the CAS-side proof that 's
+    // mint_v1_multi_range has landed; will pair this with gateway-
     // side multipart/byteranges verification.
     let parsed = url::Url::parse(xorb_url).expect("xorb url parses");
     let r_param = parsed
@@ -366,12 +363,12 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
     // Exact shape — the fixture pins bytes 1024..=8191 and 12288..=16383.
     assert_eq!(r_param, "1024-8191,12288-16383");
 
-    // Compile-time probe for the xet-client V2-override path — Phase 5 pairs
+    // Compile-time probe for the xet-client V2-override path — pairs
     // the CAS-side V2 proof above with a gateway-side multipart/byteranges
     // byte-compare via xet_client's RemoteClient. Instantiate the client here
     // so any upstream rename of `RemoteClient::new` /
     // `get_reconstruction_with_version_override` breaks this file at build
-    // time, not at Phase 5 test-authoring time.
+    // time, not at test-authoring time.
     let auth = AuthConfig::maybe_new(
         Some(harness.upload_download_token.clone()),
         Some(u64::MAX),
@@ -384,7 +381,7 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
         false,
         None,
     );
-    // Phase 5 will call `.get_reconstruction(&file_id, None)` (the V2-first
+    // will call `.get_reconstruction(&file_id, None)` (the V2-first
     // client path that xet-core uses against a live gateway). Coerce to the
     // trait object so a rename of the `Client` trait breaks this file.
     let _client_trait: Arc<dyn Client> = _client;

@@ -6,6 +6,7 @@ members  = [
     "crates/siahub-cas-storage",
     "crates/siahub-cas-db",
     "crates/siahub-cas-proto",
+    "crates/siahub-cas-register",
 ]
 
 [workspace.package]
@@ -15,10 +16,10 @@ publish      = false
 license      = "MIT"
 
 [workspace.dependencies]
-# Protocol types (notes.md §1 — NEVER fork; re-export only via siahub-cas-proto).
-# Note: crates.io publishes this crate with a hyphenated name; the Rust
+# Protocol types (.md §1 — NEVER fork; re-export only via siahub-cas-proto).
+# crates.io publishes this crate with a hyphenated name; the Rust
 # import identifier is `xet_core_structures`. The README of the crate disclaims
-# public use, but Phase 1/2 policy is to pin exact and live within the
+# public use, but /2 policy is to pin exact and live within the
 # structures-only subset.
 xet-core-structures = "=1.5.1"
 
@@ -27,7 +28,7 @@ axum       = "0.8"
 tokio      = { version = "1.50", features = ["full"] }
 tokio-util = "0.7"
 tower      = "0.5"
-tower-http = { version = "0.6", features = ["trace"] }
+tower-http = { version = "0.6", features = ["trace", "cors"] }
 hyper      = "1"
 http       = "1"
 
@@ -58,9 +59,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 envy = "0.4"
 
 # Dev-only — pinned in conformance/ crate, NOT in any cas/ crate runtime.
-# xet_client     = "=1.5.1"   # conformance/ only
-# testcontainers = "0.22"     # conformance/ only
-# insta          = "1"        # conformance/ only
+# xet_client = "=1.5.1" # conformance/ only
+# testcontainers = "0.22" # conformance/ only
+# insta = "1" # conformance/ only
 
 [profile.release]
 lto           = "thin"

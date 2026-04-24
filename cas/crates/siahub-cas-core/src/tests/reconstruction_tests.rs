@@ -1,18 +1,16 @@
-//! Plan 02-06 — reconstruction::v1 tests.
-//!
+//!reconstruction::v1 tests.
 //! Focus of this file:
-//!   * P4 golden `insta` snapshot — pins `coalesce_terms_by_xorb`'s JSON
-//!     output for a deliberately-overlapping multi-xorb scenario. Any
-//!     off-by-one refactor fails the build with a snapshot diff.
-//!   * Build-response pure-function tests — exercise `build_response` with a
-//!     synthetic `ReconstructionRow`, asserting shape + the
-//!     END-EXCLUSIVE-chunk ↔ END-INCLUSIVE-byte invariants at every site.
-//!
+//! * golden `insta` snapshot — pins `coalesce_terms_by_xorb`'s JSON
+//! output for a deliberately-overlapping multi-xorb scenario. Any
+//! off-by-one refactor fails the build with a snapshot diff.
+//! * Build-response pure-function tests — exercise `build_response` with a
+//! synthetic `ReconstructionRow`, asserting shape + the
+//! END-EXCLUSIVE-chunk ↔ END-INCLUSIVE-byte invariants at every site.
 //! Full handler tests (single happy path, batch, 404, pin-state exclusion,
 //! rate-limit, scope) need a live Postgres + Redis and a testcontainers rig
-//! — those deferred to Plan 02-10 (conformance crate) per the plan's
+//!those deferred to (conformance crate) per the plan's
 //! explicit escape valve at Task 5 ("if context budget gets tight, move
-//! Tests 1 + 2 + 3 to Plan 02-10 and keep only golden + coalesce here").
+//! Tests 1 + 2 + 3 to and keep only golden + coalesce here").
 //! Deviation logged in the SUMMARY.
 
 use std::sync::Arc;
@@ -25,19 +23,19 @@ use siahub_cas_proto::merklehash::MerkleHash;
 use uuid::Uuid;
 
 // -------------------------------------------------------------------------
-// P4 golden snapshot — the canonical PITFALL P4 test scenario.
+// golden snapshot — the canonical PITFALL test scenario.
 // -------------------------------------------------------------------------
 
 fn mk_term(xorb: [u8; 32], bs: i64, be: i64, cs: i64, ce: i64) -> Term {
     Term {
         xorb_hash: xorb,
-        // END-EXCLUSIVE chunk indices (P4).
+        // END-EXCLUSIVE chunk indices.
         xorb_start: cs,
         xorb_end: ce,
-        // END-EXCLUSIVE byte offsets (P4) — inputs to coalesce.
+        // END-EXCLUSIVE byte offsets — inputs to coalesce.
         xorb_byte_start: bs,
         xorb_byte_end: be,
-        // END-EXCLUSIVE unpacked offsets (P4).
+        // END-EXCLUSIVE unpacked offsets.
         unpacked_start: 0,
         unpacked_end: be - bs,
     }
@@ -45,12 +43,11 @@ fn mk_term(xorb: [u8; 32], bs: i64, be: i64, cs: i64, ce: i64) -> Term {
 
 /// Golden snapshot — deliberately-overlapping multi-term scenario per the
 /// plan's Task 4 spec. Four terms across two xorbs:
-///   * xorb A: [1024, 4096), [3072, 8192), [12288, 16384)
-///     - Terms 1+2 overlap and merge to [1024, 8192) END-EXCLUSIVE →
-///       1024..=8191 END-INCLUSIVE.
-///     - Term 3 is disjoint → 12288..=16383 END-INCLUSIVE.
-///   * xorb B: [0, 65536) — single range → 0..=65535 END-INCLUSIVE.
-///
+/// * xorb A: [1024, 4096), [3072, 8192), [12288, 16384)
+/// - Terms 1+2 overlap and merge to [1024, 8192) END-EXCLUSIVE →
+/// 1024..=8191 END-INCLUSIVE.
+/// - Term 3 is disjoint → 12288..=16383 END-INCLUSIVE.
+/// * xorb B: [0, 65536) — single range → 0..=65535 END-INCLUSIVE.
 /// Any off-by-one refactor in `coalesce_terms_by_xorb` fails the insta diff.
 #[test]
 fn coalesce_golden_snapshot() {
@@ -119,7 +116,7 @@ fn build_response_produces_coalesced_fetch_info() {
     let a_key = MerkleHash::from(xorb_a).hex();
     let a_entries = resp.fetch_info.get(&a_key).expect("xorb_a present");
     assert_eq!(a_entries.len(), 1);
-    // P4: merged [1024, 8192) END-EXCLUSIVE → 1024..=8191 END-INCLUSIVE.
+    // : merged [1024, 8192) END-EXCLUSIVE → 1024..=8191 END-INCLUSIVE.
     assert_eq!(a_entries[0].url_range.start, 1024);
     assert_eq!(a_entries[0].url_range.end_inclusive, 8191);
     // Chunk range union: min(0, 6) .. max(8, 16) = 0..16 END-EXCLUSIVE.
@@ -160,7 +157,7 @@ fn build_response_emits_signed_url_per_range() {
     let url = &entries[0].url;
     assert!(url.starts_with("https://cas.test/xorb/"), "url = {url}");
     assert!(url.contains(&hex), "url missing xorb hex: {url}");
-    // Plan 02-08's UrlSigner canonical string includes exp+kid+sig+r.
+    // 's UrlSigner canonical string includes exp+kid+sig+r.
     assert!(url.contains("exp="));
     assert!(url.contains("kid="));
     assert!(url.contains("sig="));
@@ -179,7 +176,7 @@ fn build_response_empty_terms_yields_empty_fetch_info() {
     let resp = build_response(&row, test_signer().as_ref(), Uuid::nil(), 0);
     assert!(resp.terms.is_empty());
     assert!(resp.fetch_info.is_empty());
-    // offset_into_first_range is always 0 in Phase 2 — Phase 3 gateway handles
+    // offset_into_first_range is always 0 in — gateway handles
     // file-level Range: headers; CAS always serves the whole file's metadata.
     assert_eq!(resp.offset_into_first_range, 0);
 }
@@ -200,7 +197,7 @@ fn build_response_disjoint_ranges_stay_separate() {
     let resp = build_response(&row, test_signer().as_ref(), Uuid::nil(), 0);
     let entries = resp.fetch_info.get(&MerkleHash::from(xorb).hex()).unwrap();
     assert_eq!(entries.len(), 2);
-    // P4: END-EXCLUSIVE [0, 100) → END-INCLUSIVE 0..=99.
+    // : END-EXCLUSIVE [0, 100) → END-INCLUSIVE 0..=99.
     assert_eq!(entries[0].url_range.end_inclusive, 99);
     assert_eq!(entries[1].url_range.end_inclusive, 299);
 }

@@ -1,30 +1,24 @@
 // Package main — merklehash.go.
-//
 // Port of xet-core's `DataHash` canonical hash algorithm, from
 // `xet_core_structures/src/merklehash/data_hash.rs`. Without this, the
-// gateway cannot perform hash-verify-on-write (GATE-07 / PITFALL P11) — the
+// gateway cannot perform hash-verify-on-write ( / PITFALL ) — the
 // load-bearing defense against cache poisoning.
-//
 // ALGORITHM (authoritative — do NOT alter without re-running the A4 probe):
-//
-//  1. Compute `blake3::keyed_hash(DATA_KEY, data)` — 32-byte digest.
-//     DATA_KEY is a fixed 32-byte constant copied verbatim from
-//     `data_hash.rs:288-291`. Any drift breaks hash parity with Rust CAS.
-//  2. Reinterpret the 32-byte digest as four little-endian u64 words.
-//     (On LE hosts, this is zero-copy — byte order is preserved.)
-//  3. Hex-encode the result by printing each u64 with `%016x`. Because
-//     we store them LE in memory, printing as big-endian hex equals
-//     "reverse each 8-byte group, then hex-encode" — notes.md gotcha #1
-//     and PITFALL P1.
-//
+// 1. Compute `blake3::keyed_hash(DATA_KEY, data)` — 32-byte digest.
+// DATA_KEY is a fixed 32-byte constant copied verbatim from
+// `data_hash.rs:288-291`. Any drift breaks hash parity with Rust CAS.
+// 2. Reinterpret the 32-byte digest as four little-endian u64 words.
+// (On LE hosts, this is zero-copy — byte order is preserved.)
+// 3. Hex-encode the result by printing each u64 with `%016x`. Because
+// we store them LE in memory, printing as big-endian hex equals
+// "reverse each 8-byte group, then hex-encode" — .md
+// and PITFALL .
 // Reference construction in Rust:
-//
-//    let digest = blake3::keyed_hash(&DATA_KEY, slice);                 // step 1
-//    let data_hash = DataHash::from(digest.as_bytes());                 // step 2 (transmute)
-//    format!("{:016x}{:016x}{:016x}{:016x}",                            // step 3
-//        w[0].to_le(), w[1].to_le(), w[2].to_le(), w[3].to_le())
-//
-// The A4 probe artifact at `.planning/phases/03-siahub-gateway-core/
+// let digest = blake3::keyed_hash(&DATA_KEY, slice); // step 1
+// let data_hash = DataHash::from(digest.as_bytes); // step 2 (transmute)
+// format!("{:016x}{:016x}{:016x}{:016x}", // step 3
+// w[0].to_le, w[1].to_le, w[2].to_le, w[3].to_le)
+// The A4 probe artifact at `
 // 03-05-A4-PROBE.md` records the probe verdict PORTED and the three canary
 // tests that prove byte-parity with Rust.
 package main
@@ -40,7 +34,6 @@ import (
 // dataKey is the 32-byte BLAKE3 keying material for xet-core's DataHash leaf
 // construction. Copied verbatim from
 // `.cache/refs/xet-core/xet_core_structures/src/merklehash/data_hash.rs:288`.
-//
 // DO NOT MODIFY. Any change silently produces hashes that disagree with
 // the Rust CAS and with every xet-core client. Treat as load-bearing.
 var dataKey = [32]byte{
@@ -52,10 +45,8 @@ var dataKey = [32]byte{
 
 // MerkleHashHex computes the xet-core canonical leaf hash of `data` and
 // returns its 64-char lowercase-hex representation.
-//
 // Byte-identical to Rust `xet_core_structures::merklehash::compute_data_hash`
-// followed by `.hex()`. Proven by the canary tests in merklehash_test.go.
-//
+// followed by `.hex`. Proven by the canary tests in merklehash_test.go.
 // For streaming workloads (e.g. piping a multi-GiB xorb from Sia through the
 // cache Put path), use `NewMerkleHasher` + `Hasher.Write` + `Hasher.Hex`.
 func MerkleHashHex(data []byte) string {
@@ -67,8 +58,7 @@ func MerkleHashHex(data []byte) string {
 }
 
 // digestToHex performs the "reverse each 8-byte group, then hex-encode" step
-// that the Rust side achieves implicitly via `u64.to_le()` + `%016x`.
-//
+// that the Rust side achieves implicitly via `u64.to_le` + `%016x`.
 // Concretely: the 32-byte BLAKE3 output is read as four little-endian u64
 // words, each of which is then formatted big-endian as 16 hex chars. The net
 // effect on the byte level is that bytes [0..8] appear in the hex string in
@@ -92,11 +82,9 @@ func uint64ToBE(v uint64) []byte {
 
 // ParseMerkleHashHex decodes the xet-core canonical hex representation back
 // into a 32-byte digest. Round-trip invariant:
-//
-//    want := "eea25d6e...7632"
-//    got, err := ParseMerkleHashHex(want); require.NoError(t, err)
-//    require.Equal(t, want, DigestToHex(got))
-//
+// want := "eea25d6e...7632"
+// got, err := ParseMerkleHashHex(want); require.NoError(t, err)
+// require.Equal(t, want, DigestToHex(got))
 // Used by cache.go to verify that a hex hash argument parses cleanly before
 // accepting a Put. Returns an error on length-mismatch or non-hex chars.
 func ParseMerkleHashHex(h string) ([32]byte, error) {
@@ -123,8 +111,7 @@ func DigestToHex(d [32]byte) string { return digestToHex(d) }
 
 // MerkleHasher is the streaming face of the hash algorithm. Implements
 // io.Writer so it can be wired into `io.TeeReader` in cache.go without
-// buffering the whole xorb in RAM (GATE-08).
-//
+// buffering the whole xorb in RAM.
 // Thread-compatible (NOT thread-safe): one hasher per goroutine. The cache
 // Put path constructs a fresh hasher per call, so this is fine.
 type MerkleHasher struct {

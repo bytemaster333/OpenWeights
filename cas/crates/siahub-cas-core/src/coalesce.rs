@@ -1,14 +1,12 @@
-//! P4 fetch_info coalescing — the ONLY place in the codebase that converts
+//! fetch_info coalescing — the ONLY place in the codebase that converts
 //! END-EXCLUSIVE byte offsets (as stored in `reconstruction_terms`) to
 //! END-INCLUSIVE HTTP Range byte offsets (as served in fetch_info).
-//!
-//! Invariants (PITFALL P4 — notes.md gotcha discipline):
-//!   1. Input `Term::xorb_byte_start..xorb_byte_end` is END-EXCLUSIVE.
-//!   2. Output `ByteRange { start, end_inclusive }` is END-INCLUSIVE.
-//!   3. There is exactly ONE `- 1` conversion site in the entire codebase.
-//!      It lives in `coalesce_terms_by_xorb` and is annotated with a P4
-//!      comment. Any refactor that duplicates this conversion is a bug.
-//!
+//! Invariants (PITFALL — .md gotcha discipline):
+//! 1. Input `Term::xorb_byte_start..xorb_byte_end` is END-EXCLUSIVE.
+//! 2. Output `ByteRange { start, end_inclusive }` is END-INCLUSIVE.
+//! 3. There is exactly ONE `- 1` conversion site in the entire codebase.
+//! It lives in `coalesce_terms_by_xorb` and is annotated with a P4
+//! comment. Any refactor that duplicates this conversion is a bug.
 //! A deliberately-overlapping golden JSON snapshot (see
 //! `tests::reconstruction_tests::coalesce_golden`) pins the output shape.
 //! Any off-by-one refactor fails the build with an `insta` diff.
@@ -29,11 +27,9 @@ pub struct ByteRange {
 
 /// Coalesce per-term byte spans (END-EXCLUSIVE) into minimal covering byte
 /// ranges (END-INCLUSIVE), grouped by xorb hash.
-///
 /// Result ordering: `BTreeMap` keyed by `[u8; 32]` → deterministic iteration
 /// order across runs. This is what makes the golden snapshot stable.
-///
-/// See module-level docs for the P4 invariant.
+/// See module-level docs for the invariant.
 pub fn coalesce_terms_by_xorb(terms: &[Term]) -> BTreeMap<[u8; 32], Vec<ByteRange>> {
     // Step 1 — group by xorb_hash. Spans are (start, end_EXCLUSIVE) as stored
     // in reconstruction_terms (`xorb_byte_start`..`xorb_byte_end`).
@@ -71,7 +67,7 @@ pub fn coalesce_terms_by_xorb(terms: &[Term]) -> BTreeMap<[u8; 32], Vec<ByteRang
                 }
                 merged.push((s, e));
             }
-            // P4: END-EXCLUSIVE chunk-byte range  →  END-INCLUSIVE HTTP Range.
+            // : END-EXCLUSIVE chunk-byte range → END-INCLUSIVE HTTP Range.
             // This is THE ONE conversion site. Any refactor that duplicates
             // this logic is a bug. See module docs.
             let byte_ranges: Vec<ByteRange> = merged

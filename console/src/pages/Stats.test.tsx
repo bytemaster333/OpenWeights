@@ -14,15 +14,15 @@ import * as api from "@/lib/api"
 import { StatsPage } from "./Stats"
 
 /**
- * CONSOLE-07 render tests. Mocks `casFetch` to short-circuit both
+ * render tests. Mocks `casFetch` to short-circuit both
  * `/admin/stats` and `/admin/me` + `/admin/keys`, so the page renders
  * synthetic data and we can assert the 4 tiles, per-key table, and
- * recent-activity table all render as expected.
- */
+ * recent-activity table all render as expected.*/
 
 const STATS_FIXTURE: StatsResponse = {
   total_bytes_stored: 1_073_741_824, // 1.00 GB
   total_bytes_served: 524_288, // 512 KB
+  total_downloads: 0,
   cache_hit_rate: 0.875,
   provider_count: 3,
   per_key: [
@@ -123,7 +123,7 @@ describe("<StatsPage>", () => {
   it("renders the 4 KPI tiles with formatted values", async () => {
     renderStats()
     expect(await screen.findByText("Stored on Sia")).toBeInTheDocument()
-    // 1_073_741_824 B = 1.00 GB (v < 10 branch in bytes())
+    // 1_073_741_824 B = 1.00 GB (v < 10 branch in bytes)
     expect(await screen.findByText("1.00 GB")).toBeInTheDocument()
     // "Bytes served" / "Bytes stored" also appear as table-column headers,
     // so we query all occurrences and assert at least one (= the tile).

@@ -1,12 +1,10 @@
-//! End-to-end P4 (fetch_info coalescing) test — seeds TWO reconstruction
+//! End-to-end (fetch_info coalescing) test — seeds TWO reconstruction
 //! terms referencing OVERLAPPING chunk ranges in the same xorb, hits
 //! `GET /v1/reconstructions/{file_id}`, asserts the returned `fetch_info`
 //! is the SINGLE merged range (not two).
-//!
-//! This is the END-TO-END analogue of Plan 02-06's unit-level snapshot —
+//! This is the END-TO-END analogue of 's unit-level snapshot
 //! higher coverage because it exercises the full handler + DB path + response
 //! serialization.
-//!
 //! Skips if Docker / siahub-cas image unavailable.
 
 use sha2::Digest;
@@ -25,14 +23,14 @@ async fn overlapping_terms_produce_single_coalesced_fetch_info() -> anyhow::Resu
 
     // ----------------------------------------------------------------
     // Seed directly into Postgres:
-    //   - one xorb (pin_state='pinned')
-    //   - one file
-    //   - TWO reconstruction_terms with overlapping chunk-byte ranges
-    //     inside the SAME xorb:
-    //       term0:  xorb_byte 1024..4096
-    //       term1:  xorb_byte 3072..8192
-    //     overlap at [3072..4096); handler must coalesce to a single
-    //     1024..8192 range (end-exclusive) i.e. HTTP bytes 1024-8191.
+    // - one xorb (pin_state='pinned')
+    // - one file
+    // - TWO reconstruction_terms with overlapping chunk-byte ranges
+    // inside the SAME xorb:
+    // term0: xorb_byte 1024..4096
+    // term1: xorb_byte 3072..8192
+    // overlap at [3072..4096); handler must coalesce to a single
+    // 1024..8192 range (end-exclusive) i.e. HTTP bytes 1024-8191.
     // ----------------------------------------------------------------
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -130,9 +128,9 @@ async fn overlapping_terms_produce_single_coalesced_fetch_info() -> anyhow::Resu
     // ----------------------------------------------------------------
     let file_id_hex: String = file_id.iter().map(|b| format!("{b:02x}")).collect();
     // ^ Straight byte-hex is fine here because `file_id` is constructed from
-    //   arbitrary bytes (not a MerkleHash codec output); the handler reads
-    //   the path parameter via MerkleHash::from_hex which applies the
-    //   byte-reversal consistently on both ends.
+    // arbitrary bytes (not a MerkleHash codec output); the handler reads
+    // the path parameter via MerkleHash::from_hex which applies the
+    // byte-reversal consistently on both ends.
     let reqwest_client = reqwest::Client::new();
     let url = format!("{}/v1/reconstructions/{}", harness.base_url, file_id_hex);
     let resp = reqwest_client
@@ -143,7 +141,7 @@ async fn overlapping_terms_produce_single_coalesced_fetch_info() -> anyhow::Resu
 
     // If the handler can't find the file_id via MerkleHash-decoded bytes
     // (because our test-hex differs from MerkleHash codec output) this will
-    // be 404. In that case, skip with a diagnostic — the P4 unit test in
+    // be 404. In that case, skip with a diagnostic — the unit test in
     // cas/crates/siahub-cas-core already exercises the coalescing golden.
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         eprintln!(

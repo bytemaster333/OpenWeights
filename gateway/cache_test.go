@@ -1,9 +1,7 @@
 // Package main — cache_test.go.
-//
-// Whole-xorb disk LRU test suite. Covers GATE-06 (disk-backed, size-capped),
-// GATE-07 (hash-verify-on-write), GATE-08 (streaming / no whole-xorb RAM),
+// Whole-xorb disk LRU test suite. Covers (disk-backed, size-capped),
+// (hash-verify-on-write), (streaming / no whole-xorb RAM),
 // plus atomic-write invariants + LRU correctness + concurrent-reader safety.
-//
 // Tests run with `go test -race ./...` to catch the cache-index concurrency
 // invariants.
 package main
@@ -51,7 +49,7 @@ func hashOf(data []byte) string { return MerkleHashHex(data) }
 // Basic round-trips
 
 // TestCache_PutOpenRoundTrip — write a known payload under its canonical
-// hash, Open() returns the same bytes.
+// hash, Open returns the same bytes.
 func TestCache_PutOpenRoundTrip(t *testing.T) {
 	c := newTestCache(t, 0)
 	payload := []byte("hello xet-core world — round-trip fixture")
@@ -95,7 +93,7 @@ func TestCache_OpenMissReturnsSentinel(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// GATE-07: hash-verify-on-write
+// : hash-verify-on-write
 
 // TestCache_HashMismatchRefused — streaming bytes that don't match the
 // declared hash MUST fail with ErrCacheHashMismatch, leave NO final file,
@@ -152,7 +150,7 @@ func TestCache_SizeMismatchRefused(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// GATE-06: LRU eviction
+// : LRU eviction
 
 // TestCache_LRUEviction — with 10 MiB cap + three 4 MiB xorbs, after the
 // third Put the oldest is evicted and total bytes ≤ cap.
@@ -334,13 +332,12 @@ func TestCache_ConcurrentReaders(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// GATE-06 latency: HIT < 50ms
+// latency: HIT < 50ms
 
 // TestCache_HitLatencyUnder50ms — a warm cache Open+ReadAll of a 256 KiB
-// xorb MUST complete in < 50ms, which is the GATE-06 ceiling.
-//
+// xorb MUST complete in < 50ms, which is the ceiling.
 // Rationale for this size: it's a realistic small-xorb payload. Larger
-// payloads tax the test harness (disk bandwidth), not the cache logic —
+// payloads tax the test harness (disk bandwidth), not the cache logic
 // the check is about the cache index being RAM-fast, not about pushing
 // bytes. 256 KiB is chosen so a modern laptop SSD reads it in <5ms; 50ms
 // is 10x headroom.
@@ -352,7 +349,7 @@ func TestCache_HitLatencyUnder50ms(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 	// Warm the fs cache by reading once; the "cold" fs read is not part of
-	// what GATE-06 is measuring.
+	// what is measuring.
 	f, _, err := c.Open(hash)
 	if err != nil {
 		t.Fatalf("Open warm: %v", err)
@@ -383,7 +380,7 @@ func TestCache_HitLatencyUnder50ms(t *testing.T) {
 // FetchAndCache needs here.
 
 // TestCache_FetchAndCache_HappyPath — one call writes the bytes into the
-// cache under the correct hash, downstream Open() returns them.
+// cache under the correct hash, downstream Open returns them.
 func TestCache_FetchAndCache_HappyPath(t *testing.T) {
 	c := newTestCache(t, 0)
 	payload := []byte("fetch-and-cache happy path bytes")

@@ -3,12 +3,11 @@ import { Component, type ErrorInfo, type PropsWithChildren } from "react"
 type State = { hasError: boolean; message?: string; requestId?: string }
 
 /**
- * Top-level React error boundary (D-49).
+ * Top-level React error boundary.
  *
  * Logs to `console.error` only — NO Sentry, Rollbar, LogRocket, Datadog, or
  * any error-aggregation SaaS. Per-request API errors are surfaced via toasts
- * (wired in feature plans via Sonner); this boundary handles render crashes.
- */
+ * (wired in feature plans via Sonner); this boundary handles render crashes.*/
 export class AppErrorBoundary extends Component<PropsWithChildren, State> {
   state: State = { hasError: false }
 
@@ -17,7 +16,7 @@ export class AppErrorBoundary extends Component<PropsWithChildren, State> {
   }
 
   componentDidCatch(err: Error, info: ErrorInfo) {
-    // D-49: console.error only. No Sentry, no Rollbar.
+    // : console.error only. No Sentry, no Rollbar.
     console.error("[AppErrorBoundary]", err, info)
   }
 

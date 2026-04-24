@@ -1,27 +1,23 @@
-//! Prometheus registry + `/metrics` endpoint scaffold (Plan 02-09, Task 2).
-//!
-//! OPS-02 / OPS-03: `/metrics` is mounted on the main router but the
+//! Prometheus registry + `/metrics` endpoint scaffold ( Task 2).
+//! / : `/metrics` is mounted on the main router but the
 //! Dockerfile / Compose binds the container to `127.0.0.1`, so the endpoint
-//! is unreachable from the public internet by default. Phase 6 Caddy also
+//! is unreachable from the public internet by default. Caddy also
 //! explicitly DENIES `/metrics` on the public vhost. The endpoint itself is
 //! unauthenticated — Prometheus scrapers do not ship bearer tokens.
-//!
-//! **Scope (Phase 2).** This module defines the `Metrics` struct, registers
+//! **Scope.** This module defines the `Metrics` struct, registers
 //! the six counters / histograms the plan's `<interfaces>` block enumerates,
 //! and exposes a single `metrics_handler` that `TextEncoder::encode`s the
-//! current registry output. Phase 3 gateway binds its own registry; this
+//! current registry output. gateway binds its own registry; this
 //! crate never reaches across the seam.
-//!
 //! **Crate choice.** We use the `prometheus = "0.13"` crate (not `metrics-rs`
 //! + `metrics-exporter-prometheus`) because:
-//!   1. Registry is explicit — we want one owned `Registry`, not a global.
-//!   2. `register_int_counter_*` returns typed handles rather than name
-//!      lookups, which makes compile-time ordering mistakes louder.
-//!   3. The `metrics-rs` facade would force us to either make the scraper
-//!      also depend on it (forcing the Go gateway to round-trip through a
-//!      Rust facade) or split the seam in Phase 3.
-//!
-//! **Orphaned metric (D-15 alert).** `xorb_orphaned_total` + its shard mirror
+//! 1. Registry is explicit — we want one owned `Registry`, not a global.
+//! 2. `register_int_counter_*` returns typed handles rather than name
+//! lookups, which makes compile-time ordering mistakes louder.
+//! 3. The `metrics-rs` facade would force us to either make the scraper
+//! also depend on it (forcing the Go gateway to round-trip through a
+//! Rust facade) or split the seam in .
+//! **Orphaned metric ( alert).** `xorb_orphaned_total` + its shard mirror
 //! are the ops alert key: any non-zero value means a row hit 5 failed pin
 //! attempts and was quarantined. See `reconciler` module for the bump site.
 
@@ -38,28 +34,27 @@ use prometheus::{
 
 use siahub_cas_storage::reconciler::ReconcilerMetrics;
 
-/// Prometheus handle set for Phase 2 siahub-cas.
-///
+/// Prometheus handle set for siahub-cas.
 /// Handles are cloneable (`Counter` / `Histogram` are `Arc` internally), so
 /// the handler + reconciler both hold their own pointers into the shared
 /// registry without a lock.
 pub struct Metrics {
-    /// Owns the registry. Exposed via `encode()` for the `/metrics` endpoint.
+    /// Owns the registry. Exposed via `encode` for the `/metrics` endpoint.
     registry: Registry,
 
-    /// D-15 alert: xorbs that exhausted 5 pin-retry attempts. NEVER
+    /// alert: xorbs that exhausted 5 pin-retry attempts. NEVER
     /// decrements; cumulative. Alert threshold > 0.
     pub xorb_orphaned_total: IntCounter,
 
-    /// Mirror of `xorb_orphaned_total` for shards (D-15 applies symmetrically).
+    /// Mirror of `xorb_orphaned_total` for shards ( applies symmetrically).
     pub shard_orphaned_total: IntCounter,
 
-    /// RESEARCH §9-P19 — counter vec with labels `{header_version,
+    /// RESEARCH §9- — counter vec with labels `{header_version,
     /// footer_version}` so ops can see which mis-versioned clients are
     /// pounding the API. Bumped from `handlers::shards` via
     /// `metrics.shard_version_rejected_total.with_label_values(&[
-    ///   header_v.to_string().as_str(), footer_v.to_string().as_str()
-    /// ]).inc()`.
+    /// header_v.to_string.as_str, footer_v.to_string.as_str
+    /// ]).inc`.
     pub shard_version_rejected_total: IntCounterVec,
 
     /// Reconciler tick counter (per successful sweep, n > 0). See plan Task 3.
@@ -78,7 +73,7 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    /// Build a fresh registry and pre-register every Phase 2 metric. This is
+    /// Build a fresh registry and pre-register every metric. This is
     /// called exactly once at process boot. Panics ONLY on registry-level
     /// programming errors (duplicate metric name, empty buckets, etc.) — all
     /// of which are statically-known bugs in this file rather than runtime
@@ -194,7 +189,7 @@ impl Default for Metrics {
     }
 }
 
-/// `Metrics` implements the reconciler's `ReconcilerMetrics` boundary trait —
+/// `Metrics` implements the reconciler's `ReconcilerMetrics` boundary trait
 /// this is the cross-crate adapter that keeps `siahub-cas-storage` from
 /// importing `siahub-cas-core` (which would form a dependency cycle, since
 /// `siahub-cas-core` depends on `siahub-cas-storage` for `SiaAdapter`).
@@ -226,7 +221,7 @@ pub trait MetricsState: Clone + Send + Sync + 'static {
 /// `GET /metrics` handler. Emits Prometheus text format (v0.0.4) with
 /// `Content-Type: text/plain; version=0.0.4` — the exact header Prom scrapers
 /// look for. No auth: network-level restriction (127.0.0.1 bind) is the
-/// trust boundary (OPS-02 / OPS-03).
+/// trust boundary ( / ).
 pub async fn metrics_handler<S: MetricsState>(State(st): State<S>) -> impl IntoResponse {
     let body = st.metrics().encode();
     let mut h = HeaderMap::new();

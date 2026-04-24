@@ -1,18 +1,16 @@
-# Plan 05-01 Task 2 — CI-only overlay.
-#
+# Task 2 — CI-only overlay.
 # Merged with ops/docker-compose.yml via
-#   `docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml up`
-#
+# `docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml up`
 # Purpose:
-#   (a) Assert V2_RECONSTRUCTION_ENABLED=true at the service level (D-65 CI
-#       half — even if .env ever drifts to `false`, the CI overlay pins
-#       true).
-#   (b) Tighten indexd's CI profile — conformance tests use testcontainers
-#       for the CAS+Postgres they actually hit, so the live compose stack
-#       exists mainly to prove INFRA-01 on a fresh host. No need to wait
-#       for a mainnet consensus sync; Zen testnet + short bootstrap timeout.
-#   (c) Raise logging verbosity on the Rust + Go services so CI failure
-#       mode diagnosis has enough signal.
+# (a) Assert V2_RECONSTRUCTION_ENABLED=true at the service level ( CI
+# half — even if .env ever drifts to `false`, the CI overlay pins
+# true).
+# (b) Tighten indexd's CI profile — conformance tests use testcontainers
+# for the CAS+Postgres they actually hit, so the live compose stack
+# exists mainly to prove on a fresh host. No need to wait
+# for a mainnet consensus sync; Zen testnet + short bootstrap timeout.
+# (c) Raise logging verbosity on the Rust + Go services so CI failure
+# mode diagnosis has enough signal.
 
 services:
   siahub-cas:
@@ -22,7 +20,7 @@ services:
 
   siahub-gateway:
     environment:
-      # Phase 3 gateway reads GATEWAY_LOG_LEVEL via config.go firstNonEmpty.
+      # gateway reads GATEWAY_LOG_LEVEL via config.go firstNonEmpty.
       GATEWAY_LOG_LEVEL: info
 
   siahub-console:

@@ -1,26 +1,22 @@
 #!/usr/bin/env bash
 # ops/preload-fixture.sh — Seed the hosted demo with the pinned fixture model.
-#
-# Plan 05-04 (DEMO-04). One-shot: run ONCE after the first `make deploy` and
-# after minting a write-scoped API key in the console. Idempotent on re-run —
+#. One-shot: run ONCE after the first `make deploy` and
+# after minting a write-scoped API key in the console. Idempotent on re-run
 # huggingface-cli dedups by Merkle hash, so re-uploading the same fixture is
 # a ~3-second no-op.
-#
 # Exit codes:
-#   0  fixture uploaded (or already present)
-#   1  any step failed
-#   2  pre-condition missing (env vars / CLI / bench config)
-#
+# 0 fixture uploaded (or already present)
+# 1 any step failed
+# 2 pre-condition missing (env vars / CLI / bench config)
 # Pre-conditions:
-#   - `make deploy` completed; stack healthy; Caddy has Let's Encrypt cert.
-#   - A write-scoped API key minted via the /keys page of https://siahub.app.
-#   - `hf` (>= 0.27) or `huggingface-cli` on PATH.
-#   - bench/bench.config.sh source-of-truth checked in (Plan 05-03).
-#
+# - `make deploy` completed; stack healthy; Caddy has Let's Encrypt cert.
+# - A write-scoped API key minted via the /keys page of https://siahub.app.
+# - `hf` (>= 0.27) or `huggingface-cli` on PATH.
+# - bench/bench.config.sh source-of-truth checked in.
 # Invocation:
-#   SIAHUB_CAS_URL=https://cas.siahub.app \
-#   SIAHUB_WRITE_KEY=hf_sia_... \
-#   bash ops/preload-fixture.sh
+# SIAHUB_CAS_URL=https://cas.siahub.app \
+# SIAHUB_WRITE_KEY=hf_sia_... \
+# bash ops/preload-fixture.sh
 
 set -euo pipefail
 

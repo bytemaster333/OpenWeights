@@ -7,20 +7,20 @@ COPY cas/Cargo.toml cas/rust-toolchain.toml ./cas/
 COPY cas/crates ./cas/crates
 
 # migrations/ must be present at build time so sqlx::migrate!("./migrations") can
-# compile-time-embed the SQL files into the binary. Plan 02-02 populates these.
-# For Plan 02-01 the directory may not yet exist; create an empty one so the
+# compile-time-embed the SQL files into the binary. populates these.
+# For the directory may not yet exist; create an empty one so the
 # COPY succeeds.
 RUN mkdir -p ./cas/migrations ./cas/.sqlx
 
 # Attempt to copy real migrations + sqlx offline cache if they exist; the
-# wildcard trick keeps the COPY from failing when Plan 02-02 hasn't landed.
+# wildcard trick keeps the COPY from failing when hasn't landed.
 # At runtime `sqlx::migrate!` resolves the path at compile time.
-# NOTE: because Dockerfile COPY does not support optional sources, Plan 02-02's
+# because Dockerfile COPY does not support optional sources, 's
 # migrations/ and .sqlx/ are written unconditionally and this stanza becomes
-# purely load-bearing once Plan 02-02 runs.
+# purely load-bearing once runs.
 
 # SQLX offline — requires .sqlx/ to be populated by `cargo sqlx prepare`.
-# Empty .sqlx/ is harmless for Plan 02-01 because no `sqlx::query!` macro
+# Empty .sqlx/ is harmless for because no `sqlx::query!` macro
 # invocation exists yet.
 ENV SQLX_OFFLINE=true
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

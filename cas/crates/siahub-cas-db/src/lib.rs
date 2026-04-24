@@ -1,9 +1,7 @@
 //! Postgres pool + migrations wiring for siahub-cas.
-//!
-//! Plan 02-02 wiring: `run_migrations` compiles the `../../migrations/` tree
+//! wiring: `run_migrations` compiles the `../../migrations/` tree
 //! into the binary at build time via `sqlx::migrate!`. The runtime binary
 //! therefore does NOT need the migrations/ directory on disk.
-//!
 //! Offline query cache: set `SQLX_OFFLINE=true` in CI + Docker so
 //! `cargo build` does not require a live database. Locally, leave it unset
 //! and `sqlx::query!` will type-check against the running Postgres. See the
@@ -14,7 +12,6 @@ pub mod queries;
 pub mod types;
 
 /// Build a connection pool to Postgres with sane defaults.
-///
 /// max_connections comes from `PG_MAX_CONNECTIONS` (Config); min 2 keeps a
 /// warm pool so the first request does not eat TCP handshake latency.
 pub async fn build_pool(
@@ -30,7 +27,6 @@ pub async fn build_pool(
 }
 
 /// Run all pending migrations against the given pool.
-///
 /// The `sqlx::migrate!` macro embeds the SQL files under `../../migrations/`
 /// into the binary at compile time. Safe to call on every boot: the
 /// `_sqlx_migrations` table tracks applied files by checksum and skips them

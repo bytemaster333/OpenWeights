@@ -1,0 +1,24 @@
+---
+title: siahub
+description: xet-compatible model hub backed by sia storage
+---
+
+# siahub
+
+self-hostable, xet-compatible hub for large files. the standard
+`hf` CLI works unmodified — set `HF_ENDPOINT` at a siahub deployment,
+then `hf upload` / `hf download` as usual. bytes land on the sia
+network, not s3.
+
+## why
+
+- unmodified hugging face client (no fork, no patch)
+- decentralized byte storage via sia
+- upload + download + model pages + api keys out of the box
+- optional pointer-only mirror on huggingface.co for discovery
+
+## jump in
+
+- [quickstart](/guides/quickstart) — three commands to upload your first model
+- [self-host](/guides/self-host) — run the stack on your own box
+- [api reference](/reference/api) — endpoints the hf CLI talks to

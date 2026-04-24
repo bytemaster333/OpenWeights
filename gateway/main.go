@@ -1,20 +1,18 @@
 // Package main — siahub-gateway entry point.
-//
 // Wave 1 responsibilities:
-//   - Load config (env; fatal on missing `GATEWAY_URL_SIGNING_KEY`).
-//   - Build chi router + request-id middleware.
-//   - Construct `UrlVerifier` at boot (fail fast on bad key material).
-//   - Mount `GET /health` (live) + `GET /xorb/{hash}` (501 stub until 03-03+).
-//   - Serve on two listeners:
-//       * Public: `GATEWAY_ADDR` (default `:8081`), HTTP/2 enabled with
-//         `MaxConcurrentStreams: 256` (D-32 / P26).
-//       * Loopback: `GATEWAY_METRICS_ADDR` (default `127.0.0.1:9100`),
-//         `/metrics` only (D-33 — Caddy MUST NOT proxy).
-//   - Graceful shutdown on SIGTERM/SIGINT with 30s drain window.
-//
+// - Load config (env; fatal on missing `GATEWAY_URL_SIGNING_KEY`).
+// - Build chi router + request-id middleware.
+// - Construct `UrlVerifier` at boot (fail fast on bad key material).
+// - Mount `GET /health` (live) + `GET /xorb/{hash}` (501 stub until 03-03+).
+// - Serve on two listeners:
+// * Public: `GATEWAY_ADDR` (default `:8081`), HTTP/2 enabled with
+// `MaxConcurrentStreams: 256` ( / ).
+// * Loopback: `GATEWAY_METRICS_ADDR` (default `127.0.0.1:9100`),
+// `/metrics` only ( — Caddy MUST NOT proxy).
+// - Graceful shutdown on SIGTERM/SIGINT with 30s drain window.
 // Deliberately NO wall-clock request timeout on `GET /xorb/...` — large xorbs
-// + slow clients are legitimate (D-31). We rely on client disconnect (TCP RST)
-// propagating via `r.Context()` to cancel the Sia SDK download, and on
+// + slow clients are legitimate. We rely on client disconnect (TCP RST)
+// propagating via `r.Context` to cancel the Sia SDK download, and on
 // `IdleTimeout: 120s` + `ReadHeaderTimeout: 10s` to shed dead connections.
 package main
 
@@ -81,7 +79,7 @@ func main() {
 		meter = NewMeter(db, metrics.Registry)
 	}
 
-	// Whole-xorb disk LRU + cache-miss coalescer (plan 03-05). The cache
+	// Whole-xorb disk LRU + cache-miss coalescer. The cache
 	// registers its counters on the shared Prometheus registry via
 	// `registerCacheMetrics(reg)` which NewMetrics already invoked; the Cache
 	// and MissCoalescer only need construction here, not metric wiring. With
@@ -124,10 +122,10 @@ func main() {
 	publicSrv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           r,
-		IdleTimeout:       120 * time.Second, // D-31
-		ReadHeaderTimeout: 10 * time.Second,  // D-31 (slowloris floor)
+		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,  // (slowloris floor)
 	}
-	// HTTP/2 with explicit MaxConcurrentStreams (D-32 / P26). `ConfigureServer`
+	// HTTP/2 with explicit MaxConcurrentStreams ( / ). `ConfigureServer`
 	// upgrades the TLS listener transparently; for h2c (plaintext HTTP/2) the
 	// Caddy reverse proxy terminates TLS so only http/1.1 is spoken on this
 	// listener in prod. The explicit setting documents the ceiling.
@@ -138,7 +136,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Loopback metrics router (D-33). Separate listener + handler so Caddy's
+	// Loopback metrics router. Separate listener + handler so Caddy's
 	// public vhost has no path onto `/metrics`.
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", metrics.Handler())

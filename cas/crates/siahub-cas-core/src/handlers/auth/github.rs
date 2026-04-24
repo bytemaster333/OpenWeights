@@ -1,21 +1,18 @@
 //! `GET /auth/github/start` + `GET /auth/github/callback` — GitHub OAuth flow.
-//!
-//! Plan 04-01 (Phase 2.1 amendment — D-44, D-50). Flow:
-//!
+//! ( amendment —). Flow:
 //! 1. `start` generates a 32-byte URL-safe nonce, inserts it into
-//!    `oauth_state` (TTL 10 min), and `302`s the browser to GitHub's
-//!    authorize endpoint with `state=<nonce>`.
+//! `oauth_state` (TTL 10 min), and `302`s the browser to GitHub's
+//! authorize endpoint with `state=<nonce>`.
 //! 2. GitHub redirects the browser back to `/auth/github/callback?code=...&state=...`.
 //! 3. `callback` atomically consumes the nonce (`consume_oauth_state`),
-//!    exchanges `code` for an access token, fetches `/user` and
-//!    (if email is null) `/user/emails`, upserts `users` keyed on numeric
-//!    `id BIGINT` (P13 — NOT email), mints a `sessions` row, and `302`s
-//!    back to the console with a `Set-Cookie: siahub_session=...` header.
-//!
-//! P14 (HIGH) mitigation: structured error codes
+//! exchanges `code` for an access token, fetches `/user` and
+//! (if email is null) `/user/emails`, upserts `users` keyed on numeric
+//! `id BIGINT` ( — NOT email), mints a `sessions` row, and `302`s
+//! back to the console with a `Set-Cookie: siahub_session=...` header.
+//! (HIGH) mitigation: structured error codes
 //! `oauth_state_mismatch` / `oauth_code_missing` / `github_token_exchange_failed`
 //! surface in error bodies so the self-host operator can distinguish
-//! callback-URL-mismatch (P14) from GitHub API flakes.
+//! callback-URL-mismatch from GitHub API flakes.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -48,7 +45,6 @@ pub trait GithubOAuthState: AuthStateRef {
 // ---------------------------------------------------------------------------
 
 /// `GET /auth/github/start` — begin the OAuth round-trip.
-///
 /// Returns `302` with a `Location:` header that points at GitHub's
 /// `/login/oauth/authorize` with `client_id`, `redirect_uri`, `scope`, and
 /// `state`. The state nonce is inserted into `oauth_state` before the
@@ -97,7 +93,7 @@ pub async fn callback<S: GithubOAuthState>(
     Query(q): Query<CallbackQuery>,
 ) -> Result<Response, CallbackError> {
     // (1) State CSRF check. `consume_oauth_state` uses a single UPDATE
-    //     ... RETURNING that only matches an unconsumed unexpired nonce.
+    // ... RETURNING that only matches an unconsumed unexpired nonce.
     let state_nonce = q.state.ok_or(CallbackError::StateMismatch)?;
     let consumed = consume_oauth_state(st.pool(), &state_nonce)
         .await
@@ -115,9 +111,9 @@ pub async fn callback<S: GithubOAuthState>(
     // (4) Fetch GitHub profile.
     let profile = fetch_user_profile(&st, &token).await?;
 
-    // (5) Email fallback if `/user` returned null. P13: email may
-    //     legitimately remain None even after the /user/emails call when
-    //     the user has no verified primary.
+    // (5) Email fallback if `/user` returned null. : email may
+    // legitimately remain None even after the /user/emails call when
+    // the user has no verified primary.
     let email = if profile.email.is_some() {
         profile.email.clone()
     } else {
@@ -126,10 +122,10 @@ pub async fn callback<S: GithubOAuthState>(
             .unwrap_or_default()
     };
 
-    // (6) Upsert user on numeric id (P13; AUTH-03). We also use the
-    //     `xmax = 0` trick on the RETURNING clause to determine whether
-    //     this is a brand-new row (INSERT) vs an UPDATE; new users land
-    //     on `/onboarding`, returning users on `/dashboard` (D-44).
+    // (6) Upsert user on numeric id (P13; ). We also use the
+    // `xmax = 0` trick on the RETURNING clause to determine whether
+    // this is a brand-new row (INSERT) vs an UPDATE; new users land
+    // on `/onboarding`, returning users on `/dashboard`.
     let (_user_id, is_new_user) = upsert_user(&st, &profile, email.as_deref()).await?;
 
     // (7) Mint a session.
@@ -286,9 +282,8 @@ async fn fetch_primary_verified_email<S: GithubOAuthState>(
         .map(|e| e.email))
 }
 
-/// Upsert the `users` row keyed on numeric `id` (P13 + AUTH-03). Returns
+/// Upsert the `users` row keyed on numeric `id` ( + ). Returns
 /// the id + a bool indicating whether the row was newly created.
-///
 /// Uses `xmax = 0` on the RETURNING clause to distinguish INSERT from
 /// UPDATE without a separate SELECT: `xmax = 0` <=> row was inserted on
 /// this statement (no prior tuple); any other value means an update.
@@ -320,7 +315,7 @@ async fn upsert_user<S: GithubOAuthState>(
 // Error type — keeps the P14-mitigation error codes stable.
 // ---------------------------------------------------------------------------
 
-/// Structured callback errors (P14). Every variant maps to a fixed HTTP
+/// Structured callback errors. Every variant maps to a fixed HTTP
 /// status + stable JSON `code` string so the self-host operator can grep
 /// logs for the exact failure mode.
 #[derive(Debug)]
@@ -421,7 +416,7 @@ mod tests {
     #[test]
     fn callback_error_codes_are_stable() {
         // Quick grep-style assertion — the literal strings are part of the
-        // phase 4 contract (04-CONTEXT §3 P14 mitigation).
+        // contract (04-CONTEXT §3 mitigation).
         let r: axum::response::Response = CallbackError::StateMismatch.into_response();
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         let r: axum::response::Response = CallbackError::CodeMissing.into_response();

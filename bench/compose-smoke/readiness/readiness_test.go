@@ -100,7 +100,7 @@ func TestAuthHeader(t *testing.T) {
 	}
 }
 
-// Guardrail: ensure main() wires run() and returns its exit code.
+// Guardrail: ensure main wires run and returns its exit code.
 // Compile-time check via interface assertion (no runtime exec).
 var _ = func() int {
 	// if this compiles, run(ctx, baseURL, pass, threshold) int exists with the right signature

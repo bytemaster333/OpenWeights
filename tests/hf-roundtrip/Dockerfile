@@ -1,5 +1,4 @@
-# Plan 05-02 — HF round-trip harness image.
-#
+#HF round-trip harness image.
 # Minimal Python image with huggingface-cli + hf (both ship in
 # huggingface_hub >= 0.25 when built with the [cli,hf_xet] extras). The
 # container is a one-shot runner: the nightly CI job builds it, runs it

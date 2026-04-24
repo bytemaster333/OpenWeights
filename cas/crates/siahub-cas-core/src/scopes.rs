@@ -1,13 +1,10 @@
 //! Scope taxonomy.
-//!
 //! The Postgres enum `api_key_scope` has three variants; this crate mirrors
 //! them as u8 const generics (used by `AuthScoped<const S: u8>`) and as a
 //! Rust enum (used for comparisons at runtime).
-//!
-//! The three const values are load-bearing — Plans 02-04..08 declare handler
+//! The three const values are load-bearing — Plans ..08 declare handler
 //! signatures against them literally. Do NOT renumber.
-//!
-//! NOTE: once Plan 02-02 (W2) lands `siahub_cas_db::types::ApiKeyScope`, this
+//! once (W2) lands `siahub_cas_db::types::ApiKeyScope`, this
 //! local enum can be re-exported from there instead. For parallel-execution
 //! safety, the local copy lives here.
 
@@ -17,7 +14,7 @@ use sqlx::Type;
 pub const SCOPE_UPLOAD: u8 = 0;
 /// Scope = `download` — may GET reconstructions / chunks.
 pub const SCOPE_DOWNLOAD: u8 = 1;
-/// Scope = `admin` — may hit `/admin/*` routes (Phase 4).
+/// Scope = `admin` — may hit `/admin/*` routes.
 pub const SCOPE_ADMIN: u8 = 2;
 
 /// Postgres `api_key_scope` enum mirror.
@@ -31,7 +28,6 @@ pub enum ApiKeyScope {
 
 impl ApiKeyScope {
     /// Map a const-generic u8 back to the enum.
-    ///
     /// Returns `None` for any out-of-range scope — the auth extractor uses
     /// this to reject unknown scopes with 403 at the const-generic boundary
     /// (T-02-03-08).

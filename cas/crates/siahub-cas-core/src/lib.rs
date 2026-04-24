@@ -11,6 +11,7 @@ pub mod scopes;
 pub mod session;
 pub mod shard_parse;
 pub mod signed_url;
+pub mod xet_jwt;
 
 #[cfg(test)]
 mod tests;

@@ -1,22 +1,19 @@
-//! Shard binary parsing + P18/P19 validation (Plan 02-05 Task 1).
-//!
+//! Shard binary parsing + P18/ validation ( Task 1).
 //! Pitfall ownership:
-//!   - **P18** (shard cross-check): `parse_and_validate` extracts the set of
-//!     referenced xorb hashes via [`ParsedShard::referenced_xorb_hashes`]. The
-//!     handler cross-checks these against `xorbs.pin_state='pinned'` BEFORE
-//!     opening any DB transaction.
-//!   - **P19** (version gating): `parse_and_validate` rejects any shard where
-//!     `MDBShardFileHeader.version != 2` OR `MDBShardFileFooter.version != 1`.
-//!     On mismatch we emit a structured log (the Prometheus metric wiring is
-//!     deferred to Plan 02-09 — rationale in SUMMARY).
-//!
-//! Pre-computed byte offsets (P4 / RESEARCH §2.5): reconstruction queries
+//! - **P18** (shard cross-check): `parse_and_validate` extracts the set of
+//! referenced xorb hashes via [`ParsedShard::referenced_xorb_hashes`]. The
+//! handler cross-checks these against `xorbs.pin_state='pinned'` BEFORE
+//! opening any DB transaction.
+//! - **P19** (version gating): `parse_and_validate` rejects any shard where
+//! `MDBShardFileHeader.version != 2` OR `MDBShardFileFooter.version != 1`.
+//! On mismatch we emit a structured log (the Prometheus metric wiring is
+//! deferred to — rationale in SUMMARY).
+//! Pre-computed byte offsets ( / RESEARCH §2.5): reconstruction queries
 //! MUST NOT re-fetch xorb footers at query time. This module computes
 //! `xorb_byte_start`/`xorb_byte_end` at shard-upload time from the shard's own
 //! XorbInfo section (each `XorbChunkSequenceEntry` carries
 //! `chunk_byte_range_start` + `unpacked_segment_bytes`) and persists them into
 //! `reconstruction_terms` via `queries/shards.rs::insert_shard_with_reconstruction`.
-//!
 //! The entire module is `pub(crate)` visible to the handler; the handler is
 //! the only caller. `parse_and_validate` is a pure function; the Postgres
 //! cross-check happens in the handler (it needs a pool).
@@ -29,7 +26,7 @@ use siahub_cas_proto::metadata_shard::shard_format::MDBShardInfo;
 use siahub_cas_proto::metadata_shard::xorb_structs::MDBXorbInfo;
 use siahub_cas_proto::metadata_shard::{MDBShardFileFooter, MDBShardFileHeader};
 
-/// Locked wire versions (PITFALL P19). Any other value → 400.
+/// Locked wire versions (PITFALL ). Any other value → 400.
 pub const EXPECTED_HEADER_VERSION: u64 = 2;
 pub const EXPECTED_FOOTER_VERSION: u64 = 1;
 
@@ -42,21 +39,20 @@ pub struct ParsedShard {
     pub footer_version: u64,
     /// De-duplicated list of referenced xorb merkle hashes (one entry per
     /// unique xorb the shard's file terms cite). The handler cross-checks
-    /// these against `xorbs.pin_state='pinned'` (PITFALL P18).
+    /// these against `xorbs.pin_state='pinned'` (PITFALL ).
     pub referenced_xorb_hashes: Vec<[u8; 32]>,
     /// One DTO per file entry in the shard's FileInfo section. Persisted
     /// verbatim into `reconstruction_files`.
     pub files: Vec<ParsedFile>,
     /// One DTO per file term, in the order xet-core serializes them. Persisted
-    /// into `reconstruction_terms`. All range fields are END-EXCLUSIVE (P4).
+    /// into `reconstruction_terms`. All range fields are END-EXCLUSIVE.
     pub terms: Vec<ParsedTerm>,
 }
 
 /// Parser errors that map at the handler boundary to `AppError` variants.
-///
 /// Mapping (see `handlers::shards` for the actual match):
-///   * `HeaderVersion(_)` / `FooterVersion(_)` → `AppError::ShardVersionUnsupported` (400)
-///   * everything else                         → `AppError::BadRequest("malformed_shard")` (400)
+/// * `HeaderVersion(_)` / `FooterVersion(_)` → `AppError::ShardVersionUnsupported` (400)
+/// * everything else → `AppError::BadRequest("malformed_shard")` (400)
 #[derive(Debug, thiserror::Error)]
 pub enum ShardParseError {
     #[error("malformed shard: {0}")]
@@ -82,16 +78,14 @@ pub enum ShardParseError {
 }
 
 /// Parse-and-validate a shard body.
-///
 /// Side effects: `tracing::warn!` on version mismatch with `header_version`
-/// and `footer_version` fields — Plan 02-09 hoists this into a Prometheus
+/// and `footer_version` fields — hoists this into a Prometheus
 /// counter `siahub_cas_shard_version_rejected_total{header_version,footer_version}`.
-///
 /// Bounds: caller MUST cap the body (handler uses 16 MiB). Unbounded input is
 /// a DoS primitive; this function does not re-bound.
 pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> {
     // Minimum-size guard — must at least fit the fixed-size header + footer.
-    const MIN_SHARD_BYTES: usize = 48 /* header */ + 200 /* footer */;
+    const MIN_SHARD_BYTES: usize = 48 /* header*/ + 200 /* footer*/;
     if bytes.len() < MIN_SHARD_BYTES {
         return Err(ShardParseError::Malformed(format!(
             "shard too small: {} bytes (min {MIN_SHARD_BYTES})",
@@ -99,14 +93,14 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
         )));
     }
 
-    // (1) Header parse — magic-number + version. P19.
+    // (1) Header parse — magic-number + version. .
     let header = {
         let mut cur = Cursor::new(bytes);
         MDBShardFileHeader::deserialize(&mut cur)
             .map_err(|e| ShardParseError::Malformed(format!("header: {e}")))?
     };
     if header.version != EXPECTED_HEADER_VERSION {
-        // P19 — structured log so Plan 02-09 can convert into a Prom counter
+        //structured log so can convert into a Prom counter
         // without changing this module's surface.
         tracing::warn!(
             header_version = header.version,
@@ -117,14 +111,13 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
     }
 
     // (2) Footer parse — last MDB_SHARD_FOOTER_SIZE bytes of the body. The
-    //     xet-core crate's `MDBShardFileFooter::deserialize` internally
-    //     validates `version == MDB_SHARD_FOOTER_VERSION (== 1)` and returns
-    //     `CoreError::ShardVersion` on mismatch. We reject the same way.
-    //
-    //     Footer size is hard-coded to 200 bytes — size of
-    //     `MDBShardFileFooter` per the xet-core 1.5.1 source. The shard's
-    //     `header.footer_size` field also encodes the size; the crate itself
-    //     relies on its own compile-time constant. We follow suit.
+    // xet-core crate's `MDBShardFileFooter::deserialize` internally
+    // validates `version == MDB_SHARD_FOOTER_VERSION (== 1)` and returns
+    // `CoreError::ShardVersion` on mismatch. We reject the same way.
+    // Footer size is hard-coded to 200 bytes — size of
+    // `MDBShardFileFooter` per the xet-core 1.5.1 source. The shard's
+    // `header.footer_size` field also encodes the size; the crate itself
+    // relies on its own compile-time constant. We follow suit.
     const FOOTER_BYTES: usize = 200;
     let footer_start = bytes
         .len()
@@ -139,7 +132,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
             Ok(f) => f,
             Err(e) => {
                 // Extract the footer version word directly from the first 8
-                // bytes (little-endian u64). If it is NOT 1, report P19 with
+                // bytes (little-endian u64). If it is NOT 1, report with
                 // the real value; otherwise report a generic malformed footer.
                 let raw_version = {
                     let mut v = [0u8; 8];
@@ -168,16 +161,16 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
     }
 
     // (3) Full-body parse via MDBShardInfo. Walks both the FileInfo and
-    //     XorbInfo sections using seek offsets from the already-validated
-    //     footer — this is the same path xet-core's own shard readers take.
+    // XorbInfo sections using seek offsets from the already-validated
+    // footer — this is the same path xet-core's own shard readers take.
     let mut seek_reader = Cursor::new(bytes);
     let shard_info = MDBShardInfo::load_from_reader(&mut seek_reader)
         .map_err(|e| ShardParseError::Malformed(format!("shard load: {e}")))?;
 
     // (4) Read xorb-info sections — these give us per-chunk byte offsets
-    //     within each xorb. We need them to pre-compute `xorb_byte_start` /
-    //     `xorb_byte_end` per term (P4). Indexed by xorb_hash for O(1) term
-    //     lookup below.
+    // within each xorb. We need them to pre-compute `xorb_byte_start` /
+    // `xorb_byte_end` per term. Indexed by xorb_hash for O(1) term
+    // lookup below.
     let xorb_infos: Vec<MDBXorbInfo> = shard_info
         .read_all_xorb_blocks_full(&mut seek_reader)
         .map_err(|e| ShardParseError::Malformed(format!("xorb info: {e}")))?;
@@ -186,7 +179,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
         let hash: [u8; 32] = xi.metadata.xorb_hash.into();
         // One entry per chunk: (byte_range_start, unpacked_segment_bytes).
         // Together they give the END-EXCLUSIVE (start..start+len) byte range
-        // of that chunk inside the serialized xorb — P4.
+        // of that chunk inside the serialized xorb — .
         let chunks: Vec<(u32, u32)> = xi
             .chunks
             .iter()
@@ -199,8 +192,8 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
     }
 
     // (5) Read file-info sections. One ParsedFile + one-or-more ParsedTerms
-    //     per file. The term_index is a serial within the file, starting at
-    //     zero, matching `reconstruction_terms (file_id, term_index)` PK.
+    // per file. The term_index is a serial within the file, starting at
+    // zero, matching `reconstruction_terms (file_id, term_index)` PK.
     let file_infos = shard_info
         .read_all_file_info_sections(&mut seek_reader)
         .map_err(|e| ShardParseError::Malformed(format!("file info: {e}")))?;
@@ -224,15 +217,15 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
 
         // Track the running unpacked cursor for this file so we can produce
         // END-EXCLUSIVE `unpacked_start` / `unpacked_end` offsets per term
-        // (P4). xet-core serializes terms in order, so a simple accumulator
+        //. xet-core serializes terms in order, so a simple accumulator
         // matches the wire semantics.
         let mut unpacked_cursor: i64 = 0;
         for (idx, seg) in fi.segments.iter().enumerate() {
             let xorb_hash: [u8; 32] = seg.xorb_hash.into();
-            // Record for the P18 cross-check.
+            // Record for the cross-check.
             referenced_set.insert(xorb_hash, ());
 
-            // Chunk-index range — END-EXCLUSIVE per P4.
+            // Chunk-index range — END-EXCLUSIVE per .
             let xorb_start = seg.chunk_index_start as i64;
             let xorb_end = seg.chunk_index_end as i64;
             if xorb_start >= xorb_end {
@@ -247,7 +240,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
             // `chunk_byte_range_start` of the FIRST chunk in the segment and
             // (start+len) of the LAST chunk. If the xorb is not in our index
             // (shard is malformed — file refers to a xorb the shard does not
-            // describe), the P18 cross-check against the DB would still trip
+            // describe), the cross-check against the DB would still trip
             // later, but we reject early with a clearer reason.
             let chunks = xorb_index.get(&xorb_hash).ok_or_else(|| {
                 ShardParseError::InconsistentTermRange {
@@ -268,7 +261,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
             }
             let (first_start, _) = chunks[first_idx];
             let (last_start, last_len) = chunks[last_idx];
-            // END-EXCLUSIVE byte offsets — see P4.
+            // END-EXCLUSIVE byte offsets — see .
             let xorb_byte_start = first_start as i64;
             let xorb_byte_end = last_start as i64 + last_len as i64;
             if xorb_byte_start >= xorb_byte_end {
@@ -279,7 +272,7 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
                 });
             }
 
-            // Unpacked byte range — END-EXCLUSIVE (P4).
+            // Unpacked byte range — END-EXCLUSIVE.
             let unpacked_start = unpacked_cursor;
             let unpacked_end = unpacked_cursor + seg.unpacked_segment_bytes as i64;
             unpacked_cursor = unpacked_end;

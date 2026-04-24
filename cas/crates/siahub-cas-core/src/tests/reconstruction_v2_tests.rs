@@ -1,21 +1,18 @@
-//! Plan 02-07 — V2 reconstruction handler tests (feature-flagged 501).
-//!
+//!V2 reconstruction handler tests (feature-flagged 501).
 //! Focus of this file — BOTH code paths behind the V2_RECONSTRUCTION_ENABLED
-//! flag (D-18):
-//!   1. Flag-off 501 response shape + status (Task 2, Test 1).
-//!   2. Flag-on V2 response shape + golden `insta` snapshot (Task 2, Test 4).
-//!   3. Pure `build_v2_response` exercising coalesced multi-range descriptors
-//!      (shape sanity without routing through axum).
-//!
+//! flag:
+//! 1. Flag-off 501 response shape + status (Task 2, Test 1).
+//! 2. Flag-on V2 response shape + golden `insta` snapshot (Task 2, Test 4).
+//! 3. Pure `build_v2_response` exercising coalesced multi-range descriptors
+//! (shape sanity without routing through axum).
 //! Tests that require a live Postgres + Redis (handler-level: 401, 403, 404,
-//! 429, 501-after-rate-limit-depletion) defer to Plan 02-10's conformance
-//! crate — same split rationale as Plan 02-06 documented in
+//! 429, 501-after-rate-limit-depletion) defer to 's conformance
+//! crate — same split rationale as documented in
 //! `tests/reconstruction_tests.rs`. That plan's Task 2 (§Tests 1–6) lists six
 //! handler-integration tests; 2/3/5/6 need live infra. Tests 1 + 4 are
 //! covered HERE at the pure-function seam because the flag gate and V2 shape
-//! are the two things Phase 3 flips — pinning them locally catches drift at
+//! are the two things flips — pinning them locally catches drift at
 //! every `cargo test` without requiring Docker.
-//!
 //! Deviation: `cargo test -p siahub-cas-core reconstruction::v2` targets this
 //! file via `reconstruction_v2_tests`; the plan's path template
 //! `reconstruction::v2` matches the test-module namespace convention used
@@ -38,7 +35,7 @@ use siahub_cas_proto::merklehash::MerkleHash;
 use uuid::Uuid;
 
 // -------------------------------------------------------------------------
-// Shared fixtures — mirror Plan 02-06's `reconstruction_tests.rs::mk_term`
+// Shared fixtures — mirror 's `reconstruction_tests.rs::mk_term`
 // so V1 ↔ V2 outputs can be reasoned about side-by-side.
 // -------------------------------------------------------------------------
 
@@ -69,7 +66,7 @@ fn test_signer() -> Arc<dyn UrlMinter> {
 
 #[test]
 fn flag_off_returns_501_not_implemented() {
-    // Direct pure-function call — asserts the exact status code Phase 3 is
+    // Direct pure-function call — asserts the exact status code is
     // NOT flipping away from. xet-core's `get_reconstruction_with_version_override`
     // keys on 501 specifically (RESEARCH §2.6).
     let resp = v2_flag_off_response();
@@ -95,7 +92,7 @@ async fn flag_off_body_is_v2_disabled_json() {
 
 #[test]
 fn flag_off_body_helper_matches_literal_contract() {
-    // Phase 3 + ops tooling may grep for this exact string. Pin it.
+    // + ops tooling may grep for this exact string. Pin it.
     let body = v2_disabled_body();
     assert_eq!(body["error"], "V2 reconstruction disabled");
     assert_eq!(
@@ -110,7 +107,7 @@ fn flag_off_body_helper_matches_literal_contract() {
 
 #[test]
 fn flag_on_build_v2_response_produces_per_xorb_single_url() {
-    // 4 terms across 2 xorbs — exactly the Plan 02-06 coalesce scenario so
+    // 4 terms across 2 xorbs — exactly the coalesce scenario so
     // V2 ↔ V1 shape diffs are easy to reason about.
     let xorb_a = [0xaa; 32];
     let xorb_b = [0xbb; 32];
@@ -134,7 +131,7 @@ fn flag_on_build_v2_response_produces_per_xorb_single_url() {
     assert_eq!(resp.fetch_info.len(), 2);
 
     // xorb_a: terms 1+2 merge to [1024, 8192); term 3 disjoint [12288, 16384).
-    // P4 → END-INCLUSIVE: 1024..=8191 and 12288..=16383.
+    // → END-INCLUSIVE: 1024..=8191 and 12288..=16383.
     let a_key = MerkleHash::from(xorb_a).hex();
     let a_entry: &XorbFetchInfoV2 = resp.fetch_info.get(&a_key).expect("xorb_a present");
     assert_eq!(
@@ -158,9 +155,9 @@ fn flag_on_build_v2_response_produces_per_xorb_single_url() {
         "url should embed xorb_a hex path: {}",
         a_entry.url
     );
-    // Phase 3 flip (RECEIVED §G item 2, Plan 03-07): URL now carries the
+    // flip (RECEIVED §G item 2): URL now carries the
     // per-segment multi-range descriptor `r=s1-e1,s2-e2,...` — NOT the
-    // earlier Phase 2 bounding-range approximation. The comma form encodes
+    // earlier bounding-range approximation. The comma form encodes
     // url-safely; url::Url percent-encodes `,` as `%2C` inside query values,
     // so we tolerate both forms on assertion.
     let url_a = &a_entry.url;
@@ -181,18 +178,18 @@ fn flag_on_build_v2_response_produces_per_xorb_single_url() {
 
     // terms[] identical in shape to V1 — one per DB term in insert order.
     assert_eq!(resp.terms.len(), 4);
-    // Chunk ranges END-EXCLUSIVE (P4) — passed through from DB without
+    // Chunk ranges END-EXCLUSIVE — passed through from DB without
     // off-by-one.
     assert_eq!(resp.terms[0].range.start, 0);
     assert_eq!(resp.terms[0].range.end, 8);
 
-    // Phase 2 always emits whole-file reconstructions.
+    // always emits whole-file reconstructions.
     assert_eq!(resp.offset_into_first_range, 0);
 }
 
 #[test]
 fn flag_on_v2_response_golden_snapshot() {
-    // Pin the V2 response JSON so Phase 3's flip is a no-wire-drift operation.
+    // Pin the V2 response JSON so 's flip is a no-wire-drift operation.
     // Matches `reconstruction_tests::coalesce_golden_snapshot`'s scenario at
     // the V2-shape level.
     let xorb_a = [0xaa; 32];
@@ -238,7 +235,7 @@ fn flag_on_v2_empty_terms_yields_empty_fetch_info() {
 
 #[test]
 fn flag_on_v2_single_range_matches_v1_byte_boundary() {
-    // Pin the P4 invariant at the V2 layer: a single END-EXCLUSIVE term
+    // Pin the invariant at the V2 layer: a single END-EXCLUSIVE term
     // [0, 1024) → URL range 0..=1023 (END-INCLUSIVE).
     let xorb = [0xcc; 32];
     let row = ReconstructionRow {
@@ -257,7 +254,7 @@ fn flag_on_v2_single_range_matches_v1_byte_boundary() {
     assert_eq!(entry.ranges[0].url_range.end_inclusive, 1023);
     // URL stamps the same range.
     assert!(entry.url.contains("r=0-1023"), "url={}", entry.url);
-    // Canonical signed-URL shape — matches Plan 02-08 contract.
+    // Canonical signed-URL shape — matches contract.
     assert!(entry.url.contains("exp="));
     assert!(entry.url.contains("kid="));
     assert!(entry.url.contains("sig="));
@@ -290,20 +287,19 @@ fn flag_on_v2_json_uses_url_range_end_key() {
 }
 
 // -------------------------------------------------------------------------
-// Deferred handler-integration tests (Plan 02-10 conformance crate).
-//
-// The Plan 02-07 `<tests>` block lists six tests: (1) flag-off 501, (2) unauth
+// Deferred handler-integration tests ( conformance crate).
+// The `<tests>` block lists six tests: (1) flag-off 501, (2) unauth
 // → 401, (3) wrong scope → 403, (4) flag-on 200 shape, (5) flag-on 404 on
 // unknown file_id, (6) rate-limit runs before flag-gate. Tests 1 + 4 are
 // pinned above at the pure-function seam. Tests 2, 3, 5, 6 require live
-// Postgres + Redis and are owned by Plan 02-10 (same split rationale as
-// Plan 02-06; see `reconstruction_tests.rs` module docs). Pinned here as
-// inventory so Phase 3 + Plan 02-10 know exactly what to add.
+// Postgres + Redis and are owned by (same split rationale as
+// ; see `reconstruction_tests.rs` module docs). Pinned here as
+// inventory so + know exactly what to add.
 // -------------------------------------------------------------------------
 
 /// Compile-time reference to the handler symbol so a rename of
 /// `query_reconstruction_v2` or a signature drift breaks this test file at
-/// build time — catches accidental removal of the route's Phase 3 toggle
+/// build time — catches accidental removal of the route's toggle
 /// point before a regression lands in CI.
 #[allow(dead_code)]
 fn _handler_symbol_exists() {
@@ -341,7 +337,7 @@ struct SnapshotFetch<'a> {
     url_path: String,
     // strip the signed-URL query string (nondeterministic sig= in different
     // HMAC test setups); keep `r=<start>-<end>` because that's the load-
-    // bearing multi-range bounding descriptor Phase 3 verifies.
+    // bearing multi-range bounding descriptor verifies.
     url_r_param: Option<String>,
     ranges: Vec<SnapshotSegment<'a>>,
 }

@@ -3,26 +3,25 @@ import { useQuery } from "@tanstack/react-query"
 import { casFetch } from "@/lib/api"
 
 /**
- * `/setup` first-run status tiles (CONSOLE-11, CONSOLE-12, OPS-01).
+ * `/setup` first-run status tiles.
  *
- * Data source: CAS `GET /admin/setup/status`, landed in 04-01 (see
+ * Data source: CAS `GET /admin/setup/status`, landed in (see
  * `cas/crates/siahub-cas-core/src/handlers/admin/setup.rs`). The endpoint
  * aggregates subsystem health checks:
  *
  * - Postgres: `SELECT 1` round-trip latency.
  * - Redis: `PING` round-trip latency.
  * - indexd: pings the configured `INDEXD_URL`; reports `synced` from the
- *   consensus payload when reachable (gotcha #6).
+ * consensus payload when reachable.
  * - GitHub OAuth: flags whether `GITHUB_OAUTH_CLIENT_ID|SECRET|CALLBACK_URL`
- *   are all present in the CAS env — drives the P14 "not configured" card
- *   on `/setup`.
+ * are all present in the CAS env — drives the "not configured" card
+ * on `/setup`.
  * - V2 reconstruction: the operator-set `SIAHUB_V2_RECONSTRUCTION_ENABLED`
- *   flag (gotcha #3). Read-only informational (Ambiguity 3).
+ * flag. Read-only informational.
  *
  * Refetch every 30s so an operator fixing `.env` sees the tiles flip within
  * half a minute of `docker compose restart cas`. Background refetch is off
- * — if the admin's browser tab is hidden, we don't need to spam CAS.
- */
+ * — if the admin's browser tab is hidden, we don't need to spam CAS.*/
 
 export type SubsystemStatus = {
   status: "ok" | "degraded" | "error"
@@ -33,9 +32,9 @@ export type SetupStatus = {
   postgres: SubsystemStatus
   redis: SubsystemStatus
   indexd: SubsystemStatus & {
-    /** `true` when indexd's consensus is synced and wallet-funded. */
+    /** `true` when indexd's consensus is synced and wallet-funded.*/
     synced?: boolean
-    /** Operator-configured URL (CONSOLE-12 — surfaced read-only). */
+    /** Operator-configured URL ( — surfaced read-only).*/
     url: string
   }
   github_oauth: { configured: boolean }

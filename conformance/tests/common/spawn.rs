@@ -1,18 +1,16 @@
 //! Test harness: bring up siahub-cas + Postgres in Docker via testcontainers,
 //! seed an API key, and return a handle containing the base URL + bearer
 //! token.
-//!
-//! Design choices (CONTEXT D-22):
-//!   - **Testcontainers-driven Postgres** — every test gets a fresh `postgres:17-alpine`
-//!     container; shared-pool concerns disappear.
-//!   - **Pre-built siahub-cas image** — the cas/Dockerfile is built once via
-//!     `make cas-image`. Per-test rebuilds would cost minutes. If the image
-//!     is absent, tests skip with a clear message pointing at `make cas-image`.
-//!   - **Sia is mocked via `SIAHUB_SIA_MOCK=true`** — the binary's `sia-mock`
-//!     feature flag gates this env path; see
-//!     `cas/crates/siahub-cas/src/main.rs::build_sia_adapter`. Phase 5 owns
-//!     live-Sia CI.
-//!
+//! Design choices (CONTEXT ):
+//! - **Testcontainers-driven Postgres** — every test gets a fresh `postgres:17-alpine`
+//! container; shared-pool concerns disappear.
+//! - **Pre-built siahub-cas image** — the cas/Dockerfile is built once via
+//! `make cas-image`. Per-test rebuilds would cost minutes. If the image
+//! is absent, tests skip with a clear message pointing at `make cas-image`.
+//! - **Sia is mocked via `SIAHUB_SIA_MOCK=true`** — the binary's `sia-mock`
+//! feature flag gates this env path; see
+//! `cas/crates/siahub-cas/src/main.rs::build_sia_adapter`. owns
+//! live-Sia CI.
 //! Skip semantics: every `spawn_cas` callsite uses `match` + early-return
 //! when the result is `Ok(None)` — NEVER panic/fail on missing Docker.
 
@@ -51,11 +49,11 @@ pub struct Harness {
 }
 
 /// Opt-in knobs for the test stack; keep backward-compat with existing
-/// `spawn_cas()` callers by providing a `Default` that matches prior shape.
+/// `spawn_cas` callers by providing a `Default` that matches prior shape.
 #[derive(Debug, Clone, Default)]
 pub struct SpawnOpts {
     /// If true, the CAS is launched with `V2_RECONSTRUCTION_ENABLED=true`.
-    /// Default false (matches Phase 2 `.env.example`); Plan 03-07 flips to
+    /// Default false (matches `.env.example`); flips to
     /// true in a V2 multi-range round-trip test.
     pub v2_reconstruction_enabled: bool,
 }
@@ -66,7 +64,7 @@ pub async fn spawn_cas() -> Result<Option<Harness>> {
     spawn_cas_with(SpawnOpts::default()).await
 }
 
-/// Spawn with the V2 flag enabled. Plan 03-07 `v2_multi_range_round_trip`
+/// Spawn with the V2 flag enabled. `v2_multi_range_round_trip`
 /// uses this to prove the end-to-end V2 → multi-range → multipart/byteranges
 /// path once the Go gateway's `multipart/byteranges` writer (03-04) lands.
 pub async fn spawn_cas_v2_enabled() -> Result<Option<Harness>> {

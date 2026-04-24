@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-# Plan 05-01 Task 3 — wait for the 6-service Compose stack to become healthy.
-#
+# Task 3 — wait for the 6-service Compose stack to become healthy.
 # Polls Docker Compose healthcheck state (NOT raw HTTP) so services whose
 # health probes are internal (pg_isready, redis-cli PING, siahub-readiness)
 # are respected exactly as docker-compose.yml specifies. Per-service timeout
 # budgets reflect expected boot cost:
-#
-#   postgres          30s  (cold init runs indexd-postgres-init.sql)
-#   redis             30s
-#   indexd           600s  (first-boot Zen consensus header sync)
-#   siahub-cas       120s  (sqlx migrations + Axum bind)
-#   siahub-gateway   120s  (cache-dir init + Postgres attach)
-#   siahub-console    60s  (static nginx — fast)
-#
+# postgres 30s (cold init runs indexd-postgres-init.sql)
+# redis 30s
+# indexd 600s (first-boot Zen consensus header sync)
+# siahub-cas 120s (sqlx migrations + Axum bind)
+# siahub-gateway 120s (cache-dir init + Postgres attach)
+# siahub-console 60s (static nginx — fast)
 # Exit 0 when every service reports `healthy`; exit 1 on any timeout.
 
 set -euo pipefail

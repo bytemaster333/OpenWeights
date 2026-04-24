@@ -1,9 +1,8 @@
 // Package appid holds the single SiaHub App ID constant used by every
-// Phase 1 validator and consumed verbatim by Phase 2 (cas/) via a
+// validator and consumed verbatim by (cas/) via a
 // language-parallel Rust copy in conformance/src/appid.rs.
-//
-// Generated once on 2026-04-20 via `crypto/rand` (equivalent to
-// siastorage.GenerateAppID() which uses lukechampine.com/frand per
+// Generated once on 2026- via `crypto/rand` (equivalent to
+// siastorage.GenerateAppID which uses lukechampine.com/frand per
 // RESEARCH §1). DO NOT rotate. Rotation invalidates every
 // {xorb_hash -> sia_object_id} mapping.
 package appid

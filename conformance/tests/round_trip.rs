@@ -1,22 +1,19 @@
 //! End-to-end round-trip driven by `xet_client::cas_client::RemoteClient`
 //! at the pinned `=1.5.1` version.
-//!
 //! Preconditions (test skips gracefully if any is missing):
-//!   - Docker daemon reachable.
-//!   - `siahub-cas` image present in the local daemon (built via `make cas-image`).
-//!   - Reference fixtures cloned to `conformance/fixtures/` (via `make conformance-fixtures`
-//!     or the `git lfs clone` in `conformance/fixtures/README.md`).
-//!
+//! - Docker daemon reachable.
+//! - `siahub-cas` image present in the local daemon (built via `make cas-image`).
+//! - Reference fixtures cloned to `conformance/fixtures/` (via `make conformance-fixtures`
+//! or the `git lfs clone` in `conformance/fixtures/README.md`).
 //! What this test exercises at conformance-grade:
-//!   1. `xet_client` builds a request, hits `POST /v1/xorbs/{prefix}/{hash}`,
-//!      our CAS responds with `{"was_inserted": true}` which the client
-//!      internally swallows.
-//!   2. `xet_client::upload_shard` hits `POST /shards` (NO `/v1` — confirms the
-//!      notes.md gotcha #2 dual-path router is the ONLY way this works).
-//!   3. `Client::get_reconstruction(file_id, None)` — V2-first with V1
-//!      fallback on 501 (the Phase 2 V2_RECONSTRUCTION_ENABLED=false path).
-//!      Returns `Option<QueryReconstructionResponseV2>` — Some-on-known-file.
-//!
+//! 1. `xet_client` builds a request, hits `POST /v1/xorbs/{prefix}/{hash}`,
+//! our CAS responds with `{"was_inserted": true}` which the client
+//! internally swallows.
+//! 2. `xet_client::upload_shard` hits `POST /shards` (NO `/v1` — confirms the
+//! .md dual-path router is the ONLY way this works).
+//! 3. `Client::get_reconstruction(file_id, None)` — V2-first with V1
+//! fallback on 501 (the V2_RECONSTRUCTION_ENABLED=false path).
+//! Returns `Option<QueryReconstructionResponseV2>` — Some-on-known-file.
 //! If xet-client API quirks (A3 probe YELLOW — SerializedXorbObject must be
 //! hand-assembled from xorb fixture bytes) prevent full upload via the
 //! client, the test falls back to raw `reqwest::Client` for that leg only
@@ -87,15 +84,13 @@ async fn round_trip_reference_xorb_shard_file() -> anyhow::Result<()> {
 
     // ----------------------------------------------------------------
     // Step 1 — Upload the reference xorb.
-    //
-    // A3 probe YELLOW note: `xet_client::Client::upload_xorb` takes a
+    // A3 probe YELLOW `xet_client::Client::upload_xorb` takes a
     // `SerializedXorbObject`, not raw bytes. Constructing one validly from
-    // the fixture requires chunker-level work. For the Phase 2 conformance
+    // the fixture requires chunker-level work. For the conformance
     // surface this is overkill — we drive the wire protocol via raw reqwest
     // for this leg, proving our CAS accepts xet-core's canonical xorb format
     // byte-identically. The OTHER xet-client calls (upload_shard,
     // get_reconstruction) exercise the client-side code paths fully.
-    //
     // If future work surfaces `SerializedXorbObject::from_raw_bytes`, this
     // leg can re-route through the client as well.
     // ----------------------------------------------------------------
@@ -132,9 +127,8 @@ async fn round_trip_reference_xorb_shard_file() -> anyhow::Result<()> {
 
     // ----------------------------------------------------------------
     // Step 2 — Upload the reference shard VIA xet-client.
-    //
     // This exercises `Client::upload_shard` which hits POST /shards (NO /v1
-    // prefix) — the load-bearing call that proves notes.md gotcha #2's
+    // prefix) — the load-bearing call that proves .md 's
     // dual-path router works against a real xet-core client.
     // ----------------------------------------------------------------
     let upload_permit = client.acquire_upload_permit().await?;
@@ -158,10 +152,9 @@ async fn round_trip_reference_xorb_shard_file() -> anyhow::Result<()> {
 
     // ----------------------------------------------------------------
     // Step 3 — Query reconstruction VIA xet-client (the Client::get_reconstruction
-    // path which does V2-first with V1 fallback on 501 — Phase 2's CAS
+    // path which does V2-first with V1 fallback on 501 — 's CAS
     // ships V2 disabled by default, so this is an implicit fallback drill).
-    //
-    // We look up the shard's top-level file_id. Phase 2's parser extracts
+    // We look up the shard's top-level file_id. 's parser extracts
     // file ids into the `reconstruction_files` table during POST /shards.
     // Rather than parse the shard format in the test, we enumerate the DB
     // to find any file_id and query it; absence ⇒ the shard was accepted

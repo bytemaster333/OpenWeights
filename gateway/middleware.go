@@ -1,7 +1,6 @@
 // Package main — middleware.go.
-//
 // Wave 1 ships one middleware only: request-ID injection. Structured logging
-// (slog JSON per OPS-02) and per-request metric instrumentation land in 03-06.
+// (slog JSON per ) and per-request metric instrumentation land in .
 package main
 
 import (
@@ -31,7 +30,7 @@ func RequestID(next http.Handler) http.Handler {
 }
 
 // RequestIDFrom returns the request id from context if present. Handlers /
-// loggers in 03-06 use this; Wave 1 exposes it for test assertion.
+// loggers in use this; Wave 1 exposes it for test assertion.
 func RequestIDFrom(ctx context.Context) string {
 	if v, ok := ctx.Value(requestIDKey{}).(string); ok {
 		return v

@@ -6,6 +6,7 @@ use siahub_cas_core::handlers::admin::map::MapState;
 use siahub_cas_core::handlers::admin::setup::SetupState;
 use siahub_cas_core::handlers::auth::github::GithubOAuthState;
 use siahub_cas_core::handlers::health::HealthState;
+use siahub_cas_core::handlers::hfapi::HfApiState;
 use siahub_cas_core::handlers::reconstruction::ReconstructionState;
 use siahub_cas_core::handlers::shards::ShardUploadState;
 use siahub_cas_core::handlers::xorbs::XorbUploadState;
@@ -17,8 +18,8 @@ use siahub_cas_storage::SiaAdapter;
 use crate::config::Config;
 
 /// App state shared across handlers via `Router::with_state`.
-/// Plan 02-02 wires `db`; 02-03 wires `redis` + `key_cache` + `rate_limit_defaults`;
-/// 02-04 wires a Sia adapter. Fields not yet consumed at this wave tick —
+/// wires `db`; wires `redis` + `key_cache` + `rate_limit_defaults`;
+/// wires a Sia adapter. Fields not yet consumed at this wave tick
 /// suppressed to keep `-D warnings` green until downstream plans land.
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -26,29 +27,29 @@ pub struct AppState {
     pub cfg: Arc<Config>,
     pub pool: PgPool,
     pub redis: Arc<fred::clients::Client>,
-    /// In-process LRU of `sha256(bearer) → ActiveKey` rows (capacity 10 000 per D-20).
+    /// In-process LRU of `sha256(bearer) → ActiveKey` rows (capacity 10 000 per ).
     pub key_cache: Arc<KeyCache>,
-    /// Per-class token-bucket defaults (D-21).
+    /// Per-class token-bucket defaults.
     pub rate_limit_defaults: RateLimitDefaults,
-    /// Sia storage boundary (CONTEXT D-12 + Plan 02-04 Task 2). Wired from
+    /// Sia storage boundary (CONTEXT + Task 2). Wired from
     /// `main.rs::run` to either a real `RustSdkAdapter::connect(...)` or a
-    /// `MockSiaAdapter::new()` for the local/compose-less dev loop.
+    /// `MockSiaAdapter::new` for the local/compose-less dev loop.
     pub sia: Arc<dyn SiaAdapter>,
-    /// HMAC-SHA256 signed-URL minter (Plan 02-08). Constructed from
+    /// HMAC-SHA256 signed-URL minter. Constructed from
     /// `GATEWAY_URL_SIGNING_KEY` + optional `GATEWAY_URL_SIGNING_KEY_PREV`
-    /// at boot; never rebuilt on the hot path. Plan 02-06 reconstruction
+    /// at boot; never rebuilt on the hot path. reconstruction
     /// handlers consume this via `st.signer.mint_v1(...)`.
     pub signer: Arc<UrlSigner>,
-    /// Shared Prometheus handle set (Plan 02-09). Wired from `main.rs::run`
-    /// via `Metrics::new()`; handlers bump counters through the
+    /// Shared Prometheus handle set. Wired from `main.rs::run`
+    /// via `Metrics::new`; handlers bump counters through the
     /// `MetricsState` trait so the binary crate stays the only consumer of
     /// the concrete type.
     pub metrics: Arc<Metrics>,
-    /// Readiness latch (Plan 02-09 Task 4). `GET /health` returns 503 while
+    /// Readiness latch ( Task 4). `GET /health` returns 503 while
     /// this is `false` — `main.rs::run` flips it to `true` only after
     /// migrations applied AND the Sia startup self-check succeeded.
     pub ready: Arc<AtomicBool>,
-    /// Plan 04-01 — shared `reqwest::Client` reused across the OAuth
+    ///shared `reqwest::Client` reused across the OAuth
     /// token-exchange call, the `/admin/stats/map` indexd proxy, and the
     /// `/admin/setup/status` probes. Built ONCE at boot so TLS handshakes
     /// + connection pooling are reused.
@@ -119,23 +120,25 @@ impl ReconstructionState for AppState {
     }
 
     fn url_signer(&self) -> Arc<dyn UrlMinter> {
-        // Plan 02-08's concrete UrlSigner implements UrlMinter; widen here.
+        // 's concrete UrlSigner implements UrlMinter; widen here.
         self.signer.clone() as Arc<dyn UrlMinter>
     }
 
     fn v2_reconstruction_enabled(&self) -> bool {
-        // D-18 — flag defaults to `false`; Phase 3 GATE-03 flips `.env` only.
-        // notes.md gotcha #3: enabling V2 before the gateway serves
+        //flag defaults to `false`; flips `.env` only.
+        // .md : enabling V2 before the gateway serves
         // multipart/byteranges silently corrupts xet-core downloads.
         self.cfg.v2_reconstruction_enabled
     }
 }
 
-// Plan 04-01 — /admin/stats/map + OAuth + /admin/setup/status state impls.
+///admin/stats/map + OAuth + /admin/setup/status state impls.
 
 impl MapState for AppState {
     fn indexd_url(&self) -> &str {
-        &self.cfg.indexd_url
+        // Admin + setup probes hit the admin API (`:9980`), NOT the app API
+        // (`:9982`) that the SDK uses. They need different URLs.
+        &self.cfg.indexd_admin_url
     }
     fn indexd_admin_password(&self) -> &str {
         &self.cfg.indexd_admin_password
@@ -150,7 +153,9 @@ impl SetupState for AppState {
         self.redis.clone()
     }
     fn indexd_url(&self) -> &str {
-        &self.cfg.indexd_url
+        // Admin + setup probes hit the admin API (`:9980`), NOT the app API
+        // (`:9982`) that the SDK uses. They need different URLs.
+        &self.cfg.indexd_admin_url
     }
     fn indexd_admin_password(&self) -> &str {
         &self.cfg.indexd_admin_password
@@ -164,6 +169,18 @@ impl SetupState for AppState {
     }
     fn v2_reconstruction_enabled(&self) -> bool {
         self.cfg.v2_reconstruction_enabled
+    }
+}
+
+impl HfApiState for AppState {
+    fn xet_jwt_signing_key(&self) -> &[u8] {
+        // Treat missing config as "feature disabled" via empty slice
+        // handlers respond 503 in that case instead of minting unsigned
+        // tokens that would fail later in mysterious ways.
+        self.cfg.xet_jwt_signing_key.as_bytes()
+    }
+    fn cas_public_url(&self) -> &str {
+        &self.cfg.cas_public_url
     }
 }
 

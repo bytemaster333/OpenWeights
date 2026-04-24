@@ -1,6 +1,6 @@
 use tracing_subscriber::{EnvFilter, fmt};
 
-/// JSON stdout logger, field names matching Phase 1 Go bench/: level, ts, msg, err,
+/// JSON stdout logger, field names matching Go bench/: level, ts, msg, err,
 /// request_id, api_key_id, xorb_hash, bytes, duration_ms, status.
 pub fn init() {
     fmt()

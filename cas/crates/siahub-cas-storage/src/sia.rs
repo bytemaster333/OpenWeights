@@ -1,15 +1,13 @@
 //! Sia adapter trait + concrete Rust SDK implementation.
-//!
-//! The trait [`SiaAdapter`] is the single surface handlers (Plan 02-04) and
-//! the reconciler (Plan 02-09) depend on. The concrete [`RustSdkAdapter`]
-//! wraps `sia_storage::Sdk` per the A1 probe findings (Plan 02-01 A1 verdict
+//! The trait [`SiaAdapter`] is the single surface handlers and
+//! the reconciler depend on. The concrete [`RustSdkAdapter`]
+//! wraps `sia_storage::Sdk` per the A1 probe findings ( A1 verdict
 //! YELLOW — `pin_object(&obj)` by REFERENCE, `upload(Object, reader, opts) ->
 //! Object` by VALUE + new return, `download` is a sync constructor returning
 //! an AsyncRead handle).
-//!
 //! The mock implementation lives in [`super::mock`] behind
 //! `cfg(any(test, feature = "sia-mock"))` so the conformance crate (Plan
-//! 02-10) and handler unit tests (Plan 02-04 Task 5) can exercise the full
+//! 02-10) and handler unit tests ( Task 5) can exercise the full
 //! request path without a live indexd.
 
 use std::io::Cursor;
@@ -22,9 +20,8 @@ pub use sia_storage::{
 };
 
 /// Errors returned across the Sia adapter boundary.
-///
 /// `Unavailable` maps 1:1 to `siahub_cas_core::errors::AppError::SiaUnavailable`
-/// → HTTP 503 (PROTO-08, distinct from 429). Any other shape is wrapped in
+/// → HTTP 503 ( distinct from 429). Any other shape is wrapped in
 /// `Other(anyhow::Error)` which becomes a 500 at the handler.
 #[derive(thiserror::Error, Debug)]
 pub enum SiaAdapterError {
@@ -45,17 +42,15 @@ impl SiaAdapterError {
 }
 
 /// Object-safe boundary between siahub-cas and Sia storage.
-///
-/// - `upload_and_pin` — content-addressed write path (STORE-01, STORE-02).
-///   Returns the 32-byte `sia_object_id` (raw bytes from `Object::id()`).
-/// - `pin_only`       — reconciler retry path for `pin_state='pinning'`
-///   rows (Plan 02-09).
-/// - `download_range` — gateway read path (Plan 02-06 V1 reconstruction
-///   materialization and Phase 3 range-serving; Plan 02-04 does not use it).
+/// - `upload_and_pin` — content-addressed write path.
+/// Returns the 32-byte `sia_object_id` (raw bytes from `Object::id`).
+/// - `pin_only` — reconciler retry path for `pin_state='pinning'`
+/// rows.
+/// - `download_range` — gateway read path ( V1 reconstruction
+/// materialization and range-serving; does not use it).
 #[async_trait]
 pub trait SiaAdapter: Send + Sync + 'static {
     /// Upload `bytes` to Sia and pin the resulting object.
-    ///
     /// Returns the 32-byte Sia object id on success.
     async fn upload_and_pin(&self, bytes: &[u8]) -> Result<Vec<u8>, SiaAdapterError>;
 
@@ -84,7 +79,6 @@ pub struct SiaAdapterConfig {
 }
 
 /// Default metadata used when wiring `RustSdkAdapter` from `main.rs`.
-///
 /// `AppMetadata::{name, description, service_url}` fields require
 /// `&'static str`, so we hard-code them here. The `id` field is the
 /// `SIAHUB_APP_ID` env var (hex → Hash256) — construct it at boot with
@@ -108,8 +102,7 @@ impl RustSdkAdapter {
     /// Full connect sequence per A1 probe snippet: `Builder::new(url, meta)?
     /// .connected(&AppKey).await?`. Returns `Err(Unavailable)` if the key is
     /// not registered for this metadata.
-    ///
-    /// **P6 startup self-check:** the handshake inside `connected(..)`
+    /// ** startup self-check:** the handshake inside `connected(..)`
     /// verifies account balance + registration with indexd; if that handshake
     /// succeeds the SDK is by-construction ready to form contracts.
     pub async fn connect(cfg: SiaAdapterConfig) -> Result<Self, SiaAdapterError> {
@@ -128,7 +121,7 @@ impl RustSdkAdapter {
         Ok(Self { sdk })
     }
 
-    /// Access the raw Sdk (Plan 02-09 reconciler may use `sdk.object(&id)`
+    /// Access the raw Sdk ( reconciler may use `sdk.object(&id)`
     /// to fetch a persisted Object by id for retry).
     pub fn sdk(&self) -> &Sdk {
         &self.sdk
@@ -168,7 +161,7 @@ impl SiaAdapter for RustSdkAdapter {
             .await
             .map_err(SiaAdapterError::unavailable)?;
 
-        // Object::id() -> Hash256; convert to Vec<u8>.
+        // Object::id -> Hash256; convert to Vec<u8>.
         let id = obj.id();
         let id_bytes: [u8; 32] = id.into();
         Ok(id_bytes.to_vec())
@@ -208,7 +201,7 @@ impl SiaAdapter for RustSdkAdapter {
 }
 
 /// Conversion from `sia_storage::Hash256` <-> u8 array, used by
-/// `Object::id()`. We convert through `Into<[u8;32]>` which the sia_core macro
+/// `Object::id`. We convert through `Into<[u8;32]>` which the sia_core macro
 /// provides. Hash256 does NOT expose a raw-bytes accessor we control — but
 /// we control a `const fn new([u8;32])` and it implements `From<[u8;32]>`
 /// via the macro.

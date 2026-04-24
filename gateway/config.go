@@ -1,12 +1,10 @@
 // Package main — siahub-gateway entry point.
-//
 // config.go owns environment-variable loading. Wave 1 only populates the
-// fields the scaffold actually reads; later plans (03-02 Postgres + Sia adapter,
-// 03-05 cache) parse additional fields and dial their dependencies.
-//
+// fields the scaffold actually reads; later plans ( Postgres + Sia adapter,
+// cache) parse additional fields and dial their dependencies.
 // Invariant: `GATEWAY_URL_SIGNING_KEY` is the only hard-required field at boot
 // (no URL verification without it). Every other field has a sane default per
-// CONTEXT D-24..D-33.
+// CONTEXT ...
 package main
 
 import (
@@ -22,10 +20,10 @@ import (
 // exactly per KEY-DECISIONS §3 so downstream plans do not have to invent
 // parallel casing.
 type Config struct {
-	// Public listener. Phase 3 default `:8081`; Compose publishes to
+	// Public listener. default `:8081`; Compose publishes to
 	// `127.0.0.1:9090` externally via port map.
 	Addr string
-	// Loopback-only metrics listener per D-33; Caddy MUST NOT proxy.
+	// Loopback-only metrics listener per ; Caddy MUST NOT proxy.
 	MetricsAddr string
 
 	// Base64-encoded 32-byte HMAC keys. `URLSigningKey` is MANDATORY;
@@ -39,7 +37,7 @@ type Config struct {
 	// verifies the signature over the canonical string, not the URL prefix.
 	GatewayBaseURL string
 
-	// Consumed by 03-02.
+	// Consumed by .
 	PostgresURL   string
 	SiaIndexerURL string
 	// AppID is the 32-byte Sia app identifier, hex-encoded (64 chars).
@@ -48,11 +46,11 @@ type Config struct {
 	// Wave 1's non-Sia tests still pass.
 	AppID string
 	// AppKey is the Sia app private key as raw hex. `SIAHUB_APP_KEY` / `APP_KEY`.
-	// GOTCHA (Phase 1 §32): `siastorage.Client.PinObject` is by value. Download
+	// GOTCHA ( §32): `siastorage.Client.PinObject` is by value. Download
 	// is ctx-driven; no value/pointer confusion at our call site.
 	AppKey string
 
-	// Consumed by 03-05.
+	// Consumed by .
 	CacheDir       string
 	CacheSizeBytes int64
 }

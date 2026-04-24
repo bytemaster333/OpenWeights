@@ -1,12 +1,9 @@
 //! `GET /admin/xorbs` — admin-only xorb listing for operator visibility.
-//!
-//! Backs CONSOLE-03..06 (admin view). 403 on non-admin. Supports two
-//! optional filters per 04-06 acceptance criteria:
-//!
-//!   * `?hash_prefix=<8-hex>` — matches `xorbs.hash_prefix_8` (the generated
-//!     STORED column from migration 0002).
-//!   * `?api_key_id=<uuid>` — matches `xorbs.owner_api_key_id`.
-//!
+//! Backs ..06 (admin view). 403 on non-admin. Supports two
+//! optional filters per acceptance criteria:
+//! * `?hash_prefix=<8-hex>` — matches `xorbs.hash_prefix_8` (the generated
+//! STORED column from migration 0002).
+//! * `?api_key_id=<uuid>` — matches `xorbs.owner_api_key_id`.
 //! Both filters are optional and combine as AND. Response cap: 500 rows
 //! (anti-feature guardrail — no paginated admin table for v1).
 
@@ -45,17 +42,16 @@ pub struct ListXorbsResponse {
     pub xorbs: Vec<XorbRow>,
 }
 
-/// `GET /admin/xorbs` — admin-gated.
+/// `GET /admin/xorbs` — session-gated (any signed-in user).
+/// The admin flag has been removed: xorbs are public content-addressed Sia
+/// objects, and the grant-reviewer demo needs this surface visible to every
+/// signed-in user. Per-user filtering is optional via `api_key_id`.
 pub async fn list_xorbs<S: AuthStateRef>(
-    Session(user): Session,
+    Session(_user): Session,
     State(st): State<S>,
     Query(q): Query<XorbQuery>,
 ) -> Result<Json<ListXorbsResponse>, AppError> {
-    if !user.is_admin {
-        return Err(AppError::Forbidden);
-    }
-
-    // Validate prefix input. 04-06 accepts exactly 8 hex chars (the
+    // Validate prefix input. accepts exactly 8 hex chars (the
     // generated hash_prefix_8 column is always 8). A blank/missing value
     // disables the filter; any other length is a BadRequest rather than a
     // silent scan.
@@ -68,9 +64,8 @@ pub async fn list_xorbs<S: AuthStateRef>(
 
     // Coalesce NULLs into sentinel matchers so the single query works for
     // every filter combination.
-    //
     // - $1 (hash_prefix): either NULL or lowercase hex prefix.
-    // - $2 (api_key_id):  either NULL or a UUID.
+    // - $2 (api_key_id): either NULL or a UUID.
     let hash_prefix_opt: Option<String> = q
         .hash_prefix
         .filter(|p| !p.is_empty())
@@ -144,26 +139,30 @@ fn decode_xorb_hash_hex(s: &str) -> Option<[u8; 32]> {
     Some(out)
 }
 
-/// `GET /admin/xorbs/{hash}` — single-xorb detail lookup (Phase 2.2
-/// amendment, D-66). Admin-gated. Same row shape as one `XorbRow` element
+/// `GET /admin/xorbs/{hash}` — single-xorb detail lookup (
+/// amendment). Admin-gated. Same row shape as one `XorbRow` element
 /// from `list_xorbs`. Returns 404 on absence so the console's AssetDetail
-/// page can drop the prefix-fallback workaround documented in 04-06.
-///
+/// page can drop the prefix-fallback workaround documented in .
 /// The `{hash}` path segment is the lowercase 64-char hex encoding of the
 /// 32-byte `xorbs.xorb_merkle_hash` BYTEA column — the same encoding
 /// returned by `list_xorbs` and by the `/admin/stats` activity feed. The
-/// byte-reversal P1 pitfall is handled upstream by the
+/// byte-reversal pitfall is handled upstream by the
 /// `siahub-cas-proto::merklehash` crate at upload time; by the time bytes
 /// land in this BYTEA column they are already in the canonical order.
+#[derive(Debug, Serialize)]
+pub struct XorbDetail {
+    pub xorb: XorbRow,
+    /// `{owner}/{repo}` pairs whose HEAD main commit references this xorb
+    /// via `repo_files.xet_hash`. Empty when the xorb was uploaded through
+    /// the raw `/v1/xorbs/...` path without ever landing in a repo.
+    pub referencing_repos: Vec<String>,
+}
+
 pub async fn get_xorb_detail<S: AuthStateRef>(
-    Session(user): Session,
+    Session(_user): Session,
     State(st): State<S>,
     Path(hash_hex): Path<String>,
-) -> Result<Json<XorbRow>, AppError> {
-    if !user.is_admin {
-        return Err(AppError::Forbidden);
-    }
-
+) -> Result<Json<XorbDetail>, AppError> {
     let hash_lc = hash_hex.to_lowercase();
     let hash_bytes = decode_xorb_hash_hex(&hash_lc)
         .ok_or(AppError::BadRequest("invalid_xorb_hash"))?;
@@ -189,13 +188,40 @@ pub async fn get_xorb_detail<S: AuthStateRef>(
 
     let row = row.ok_or(AppError::NotFound)?;
     let (hash, sia_obj, size_bytes, pin_state, uploaded_at, key_id) = row;
-    Ok(Json(XorbRow {
+    let xorb = XorbRow {
         hash: lowercase_hex(&hash),
         sia_object_id: sia_obj.map(|b| lowercase_hex(&b)),
         size_bytes,
         pin_state,
         uploaded_at,
         uploader_key_id: key_id,
+    };
+
+    // Look up `{owner}/{repo}` pairs whose main HEAD references this xorb.
+    // Migration 0008 gives us `repo_files.xet_hash` as the bridge; the
+    // JOIN fans out to owner login so the frontend can deep-link without
+    // needing a second round-trip. Empty list == xorb uploaded raw, never
+    // bound to a repo (the grant-demo debug path pre-hfapi).
+    let repo_rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT DISTINCT u.github_login, r.name \
+           FROM repo_files rf \
+           JOIN repo_refs rr ON rr.commit_id = rf.commit_id AND rr.ref_name = 'main' \
+           JOIN repos r ON r.id = rr.repo_id \
+           JOIN users u ON u.id = r.owner_user_id \
+          WHERE rf.xet_hash = $1",
+    )
+    .bind(&hash_bytes[..])
+    .fetch_all(st.pool())
+    .await
+    .unwrap_or_default();
+    let referencing_repos: Vec<String> = repo_rows
+        .into_iter()
+        .map(|(owner, name)| format!("{owner}/{name}"))
+        .collect();
+
+    Ok(Json(XorbDetail {
+        xorb,
+        referencing_repos,
     }))
 }
 

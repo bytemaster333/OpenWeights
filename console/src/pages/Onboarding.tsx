@@ -10,24 +10,23 @@ import { type CreatedKey, useCreateKey } from "@/hooks/useKeys"
 import { CAS_URL } from "@/lib/api"
 
 /**
- * `/onboarding` page (CONSOLE-02 + KEYS-01 + KEYS-02).
+ * `/onboarding` page ( + + ).
  *
  * On mount, issues exactly one `POST /admin/keys {name:"onboarding",
  * scope:"write"}` and renders the returned plaintext in:
  *
- *   (a) the `<OneTimeKeyModal>` (D-45: beforeunload-guarded one-shot), AND
- *   (b) the `HF_XET_DATA_CUSTOM_HEADERS` line inside the first
- *       `<CopyPasteCard>`.
+ * (a) the `<OneTimeKeyModal>` (: beforeunload-guarded one-shot), AND
+ * (b) the `HF_XET_DATA_CUSTOM_HEADERS` line inside the first
+ * `<CopyPasteCard>`.
  *
  * The plaintext lives in `useState` scoped to this component — React
  * unmounts it on navigation away, at which point the plaintext is
  * garbage-collected. It is never written to `localStorage`,
  * `sessionStorage`, analytics (we have none; see anti-features in
- * notes.md), or any other persistent sink.
+ * .md), or any other persistent sink.
  *
  * Strict-mode double-invoke of the mount effect is guarded with a ref so
- * we never fire two `POST /admin/keys` requests during development.
- */
+ * we never fire two `POST /admin/keys` requests during development.*/
 
 function buildEnvBlock(plaintextKey: string): string {
   return `export HF_XET_DATA_DEFAULT_CAS_ENDPOINT="${CAS_URL}"
@@ -43,7 +42,7 @@ export function OnboardingPage() {
   const create = useCreateKey()
   const navigate = useNavigate()
 
-  // KEYS-01: auto-generate exactly one write-scope key on mount.
+  // : auto-generate exactly one write-scope key on mount.
   // `useRef` guard is redundant with the React Query `isPending` check but
   // belt-and-braces against StrictMode double-invoke in dev.
   useEffect(() => {

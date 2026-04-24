@@ -1,52 +1,83 @@
-import { ArrowLeftIcon, CheckIcon, CopyIcon } from "@phosphor-icons/react"
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  CircleNotchIcon,
+  CloudCheckIcon,
+  CloudSlashIcon,
+  CopyIcon,
+  HashIcon,
+  InfoIcon,
+} from "@phosphor-icons/react"
 import { Link, useParams } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 
-import { UserMenu } from "@/components/UserMenu"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAsset } from "@/hooks/useAssets"
-import { useMe } from "@/hooks/useMe"
+import { formatBytes } from "@/lib/format"
 
 /**
- * `/assets/$hash` page (CONSOLE-06).
+ * `/assets/$hash` — single-xorb detail page.
  *
- * Rendered when an operator clicks a hash in `/assets`. Shows the same
- * per-xorb fields exposed by `/admin/xorbs` plus a `referencing_repos`
- * list. Because 04-01 did not ship `/admin/xorbs/{hash}`, the `useAsset`
- * hook falls back to a filtered list scan (see `useAssets.ts` for the
- * story) — that fallback always returns `referencing_repos: []`, so the
- * "Referencing repos" section is hidden until a follow-up CAS plan lands
- * the detail endpoint with reconstruction-term joins.
- */
+ * Shape: hero (hash + copy + pin state badge) → info grid → Sia section
+ * that explains pin state → referencing repos with deep-links into the
+ * model catalog.*/
 
-function formatBytes(n: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"]
-  let v = n
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i += 1
-  }
-  return `${v.toFixed(v < 10 && i > 0 ? 2 : 0)} ${units[i]}`
+type PinMeta = {
+  label: string
+  variant: "default" | "secondary" | "destructive" | "outline"
+  Icon: React.ComponentType<{ size?: number; weight?: "regular" | "bold" | "fill" | "light" | "thin" | "duotone" }>
+  summary: string
+  detail: string
 }
 
-function pinStateVariant(s: string): "default" | "secondary" | "destructive" | "outline" {
+function pinMeta(s: string): PinMeta {
   switch (s) {
     case "pinned":
-      return "default"
-    case "orphaned":
-      return "destructive"
+      return {
+        label: "Pinned on Sia",
+        variant: "default",
+        Icon: CloudCheckIcon,
+        summary: "Durable on Sia.",
+        detail: "Acknowledged by a Sia host.",
+      }
     case "pinning":
+      return {
+        label: "Sia-pending",
+        variant: "secondary",
+        Icon: CircleNotchIcon,
+        summary: "Waiting for a host contract.",
+        detail: "Reconciler retries every minute.",
+      }
     case "uploading":
-      return "secondary"
+      return {
+        label: "Uploading",
+        variant: "secondary",
+        Icon: CircleNotchIcon,
+        summary: "Bytes arriving.",
+        detail: "Refresh in a few seconds.",
+      }
+    case "orphaned":
+      return {
+        label: "Orphaned",
+        variant: "destructive",
+        Icon: CloudSlashIcon,
+        summary: "Retry budget exhausted.",
+        detail: "Bytes still local. Retries resume when a host is available.",
+      }
     default:
-      return "outline"
+      return {
+        label: s,
+        variant: "outline",
+        Icon: InfoIcon,
+        summary: "Unknown pin state.",
+        detail: "",
+      }
   }
 }
 
-function CopyInlineButton({ value, label }: { value: string; label: string }) {
+function CopyInline({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return
@@ -59,118 +90,171 @@ function CopyInlineButton({ value, label }: { value: string; label: string }) {
       variant="ghost"
       size="sm"
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
-      data-testid={`asset-detail-copy-${label.replace(/\s+/g, "-").toLowerCase()}`}
-      onClick={() => {
+      onClick={() =>
         navigator.clipboard
           .writeText(value)
           .then(() => setCopied(true))
-          .catch(() => {
-            // Clipboard denied — swallow.
-          })
-      }}
+          .catch(() => {})
+      }
     >
-      {copied ? <CheckIcon data-icon="inline-start" /> : <CopyIcon data-icon="inline-start" />}
-      <span className="sr-only">Copy {label}</span>
+      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
     </Button>
   )
 }
 
 export function AssetDetailPage() {
   const { hash } = useParams({ strict: false }) as { hash: string }
-  const { data: user } = useMe()
   const { data, isPending, error } = useAsset(hash)
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-6 flex items-center justify-between">
-        <Link
-          to="/assets"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          data-testid="asset-detail-back"
-        >
-          <ArrowLeftIcon className="size-4" aria-hidden="true" />
-          Back to assets
-        </Link>
-        {user ? <UserMenu user={user} /> : null}
-      </header>
+    <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+      <Link
+        to="/assets"
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeftIcon size={14} />
+        Back to assets
+      </Link>
 
       {isPending && (
-        <div className="flex flex-col gap-4" data-testid="asset-detail-loading">
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-2/3" />
+        <div className="space-y-4" data-testid="asset-detail-loading">
+          <Skeleton className="h-10 w-1/2" />
+          <Skeleton className="h-40 w-full" />
         </div>
       )}
 
       {!isPending && (error || !data) && (
-        <div data-testid="asset-detail-not-found">
-          <h1 className="mb-2 font-heading text-2xl font-medium">Not found</h1>
-          <p className="text-sm text-muted-foreground">
-            No xorb found for hash <code className="font-mono">{hash}</code>.
-            {error ? ` (${error.message})` : null}
-          </p>
+        <div data-testid="asset-detail-not-found" className="rounded border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          No xorb found for hash <code className="font-mono">{hash}</code>.
+          {error ? ` (${error.message})` : null}
         </div>
       )}
 
-      {!isPending && data && (
-        <article className="flex flex-col gap-6">
-          <div>
-            <p className="text-xs tracking-wide text-muted-foreground uppercase">Xorb</p>
-            <div className="mt-1 flex items-start gap-2">
-              <h1 className="font-mono text-base break-all" data-testid="asset-detail-hash">
-                {data.xorb.hash}
-              </h1>
-              <CopyInlineButton value={data.xorb.hash} label="hash" />
+      {!isPending && data && <AssetDetailBody data={data} />}
+    </main>
+  )
+}
+
+function AssetDetailBody({
+  data,
+}: {
+  data: { xorb: import("@/hooks/useAssets").Xorb; referencing_repos: string[] }
+}) {
+  const x = data.xorb
+  const pm = pinMeta(x.pin_state)
+  const Icon = pm.Icon
+
+  return (
+    <>
+      <header className="space-y-3">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+          <HashIcon size={14} weight="light" />
+          Xorb
+        </div>
+        <div className="flex flex-wrap items-start gap-2">
+          <h1
+            className="break-all font-mono text-lg leading-snug"
+            data-testid="asset-detail-hash"
+          >
+            {x.hash}
+          </h1>
+          <CopyInline value={x.hash} label="hash" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Icon size={16} weight="light" />
+          <Badge variant={pm.variant}>{pm.label}</Badge>
+          <span className="text-sm text-muted-foreground">{pm.summary}</span>
+        </div>
+      </header>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <InfoCard label="Size" value={formatBytes(x.size_bytes)} />
+        <InfoCard label="Uploaded" value={new Date(x.uploaded_at).toLocaleString()} />
+        <InfoCard
+          label="Uploader key"
+          value={
+            <code className="font-mono text-xs break-all">
+              {x.uploader_key_id.slice(0, 13)}…
+            </code>
+          }
+        />
+        <InfoCard
+          label="Referenced by"
+          value={`${data.referencing_repos.length} repo${
+            data.referencing_repos.length === 1 ? "" : "s"
+          }`}
+        />
+      </div>
+
+      {/* Sia pin section*/}
+      <section className="rounded border bg-muted/10 p-4">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Sia pin
+        </h2>
+        {x.sia_object_id ? (
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">Object ID</div>
+            <div className="flex items-start gap-2">
+              <code className="break-all font-mono text-xs">{x.sia_object_id}</code>
+              <CopyInline value={x.sia_object_id} label="sia object id" />
             </div>
           </div>
+        ) : (
+          <div className="space-y-1">
+            <div className="text-sm">No Sia object id yet.</div>
+            <p className="text-xs text-muted-foreground">{pm.detail}</p>
+          </div>
+        )}
+      </section>
 
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
-            <dt className="text-muted-foreground">Sia object ID</dt>
-            <dd className="font-mono text-xs break-all" data-testid="asset-detail-sia-object-id">
-              {data.xorb.sia_object_id ? (
-                <span className="inline-flex items-center gap-2">
-                  <span>{data.xorb.sia_object_id}</span>
-                  <CopyInlineButton value={data.xorb.sia_object_id} label="sia object id" />
-                </span>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </dd>
-
-            <dt className="text-muted-foreground">Size</dt>
-            <dd data-testid="asset-detail-size">{formatBytes(data.xorb.size_bytes)}</dd>
-
-            <dt className="text-muted-foreground">Pin state</dt>
-            <dd>
-              <Badge variant={pinStateVariant(data.xorb.pin_state)}>{data.xorb.pin_state}</Badge>
-            </dd>
-
-            <dt className="text-muted-foreground">Uploaded</dt>
-            <dd data-testid="asset-detail-uploaded-at">
-              {new Date(data.xorb.uploaded_at).toLocaleString()}
-            </dd>
-
-            <dt className="text-muted-foreground">Uploader key</dt>
-            <dd className="font-mono text-xs" data-testid="asset-detail-uploader-key">
-              {data.xorb.uploader_key_id}
-            </dd>
-          </dl>
-
-          {data.referencing_repos.length > 0 && (
-            <section data-testid="asset-detail-referencing-repos">
-              <h2 className="mb-2 font-heading text-lg font-medium">Referencing repos</h2>
-              <ul className="list-disc pl-6 text-sm">
-                {data.referencing_repos.map((r) => (
-                  <li key={r}>
-                    <code className="font-mono">{r}</code>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </article>
+      {/* Referencing repos*/}
+      {data.referencing_repos.length > 0 ? (
+        <section
+          data-testid="asset-detail-referencing-repos"
+          className="rounded border bg-muted/10 p-4"
+        >
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Referencing repos
+          </h2>
+          <ul className="space-y-1.5 text-sm">
+            {data.referencing_repos.map((r) => {
+              const [owner, name] = r.split("/")
+              return (
+                <li key={r}>
+                  <Link
+                    to="/models/$owner/$repo"
+                    params={{ owner, repo: name }}
+                    className="font-mono text-primary hover:underline"
+                  >
+                    {r}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ) : (
+        <section className="rounded border border-dashed p-4 text-center text-sm text-muted-foreground">
+          Not referenced by any repo.
+        </section>
       )}
-    </main>
+    </>
+  )
+}
+
+function InfoCard({
+  label,
+  value,
+}: {
+  label: string
+  value: React.ReactNode
+}) {
+  return (
+    <div className="rounded border bg-muted/10 p-3">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 text-sm">{value}</div>
+    </div>
   )
 }

@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# Plan 05-02 — HF round-trip harness.
-#
+#HF round-trip harness.
 # Args: none (configured entirely by env).
-#   CAS_BASE_URL        e.g. http://host:8090/cas   — HF_XET_DATA_DEFAULT_CAS_ENDPOINT
-#   GATEWAY_BASE_URL    e.g. http://host:8090/gateway (not directly used by the
-#                        harness, but exported for xet-core multi-range fetches
-#                        via the signed URLs CAS mints)
-#   SIAHUB_API_KEY      fresh-minted via scripts/issue-test-key.sh
-#   HF_FIXTURE_REPO     sourced from bench/bench.config.sh
-#   HF_FIXTURE_REVISION pinned 40-char hex commit SHA
-#   HF_FIXTURE_KIND     "model" | "dataset" (dataset → --repo-type dataset)
-#
+# CAS_BASE_URL e.g. http://host:8090/cas — HF_XET_DATA_DEFAULT_CAS_ENDPOINT
+# GATEWAY_BASE_URL e.g. http://host:8090/gateway (not directly used by the
+# harness, but exported for xet-core multi-range fetches
+# via the signed URLs CAS mints)
+# SIAHUB_API_KEY fresh-minted via scripts/issue-test-key.sh
+# HF_FIXTURE_REPO sourced from bench/bench.config.sh
+# HF_FIXTURE_REVISION pinned 40-char hex commit SHA
+# HF_FIXTURE_KIND "model" | "dataset" (dataset → --repo-type dataset)
 # Exit codes:
-#   0  byte-identical round-trip confirmed
-#   1  SHA mismatch, or upload/download failure
-#   2  --self-check only (smoke for the image itself)
+# 0 byte-identical round-trip confirmed
+# 1 SHA mismatch, or upload/download failure
+# 2 --self-check only (smoke for the image itself)
 
 set -euo pipefail
 

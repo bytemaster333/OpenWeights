@@ -1,24 +1,19 @@
-//! `GET /admin/setup/status` — consolidated subsystem-probe endpoint (D-53).
-//!
-//! Backs CONSOLE-11 + CONSOLE-12. Admin-gated per D-53 (setup diagnostics
+//! `GET /admin/setup/status` — consolidated subsystem-probe endpoint.
+//! Backs + . Admin-gated per (setup diagnostics
 //! expose indexer URL + OAuth config presence — non-public info).
-//!
 //! Returns a fixed-shape JSON body:
-//!
 //! ```json
 //! {
-//!   "postgres":    {"status":"ok|degraded", "latency_ms": 2.1},
-//!   "redis":       {"status":"ok|degraded", "latency_ms": 0.3},
-//!   "indexd":      {"status":"ok|degraded", "latency_ms": 14.8,
-//!                   "synced": true|false, "url": "http://indexd:9980"},
-//!   "github_oauth": {"configured": true|false},
-//!   "v2_reconstruction_enabled": false
+//! "postgres": {"status":"ok|degraded", "latency_ms": 2.1},
+//! "redis": {"status":"ok|degraded", "latency_ms": 0.3},
+//! "indexd": {"status":"ok|degraded", "latency_ms": 14.8,
+//! "synced": true|false, "url": "http://indexd:9980"},
+//! "github_oauth": {"configured": true|false},
+//! "v2_reconstruction_enabled": false
 //! }
 //! ```
-//!
-//! `v2_reconstruction_enabled` is READ-ONLY (Ambiguity 3 resolution); the
+//! `v2_reconstruction_enabled` is READ-ONLY ( resolution); the
 //! console renders it as a status tile, never as a toggle.
-//!
 //! The endpoint itself returns 200 even if a subsystem is degraded — the
 //! `status` field signals per-subsystem health so the UI can render partial
 //! readiness without hiding working services.

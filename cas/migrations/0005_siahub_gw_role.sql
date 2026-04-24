@@ -1,25 +1,20 @@
 -- 0005_siahub_gw_role.sql — minimal-privilege GRANTs for the siahub_gw role.
 -- Plan: 03-02-sia-postgres-adapter-PLAN.md · Phase: 03-siahub-gateway-core · Wave: 2
---
--- Owner: Phase 3 (siahub-gateway).
---
+-- Owner: (siahub-gateway).
 -- Scope split:
---   * ROLE CREATION happens at Postgres first-boot via
---     `ops/indexd-postgres-init.sql` (where the container entrypoint has env
---     var access and can interpolate SIAHUB_GW_PASSWORD via `\set`).
---   * PER-TABLE GRANTs live here because they depend on the `xorbs` +
---     `usage_log` tables existing — those are created by migrations 0002
---     and 0003, so this migration is sequenced after them.
---
+-- * ROLE CREATION happens at Postgres first-boot via
+-- `ops/indexd-postgres-init.sql` (where the container entrypoint has env
+-- var access and can interpolate SIAHUB_GW_PASSWORD via `\set`).
+-- * PER-TABLE GRANTs live here because they depend on the `xorbs` +
+-- `usage_log` tables existing — those are created by migrations 0002
+-- and 0003, so this migration is sequenced after them.
 -- Idempotent: `GRANT` against an already-granted role is a no-op in
 -- Postgres. Replays against a bootstrapped cluster cost nothing.
---
--- CONTEXT §2 + KEY-DECISIONS D-27: gateway writes 'download' rows to
+-- CONTEXT §2 + KEY-DECISIONS : gateway writes 'download' rows to
 -- `usage_log` directly (OQ-J resolved) and reads `xorb_merkle_hash →
 -- sia_object_id` from `xorbs` filtered on `pin_state = 'pinned'`. Nothing
 -- else. Widening this role requires a NEW migration — do NOT alter grants
--- in place (PITFALL P15 forward-only).
---
+-- in place (PITFALL forward-only).
 -- If the role does not exist (recoverable dev path where init.sql never
 -- ran because the volume was pre-bootstrapped), the DO block raises a
 -- clear error instead of the GRANTs silently no-oping against a missing
@@ -36,13 +31,12 @@ BEGIN
 END
 $$;
 
--- D-29: add 'download' to the usage_event enum. Migration 0003 shipped the
+-- : add 'download' to the usage_event enum. Migration 0003 shipped the
 -- enum with 'xorb_serve' / 'dedup_query' reserved for gateway use, but
--- Phase 3 KEY-DECISIONS D-29 overrides to converge on 'download' (matches
--- Phase 4 CONSOLE-03/04/08 stats surface). Forward-only ALTER; idempotent
+-- KEY-DECISIONS overrides to converge on 'download' (matches
+-- /04/08 stats surface). Forward-only ALTER; idempotent
 -- via IF NOT EXISTS so migration replays are no-ops.
---
--- Note: ALTER TYPE ... ADD VALUE must run OUTSIDE a transaction on older
+-- ALTER TYPE ... ADD VALUE must run OUTSIDE a transaction on older
 -- Postgres versions, but Postgres 12+ allows it in a transaction block.
 -- sqlx::migrate! on Postgres 17 handles this transparently.
 ALTER TYPE usage_event ADD VALUE IF NOT EXISTS 'download';
@@ -52,14 +46,14 @@ GRANT USAGE ON SCHEMA public TO siahub_gw;
 
 -- Read-only on xorbs (the only table gateway reads).
 -- Gateway query: SELECT sia_object_id, size_bytes FROM xorbs
---                WHERE xorb_merkle_hash = $1 AND pin_state = 'pinned';
+-- WHERE xorb_merkle_hash = $1 AND pin_state = 'pinned';
 GRANT SELECT ON TABLE xorbs TO siahub_gw;
 
 -- Insert-only on usage_log (no UPDATE, no DELETE — CAS is append-only).
 -- Gateway writes: event='download' + bytes + api_key_id + cache_hit + occurred_at.
 GRANT INSERT ON TABLE usage_log TO siahub_gw;
 
--- Sequence USAGE lets INSERTs draw nextval() from usage_log.id's BIGSERIAL
+-- Sequence USAGE lets INSERTs draw nextval from usage_log.id's BIGSERIAL
 -- sequence. Omitting this surfaces as `permission denied for sequence
 -- usage_log_id_seq` on every meter write.
 GRANT USAGE ON SEQUENCE usage_log_id_seq TO siahub_gw;

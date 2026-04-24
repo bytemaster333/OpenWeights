@@ -1,15 +1,12 @@
 // sia_test.go — SiaAdapter interface-level tests.
-//
 // We deliberately DO NOT dial Sia in unit tests: the live round-trip lives
-// in bench/thesis/thesis.go (Phase 1) and will land as a `integration`-tagged
-// gateway test in 03-05 when the cache miss path is wired. W2's job is to
+// in bench/thesis/thesis.go and will land as a `integration`-tagged
+// gateway test in when the cache miss path is wired. W2's job is to
 // prove the adapter honors its contract at the interface seam:
-//
-//   - NewSiaAdapter validates env inputs (AppID / AppKey / IndexerURL).
-//   - DownloadRange delegates ctx cancellation to its caller.
-//   - The `SiaDownloader` interface is satisfied by the concrete struct AND
-//     by the fake substitute downstream plans will inject.
-//
+// - NewSiaAdapter validates env inputs (AppID / AppKey / IndexerURL).
+// - DownloadRange delegates ctx cancellation to its caller.
+// - The `SiaDownloader` interface is satisfied by the concrete struct AND
+// by the fake substitute downstream plans will inject.
 // Fake-driven cancellation / success tests give us CI coverage of the
 // SiaDownloader seam without a live Zen testnet dependency.
 package main
@@ -28,8 +25,7 @@ import (
 
 // fakeSia implements SiaDownloader for use in unit tests. Configurable to
 // emit a fixed payload, return a fixed error, or block until ctx cancels.
-//
-// 03-05 additions: `downloadCalls` counter (atomic.Int64) so cache +
+// additions: `downloadCalls` counter (atomic.Int64) so cache +
 // singleflight tests can assert "exactly one SDK call for N concurrent
 // misses"; `sleep` duration to simulate a slow Sia round-trip while the
 // coalescer builds up followers.
@@ -38,7 +34,7 @@ type fakeSia struct {
 	err     error
 	block   bool
 
-	// 03-05: observability for miss-coalescing tests.
+	// : observability for miss-coalescing tests.
 	downloadCalls atomic.Int64
 	sleep         time.Duration
 }
@@ -152,8 +148,8 @@ func TestFakeSia_PropagatesError(t *testing.T) {
 	}
 }
 
-// GATE-10 precondition: ctx cancel halts a blocking download within 1s.
-// The fake substitutes for the SDK here; the live-wire test lands in 03-05.
+// precondition: ctx cancel halts a blocking download within 1s.
+// The fake substitutes for the SDK here; the live-wire test lands in .
 func TestFakeSia_CancellationAbortsDownload(t *testing.T) {
 	t.Parallel()
 	f := &fakeSia{block: true}

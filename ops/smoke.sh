@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
 # ops/smoke.sh — Fresh-machine objective smoke for the hosted demo.
-#
-# Plan 05-04. Replaces the cut DEMO-01 outside-tester <15-min criterion (D-67).
+# . Replaces the cut outside-tester <15-min criterion.
 # Run immediately post-deploy + whenever the owner wants reassurance:
-#
-#   bash ops/smoke.sh                    # default domain: siahub.app
-#   bash ops/smoke.sh example.com        # custom domain
-#
-# Exit semantics (D-71):
-#   0  all checks passed
-#   1  at least one check failed
-#   2  pre-condition skip (no network / missing tool)
-#
+# bash ops/smoke.sh # default domain: siahub.app
+# bash ops/smoke.sh example.com # custom domain
+# Exit semantics:
+# 0 all checks passed
+# 1 at least one check failed
+# 2 pre-condition skip (no network / missing tool)
 # Required env (sourced from .env by default):
-#   SIAHUB_PUBLIC_READ_KEY    read-scoped API key (mint one via the console)
-#   SIAHUB_FIXTURE_FILE_ID    file-id from ops/preload-fixture.sh receipt
-#                             (optional — check #3 degrades to 401-assert if unset)
+# SIAHUB_PUBLIC_READ_KEY read-scoped API key (mint one via the console)
+# SIAHUB_FIXTURE_FILE_ID file-id from ops/preload-fixture.sh receipt
+# (optional — check #3 degrades to 401-assert if unset)
 
 set -uo pipefail
 
@@ -60,7 +56,7 @@ else
   fail "CAS NOT reachable (${CAS}/health)"
 fi
 
-# ─── 2. Dual-SAN cert: both domains share one cert (D-60) ──────────────────────
+# ─── 2. Dual-SAN cert: both domains share one cert ──────────────────────
 echo "[2/5] dual-SAN cert (D-60)"
 SANS="$(
   echo | openssl s_client -connect "${DOMAIN}:443" -servername "${DOMAIN}" 2>/dev/null \
@@ -99,7 +95,7 @@ else
   fi
 fi
 
-# ─── 4. HF download via SiaHub endpoint (optional; D-66 core-value check) ──────
+# ─── 4. HF download via SiaHub endpoint (optional; core-value check) ──────
 echo "[4/5] hf download through ${CAS}"
 HF_BIN=""
 if   command -v hf               >/dev/null 2>&1; then HF_BIN=hf
@@ -128,10 +124,10 @@ else
   fi
 fi
 
-# ─── 5. Range-header integrity through Caddy (P12 regression) ──────────────────
+# ─── 5. Range-header integrity through Caddy ( regression) ──────────────────
 echo "[5/5] range-header integrity (P12)"
 if [[ -x tests/hf-roundtrip/verify-range-integrity.sh ]]; then
-  # Point the P12 regression script at the prod Caddy path-prefix routes.
+  # Point the regression script at the prod Caddy path-prefix routes.
   # It mints a signed URL via the CAS /v1/reconstructions/<xorb> route, then
   # issues single-range + multi-range GETs through Caddy.
   if GATEWAY_VIA_CADDY_URL="${CAS}/gateway" \

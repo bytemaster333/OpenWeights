@@ -1,26 +1,23 @@
 # ops/docker-compose.prod.yml — Production overlay for the hosted demo.
-#
-# Plan 05-04. Compose with:
-#   docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
-#                  --env-file .env up -d
-#
+# . Compose with:
+# docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
+# --env-file .env up -d
 # Differences from the base (dev/CI) compose:
-#   1. Adds a `caddy` service bound to 0.0.0.0:80 + 0.0.0.0:443 (ONLY public ports).
-#   2. Drops the base file's `127.0.0.1:<x>:<y>` port mappings to `expose:` so
-#      CAS/gateway/console/Postgres/Redis/indexd(app)/indexd(admin) are reachable
-#      only on the Compose network — Caddy proxies CAS + gateway + console, and
-#      Postgres/Redis/indexd are internal dependencies of the siahub-* services.
-#   3. Pins `V2_RECONSTRUCTION_ENABLED=true` (Phase 3 default anyway; belt-and-
-#      suspenders for D-65 in production).
-#   4. Sets `GATEWAY_BASE_URL=https://cas.siahub.app/gateway` so signed URLs
-#      minted by CAS reach the gateway via Caddy.
-#   5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in .env for a
-#      testnet demo.
-#   6. `restart: unless-stopped` on every service — reboot-resilient without
-#      requiring a systemd unit.
-#
+# 1. Adds a `caddy` service bound to 0.0.0.0:80 + 0.0.0.0:443 (ONLY public ports).
+# 2. Drops the base file's `127.0.0.1:<x>:<y>` port mappings to `expose:` so
+# CAS/gateway/console/Postgres/Redis/indexd(app)/indexd(admin) are reachable
+# only on the Compose network — Caddy proxies CAS + gateway + console, and
+# Postgres/Redis/indexd are internal dependencies of the siahub-* services.
+# 3. Pins `V2_RECONSTRUCTION_ENABLED=true` ( default anyway; belt-and-
+# suspenders for in production).
+# 4. Sets `GATEWAY_BASE_URL=https://cas.siahub.app/gateway` so signed URLs
+# minted by CAS reach the gateway via Caddy.
+# 5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in .env for a
+# testnet demo.
+# 6. `restart: unless-stopped` on every service — reboot-resilient without
+# requiring a systemd unit.
 # indexd image pinning: `INDEXD_IMAGE` in .env MUST be a digest-pinned ref
-# (e.g. ghcr.io/siafoundation/indexd@sha256:...) rather than `:latest`. Phase 1
+# (e.g. ghcr.io/siafoundation/indexd@sha256:...) rather than `:latest`.
 # close produced the canonical digest; the .env.prod.example file lists it.
 
 services:
@@ -93,8 +90,8 @@ services:
     restart: unless-stopped
 
   # ─── indexd: keep p2p port public (required by Sia protocol), loopback
-  #     the admin/app APIs. The base compose already loopback-binds 9980/9982
-  #     so this is a belt-and-suspenders explicit reset.
+  # the admin/app APIs. The base compose already loopback-binds 9980/9982
+  # so this is a belt-and-suspenders explicit reset.
   indexd:
     # Keep the p2p syncer port (9981) network-reachable; drop the rest.
     ports: !override

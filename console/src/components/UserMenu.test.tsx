@@ -7,13 +7,12 @@ import * as api from "@/lib/api"
 import { UserMenu } from "./UserMenu"
 
 /**
- * P13 regression tests for UserMenu.
+ * regression tests for UserMenu.
  *
  * The single load-bearing invariant: email (null OR `@users.noreply...`)
  * MUST NOT appear in the rendered DOM. The display handle is always
  * `@{login}`. If a future refactor tries to "be helpful" and render the
- * email as a tooltip or secondary label, these tests fail.
- */
+ * email as a tooltip or secondary label, these tests fail.*/
 
 function renderWithProviders(ui: React.ReactElement) {
   const qc = new QueryClient({
@@ -115,7 +114,7 @@ describe("UserMenu sign out", () => {
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("user-menu-signout"))
-      // Let the useMutation promise chain settle inside act().
+      // Let the useMutation promise chain settle inside act.
       await Promise.resolve()
       await Promise.resolve()
     })

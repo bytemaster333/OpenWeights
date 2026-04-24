@@ -6,22 +6,21 @@ import { useMe } from "@/hooks/useMe"
  * Client-side gate for admin-only pages (currently `/setup`).
  *
  * This is a UX convenience, NOT the security boundary. CAS enforces
- * `is_admin` on every admin endpoint server-side (04-01 middleware). A
+ * `is_admin` on every admin endpoint server-side ( middleware). A
  * non-admin who guesses `/setup` would still get 403s from CAS if this
  * component didn't exist — they just wouldn't see the nice "Admins only"
  * message.
  *
  * Intentional choices:
  * - **No redirect.** A redirect to `/dashboard` would be lossy for two
- *   scenarios: (a) a user whose `is_admin` flag was flipped mid-session
- *   and a refresh would fix it, and (b) an operator misreading the URL —
- *   they deserve the clear "Admins only" message, not a silent bounce.
+ * scenarios: (a) a user whose `is_admin` flag was flipped mid-session
+ * and a refresh would fix it, and (b) an operator misreading the URL —
+ * they deserve the clear "Admins only" message, not a silent bounce.
  * - **Pending → neutral loading.** Same copy as `<AuthGuard>` so the two
- *   nested guards (Auth outer, Admin inner) look visually continuous.
+ * nested guards (Auth outer, Admin inner) look visually continuous.
  * - **`useMe` already fetched upstream** — `<AuthGuard>` rendering this
- *   component means the `/admin/me` query has resolved, so the child fetch
- *   is a TanStack Query cache hit.
- */
+ * component means the `/admin/me` query has resolved, so the child fetch
+ * is a TanStack Query cache hit.*/
 export function AdminGuard({ children }: PropsWithChildren) {
   const { data: user, isPending } = useMe()
 

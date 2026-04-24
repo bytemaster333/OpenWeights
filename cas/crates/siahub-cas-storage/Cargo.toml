@@ -8,7 +8,7 @@ license.workspace      = true
 
 [features]
 default  = []
-sia-mock = []   # enabled by the conformance crate; D-22
+sia-mock = []   # enabled by the conformance crate;
 
 [dependencies]
 sia_storage      = { workspace = true }

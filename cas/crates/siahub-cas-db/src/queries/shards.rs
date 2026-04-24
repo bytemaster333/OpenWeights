@@ -1,21 +1,18 @@
 //! shards table queries + transactional reconstruction inserter.
-//!
-//! D-13 option C pipeline (Plan 02-05):
-//!
+//! option C pipeline:
 //! ```text
-//!   BEGIN TRANSACTION
-//!     INSERT INTO shards (shard_hash, sia_object_id=NULL, ..., pin_state='pinning')
-//!       ON CONFLICT (shard_hash) DO NOTHING RETURNING shard_hash
-//!       ├── Some(..) → fresh row → INSERT reconstruction_files + reconstruction_terms
-//!       └── None     → dedup — caller returns {result: Exists}, no further writes
-//!   COMMIT
-//!   — bytes durable in Postgres even if the next step fails (Sia-authoritative:
-//!     reconciler will retry the upload+pin from the parsed cache).
-//!   sdk.upload_and_pin(shard_bytes) → set_pin_state('pinned', Some(real_id))
+//! BEGIN TRANSACTION
+//! INSERT INTO shards (shard_hash, sia_object_id=NULL, ..., pin_state='pinning')
+//! ON CONFLICT (shard_hash) DO NOTHING RETURNING shard_hash
+//! ├── Some(..) → fresh row → INSERT reconstruction_files + reconstruction_terms
+//! └── None → dedup — caller returns {result: Exists}, no further writes
+//! COMMIT
+//!bytes durable in Postgres even if the next step fails (Sia-authoritative:
+//! reconciler will retry the upload+pin from the parsed cache).
+//! sdk.upload_and_pin(shard_bytes) → set_pin_state('pinned', Some(real_id))
 //! ```
-//!
 //! Runtime-checked SQL (same discipline as `queries/xorbs.rs`) so builds are
-//! offline-safe with `SQLX_OFFLINE=true`. Plan 02-11 may upgrade to
+//! offline-safe with `SQLX_OFFLINE=true`. may upgrade to
 //! compile-checked `query!` once `.sqlx/` is refreshed against a live DB.
 
 use sqlx::{PgPool, Postgres, Transaction};
@@ -25,20 +22,17 @@ use crate::queries::reconstruction::{ParsedFile, ParsedTerm};
 use crate::types::XorbPinState;
 
 /// Attempt to claim the shard hash + populate its reconstruction rows.
-///
-/// One transaction covers three tables (D-13 option C):
-///   1. `INSERT INTO shards ... ON CONFLICT DO NOTHING` — atomic PK dedup.
-///   2. `INSERT INTO reconstruction_files` — bulk, one row per `ParsedFile`.
-///   3. `INSERT INTO reconstruction_terms` — bulk, one row per `ParsedTerm`.
-///
+/// One transaction covers three tables ( option C):
+/// 1. `INSERT INTO shards ... ON CONFLICT DO NOTHING` — atomic PK dedup.
+/// 2. `INSERT INTO reconstruction_files` — bulk, one row per `ParsedFile`.
+/// 3. `INSERT INTO reconstruction_terms` — bulk, one row per `ParsedTerm`.
 /// Returns:
-/// * `Ok(true)`  on fresh insert (caller must proceed to Sia upload+pin).
+/// * `Ok(true)` on fresh insert (caller must proceed to Sia upload+pin).
 /// * `Ok(false)` on dedup — the shard already exists with all its
-///   reconstruction rows populated by a prior committed tx;
-///   caller returns `{result: Exists}` with no Sia I/O.
-///
+/// reconstruction rows populated by a prior committed tx;
+/// caller returns `{result: Exists}` with no Sia I/O.
 /// Initial `pin_state` is `'pinning'` (schema default). `sia_object_id` is
-/// left NULL; Plan 02-09 reconciler keys off the NULL + pin_state window.
+/// left NULL; reconciler keys off the NULL + pin_state window.
 pub async fn insert_shard_with_reconstruction(
     tx: &mut Transaction<'_, Postgres>,
     shard_hash: &[u8; 32],
@@ -49,8 +43,8 @@ pub async fn insert_shard_with_reconstruction(
     terms: &[ParsedTerm],
 ) -> Result<bool, sqlx::Error> {
     // (1) Atomic PK dedup — ON CONFLICT DO NOTHING RETURNING tells us whether
-    //     we won the race. If RETURNING yields a row, we own this shard_hash
-    //     for the remainder of the transaction.
+    // we won the race. If RETURNING yields a row, we own this shard_hash
+    // for the remainder of the transaction.
     let row: Option<(Vec<u8>,)> = sqlx::query_as(
         "INSERT INTO shards \
            (shard_hash, sia_object_id, size_bytes, owner_user_id, owner_api_key_id) \
@@ -69,14 +63,14 @@ pub async fn insert_shard_with_reconstruction(
         // Dedup path: the shard row + its reconstruction rows already exist
         // from a prior committed transaction. Do NOT re-insert — the
         // reconstruction_files PK would conflict anyway, and these are
-        // append-only by design (notes.md: no DELETE).
+        // append-only by design (.md: no DELETE).
         return Ok(false);
     }
 
     // (2) Bulk INSERT reconstruction_files via UNNEST of parallel BYTEA[] +
-    //     BIGINT[] arrays. One round-trip; O(n) rows where n = files.len().
-    //     In practice a shard has one file most of the time, but multi-file
-    //     shards are legal per the xet-core wire format.
+    // BIGINT[] arrays. One round-trip; O(n) rows where n = files.len.
+    // In practice a shard has one file most of the time, but multi-file
+    // shards are legal per the xet-core wire format.
     if !files.is_empty() {
         let file_ids: Vec<Vec<u8>> = files.iter().map(|f| f.file_id.to_vec()).collect();
         let shard_hashes: Vec<Vec<u8>> = files.iter().map(|_| shard_hash.to_vec()).collect();
@@ -94,24 +88,24 @@ pub async fn insert_shard_with_reconstruction(
     }
 
     // (3) Bulk INSERT reconstruction_terms via UNNEST of nine parallel arrays.
-    //     All range columns remain END-EXCLUSIVE — see P4 annotation on
-    //     ParsedTerm. No conversion happens here; the shard parser's
-    //     pre-computed values land verbatim.
+    // All range columns remain END-EXCLUSIVE — see annotation on
+    // ParsedTerm. No conversion happens here; the shard parser's
+    // pre-computed values land verbatim.
     if !terms.is_empty() {
         let file_ids: Vec<Vec<u8>> = terms.iter().map(|t| t.file_id.to_vec()).collect();
         let term_indices: Vec<i32> = terms.iter().map(|t| t.term_index).collect();
         let xorb_hashes: Vec<Vec<u8>> = terms.iter().map(|t| t.xorb_hash.to_vec()).collect();
-        // END-EXCLUSIVE — see P4.
+        // END-EXCLUSIVE — see .
         let xorb_starts: Vec<i64> = terms.iter().map(|t| t.xorb_start).collect();
-        // END-EXCLUSIVE — see P4.
+        // END-EXCLUSIVE — see .
         let xorb_ends: Vec<i64> = terms.iter().map(|t| t.xorb_end).collect();
-        // END-EXCLUSIVE — see P4.
+        // END-EXCLUSIVE — see .
         let xorb_byte_starts: Vec<i64> = terms.iter().map(|t| t.xorb_byte_start).collect();
-        // END-EXCLUSIVE — see P4.
+        // END-EXCLUSIVE — see .
         let xorb_byte_ends: Vec<i64> = terms.iter().map(|t| t.xorb_byte_end).collect();
-        // END-EXCLUSIVE — see P4.
+        // END-EXCLUSIVE — see .
         let unpacked_starts: Vec<i64> = terms.iter().map(|t| t.unpacked_start).collect();
-        // END-EXCLUSIVE — see P4.
+        // END-EXCLUSIVE — see .
         let unpacked_ends: Vec<i64> = terms.iter().map(|t| t.unpacked_end).collect();
 
         sqlx::query(
@@ -143,7 +137,6 @@ pub async fn insert_shard_with_reconstruction(
 }
 
 /// Update `pin_state` for a shard. Mirror of `xorbs::set_pin_state`.
-///
 /// When `sia_object_id` is provided, it is written (or overwrites NULL); when
 /// `None`, the existing column value is retained via `COALESCE`. Also bumps
 /// `pin_attempts` and stamps `last_pin_attempt_at` so the reconciler's
@@ -179,7 +172,7 @@ pub async fn set_pin_state(
 }
 
 /// `true` iff the shard has been successfully pinned to Sia. Mirrors
-/// `xorbs::exists_pinned`. Available for future gateway lookups (Phase 3).
+/// `xorbs::exists_pinned`. Available for future gateway lookups.
 pub async fn exists_pinned(
     pool: &PgPool,
     shard_hash: &[u8; 32],
@@ -194,10 +187,9 @@ pub async fn exists_pinned(
     Ok(row.is_some())
 }
 
-/// Batch P18 cross-check: return the subset of `xorb_hashes` that are present
+/// Batch cross-check: return the subset of `xorb_hashes` that are present
 /// in `xorbs` AND in `pin_state='pinned'`. Caller computes the missing set by
 /// difference. One round-trip regardless of list length.
-///
 /// Caller owns surfacing missing xorbs as the 400 `shard_missing_xorbs`
 /// response body.
 pub async fn which_xorbs_are_pinned(

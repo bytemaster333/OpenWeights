@@ -15,8 +15,7 @@ import { KeysPage } from "./Keys"
 /**
  * Keys page tests — exercise the real `useKeys` / `useCreateKey` /
  * `useRevokeKey` hooks end-to-end against a mocked `casFetch`. This keeps
- * the contract between the table UI + the request shape under test.
- */
+ * the contract between the table UI + the request shape under test.*/
 
 type ListedKeyFixture = {
   id: string
@@ -285,7 +284,7 @@ describe("KeysPage", () => {
     })
 
     // After ack, the table shows masked_prefix for the new row and the
-    // plaintext literal is absent from the entire DOM (D-45 guarantee).
+    // plaintext literal is absent from the entire DOM ( guarantee).
     await waitFor(() => {
       expect(screen.getByTestId(`keys-prefix-${CREATED.id}`)).toHaveTextContent(
         CREATED.masked_prefix,

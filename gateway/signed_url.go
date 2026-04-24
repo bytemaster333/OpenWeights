@@ -1,24 +1,18 @@
 // Package main — signed_url.go.
-//
 // Go port of `cas/crates/siahub-cas-core/src/signed_url.rs::UrlSigner::verify`.
 // MUST remain byte-identical to the Rust side. Drift is a grant-story-breaking
 // silent-corruption bug; enforcement lives in `signed_url_test.go` which loads
 // `conformance/fixtures/signed_url_vectors.json` and asserts every vector.
-//
-// Wire contract (RECEIVED §B step 2; CONTEXT D-14):
-//
+// Wire contract (RECEIVED §B step 2; CONTEXT ):
 //	canonical = "v1\n<xorb_hash_hex>\n<exp>\n<r_or_empty>\n<kid>"
-//	sig       = base64url_nopad( HMAC_SHA256(key, canonical) )
-//
+//	sig = base64url_nopad( HMAC_SHA256(key, canonical) )
 // Field order is FIXED: version, hash, exp, range, kid. The separator is
 // EXACTLY one LF (0x0A) — never CRLF, never a colon.
-//
 // Consumer contract (handlers map these):
-//   - VerifyErr{Kind:"expired"}       -> HTTP 403 (gotcha #8; xet-core refreshes on 403)
-//   - VerifyErr{Kind:"bad_signature"} -> HTTP 403 (same; must be indistinguishable from 404)
-//   - VerifyErr{Kind:"malformed:*"}   -> HTTP 400
-//
-// Rotation: try CURRENT key first; fall through to PREV if configured. Phase 2
+// - VerifyErr{Kind:"expired"} -> HTTP 403 (; xet-core refreshes on 403)
+// - VerifyErr{Kind:"bad_signature"} -> HTTP 403 (same; must be indistinguishable from 404)
+// - VerifyErr{Kind:"malformed:*"} -> HTTP 400
+// Rotation: try CURRENT key first; fall through to PREV if configured.
 // mints with CURRENT only, so PREV existing implies a rotation window is open.
 package main
 
@@ -90,7 +84,7 @@ func NewUrlVerifier(currentB64, prevB64 string, ttlSecs int64) (*UrlVerifier, er
 }
 
 // decodeKey accepts standard-base64 (with padding) and validates length.
-// Error messages NEVER include key bytes (matches Phase 2 D-14 / T-02-08-03).
+// Error messages NEVER include key bytes (matches / T-02-08-03).
 func decodeKey(b64 string) ([]byte, error) {
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
@@ -104,7 +98,6 @@ func decodeKey(b64 string) ([]byte, error) {
 
 // CanonicalString rebuilds the exact HMAC input the Rust minter signed. This is
 // the byte-identical target asserted by the cross-language vectors test.
-//
 // `r` nil → empty field. `r` set → "<start>-<end_inclusive>" ASCII decimals,
 // single '-' (0x2D), no spaces.
 func CanonicalString(version, hashHex string, exp uint64, r *[2]uint64, kid uuid.UUID) string {
@@ -118,18 +111,16 @@ func CanonicalString(version, hashHex string, exp uint64, r *[2]uint64, kid uuid
 }
 
 // Verify checks the signed URL query against the given xorb hash path segment.
-//
 // Router integration (03-03+): `xorbHashHex = chi.URLParam(r, "hash")`,
-// `q = r.URL.Query()`, `now = time.Now()`. On VerifyErr handlers MUST respond
+// `q = r.URL.Query`, `now = time.Now`. On VerifyErr handlers MUST respond
 // 403 for `expired`/`bad_signature` and 400 for any `malformed:*` kind.
-//
 // Implementation notes:
-//   - Expiry is checked BEFORE signature to keep timing uniform on expired URLs
-//     and to avoid touching key material unnecessarily.
-//   - `subtle.ConstantTimeCompare` is used for every HMAC compare (T1 spoofed
-//     URL threat mitigation; mirrors Rust `subtle::ConstantTimeEq`).
-//   - Mixed-case hex in the path segment is REJECTED — `MerkleHash::hex`
-//     always emits lowercase, so accepting uppercase would widen the grant.
+// - Expiry is checked BEFORE signature to keep timing uniform on expired URLs
+// and to avoid touching key material unnecessarily.
+// - `subtle.ConstantTimeCompare` is used for every HMAC compare (T1 spoofed
+// URL threat mitigation; mirrors Rust `subtle::ConstantTimeEq`).
+// - Mixed-case hex in the path segment is REJECTED — `MerkleHash::hex`
+// always emits lowercase, so accepting uppercase would widen the grant.
 func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*VerifyOk, *VerifyErr) {
 	// Path-segment shape: 64 lowercase hex chars. Any deviation = 400.
 	if len(xorbHashHex) != 64 {
@@ -163,9 +154,9 @@ func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*
 	}
 
 	var rng *[2]uint64
-	// `url.Values.Has` (Go 1.17+) distinguishes "absent" from "empty-string" —
+	// `url.Values.Has` (Go 1.17+) distinguishes "absent" from "empty-string"
 	// an empty `r=` value still counts as PRESENT and must parse to a range,
-	// matching Rust `url::Url.query_pairs().any(|k| k == "r")`.
+	// matching Rust `url::Url.query_pairs.any(|k| k == "r")`.
 	if q.Has("r") {
 		rs := q.Get("r")
 		parts := strings.SplitN(rs, "-", 2)

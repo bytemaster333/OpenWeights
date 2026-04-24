@@ -3,15 +3,14 @@
  *
  * Design notes:
  * - `credentials: "include"` on every call — the session cookie (`siahub_session`,
- *   D-50) is `HttpOnly; SameSite=Lax; Secure` and set by CAS on OAuth callback.
- * - 403 vs 401 discipline (see gotcha #8 / 04-CONTEXT §4.7):
- *   - 401 — session expired; hooks should route the user to `/login`.
- *   - 403 — signed-URL or admin-scope issue; hooks should surface a toast with
- *     the "Refresh URL" semantics rather than logging the user out.
- *   This module surfaces the raw status via `ApiError`; per-hook code decides.
+ * ) is `HttpOnly; SameSite=Lax; Secure` and set by CAS on OAuth callback.
+ * - 403 vs 401 discipline (see / 04-CONTEXT §4.7):
+ * - 401 — session expired; hooks should route the user to `/login`.
+ * - 403 — signed-URL or admin-scope issue; hooks should surface a toast with
+ * the "Refresh URL" semantics rather than logging the user out.
+ * This module surfaces the raw status via `ApiError`; per-hook code decides.
  * - No auth header is attached. Plaintext API keys live only in the
- *   `POST /admin/keys` response body + onboarding copy-paste (D-45).
- */
+ * `POST /admin/keys` response body + onboarding copy-paste.*/
 
 const CAS_URL = import.meta.env.VITE_CAS_URL ?? "http://localhost:8080"
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "http://localhost:9090"
@@ -61,10 +60,9 @@ export function gatewayFetch<T>(path: string, init: RequestInit = {}): Promise<T
 
 /**
  * Log the current user out. Hits CAS `POST /auth/logout`, which marks the
- * session `revoked_at = NOW()` and clears the `siahub_session` cookie via
- * `Set-Cookie: Max-Age=0` (AUTH-05, 04-CONTEXT §4.6). Callers should clear
- * any cached user data after this resolves.
- */
+ * session `revoked_at = NOW` and clears the `siahub_session` cookie via
+ * `Set-Cookie: Max-Age=0` ( 04-CONTEXT §4.6). Callers should clear
+ * any cached user data after this resolves.*/
 export function logout(): Promise<void> {
   return casFetch<void>("/auth/logout", { method: "POST" })
 }

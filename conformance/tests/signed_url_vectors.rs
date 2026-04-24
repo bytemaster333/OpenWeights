@@ -1,15 +1,13 @@
-//! Cross-language signed-URL vectors — verifies the Phase 2 Rust minter
+//! Cross-language signed-URL vectors — verifies the Rust minter
 //! (`siahub_cas_core::signed_url::UrlSigner`) and an INDEPENDENT Rust HMAC
 //! re-implementation produce byte-identical `canonical_string` +
 //! `expected_sig_b64url_nopad` for every vector in
 //! `conformance/fixtures/signed_url_vectors.json`.
-//!
-//! Why re-implement the HMAC here? The Phase 3 Go gateway will hash in Go; if
+//! Why re-implement the HMAC here? The Go gateway will hash in Go; if
 //! the only Rust signature consumer were `siahub_cas_core::signed_url`
 //! itself, a bug shared with the minter would never surface. This test
 //! re-derives the signature with the `hmac` + `sha2` crates directly — a
 //! fresh execution path — and confirms the two Rust paths agree.
-//!
 //! This test runs WITHOUT Docker or fixtures — it's a pure-CPU vector
 //! verification.
 
@@ -91,14 +89,13 @@ fn minter_produces_expected_signature() {
     // in the prev slot for `signed_by == "prev"`). Mint for the vector's
     // inputs and confirm the resulting `sig` query param equals
     // `expected_sig_b64url_nopad`.
-    //
     // Covers:
-    //   - the `mint_v1` happy path
-    //   - the rotation-key vector `v1_rotation_prev_key` (loaded with the
-    //     rotating key as the CURRENT key for minting purposes, because
-    //     `UrlSigner::mint_v1` always uses `key_current`; the vector proves
-    //     the SAME key material signs to the SAME bytes whether it's
-    //     "current" or "prev" — mint-side symmetry).
+    // - the `mint_v1` happy path
+    // - the rotation-key vector `v1_rotation_prev_key` (loaded with the
+    // rotating key as the CURRENT key for minting purposes, because
+    // `UrlSigner::mint_v1` always uses `key_current`; the vector proves
+    // the SAME key material signs to the SAME bytes whether it's
+    // "current" or "prev" — mint-side symmetry).
     let vectors = load_vectors();
     for v in &vectors {
         let base = url::Url::parse("https://gateway.test").unwrap();
@@ -130,7 +127,6 @@ fn verify_accepts_vector_signatures() {
     // appropriate slot (current or prev), re-construct a URL via
     // `UrlSigner::mint_v1` with a FRESH current key, and assert that
     // `verify` accepts when the vector's key is threaded as key_prev.
-    //
     // Proves the rotation path works end-to-end.
     let vectors = load_vectors();
     for v in &vectors {
@@ -151,7 +147,7 @@ fn verify_accepts_vector_signatures() {
         assert!(!verified.accepted_by_prev_key);
 
         // 2. Build a DIFFERENT current key + put VEC's key in prev. Verify
-        //    must accept AND flag `accepted_by_prev_key=true`.
+        // must accept AND flag `accepted_by_prev_key=true`.
         let other_key_b64 = base64::engine::general_purpose::STANDARD
             .encode([0xAB; 32]);
         let signer_rotated = UrlSigner::new(
@@ -176,7 +172,7 @@ fn verify_accepts_vector_signatures() {
 
 #[test]
 fn fixture_is_tracked_at_pinned_revision() {
-    // Sanity: the fixture constants committed in Plan 02-08 must still
+    // Sanity: the fixture constants committed in must still
     // anchor to the pinned reference xorb hash. Any drift = planning step
     // missed.
     let vectors = load_vectors();
