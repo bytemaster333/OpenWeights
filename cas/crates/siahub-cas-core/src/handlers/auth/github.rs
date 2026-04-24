@@ -122,29 +122,19 @@ pub async fn callback<S: GithubOAuthState>(
             .unwrap_or_default()
     };
 
-    // (6) Upsert user on numeric id (P13; ). We also use the
-    // `xmax = 0` trick on the RETURNING clause to determine whether
-    // this is a brand-new row (INSERT) vs an UPDATE; new users land
-    // on `/onboarding`, returning users on `/dashboard`.
+    // upsert user on numeric github id
     let (_user_id, is_new_user) = upsert_user(&st, &profile, email.as_deref()).await?;
 
-    // (7) Mint a session.
     let minted = mint_session(st.pool(), profile.id)
         .await
         .map_err(CallbackError::Db)?;
     let set_cookie = session_cookie_header(minted.session_id);
 
-    // (8) Redirect to the right landing page on the console side.
+    // new users go to /keys (onboarding merged into keys page); returning users to /dashboard
     let destination = if is_new_user {
-        format!(
-            "{}/onboarding",
-            st.console_base_url().trim_end_matches('/')
-        )
+        format!("{}/keys", st.console_base_url().trim_end_matches('/'))
     } else {
-        format!(
-            "{}/dashboard",
-            st.console_base_url().trim_end_matches('/')
-        )
+        format!("{}/dashboard", st.console_base_url().trim_end_matches('/'))
     };
 
     let mut headers = HeaderMap::new();
