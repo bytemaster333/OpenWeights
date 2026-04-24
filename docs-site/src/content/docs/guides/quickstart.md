@@ -15,8 +15,9 @@ HF_TOKEN=<your-key> HF_ENDPOINT=https://siahub.app \
   hf upload <owner>/<repo> ./files
 ```
 
-Replace `<owner>` with your GitHub login. `<repo>` can be anything that
-matches `[a-z0-9._-]{1,96}`.
+Replace `<owner>` with your GitHub login. `<repo>` can be any
+alphanumeric string (up to 96 chars) containing `-`, `_`, or `.` — it
+just can't start with a dot.
 
 ## 3. Download
 

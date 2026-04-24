@@ -3,28 +3,21 @@ title: Architecture
 description: What runs where
 ---
 
-## Components
+A SiaHub deployment is five long-running services behind a reverse
+proxy, plus Postgres and Redis for state. All services live on the
+same Docker Compose network.
 
-```
-     hf CLI
-        |
-        v
-  +-----------+      +-----------+     +----------+
-  |  console  |      |    cas    |---->|   Sia    |
-  |  (React)  |----->|  (Rust)   |     | (indexd) |
-  +-----------+      +-----------+     +----------+
-                          |    ^
-                          v    |
-                     +-----------+
-                     |  gateway  |
-                     |   (Go)    |
-                     +-----------+
-                          |
-                          v
-                     +-----------+
-                     | Sia hosts |
-                     +-----------+
-```
+## Request flow
+
+An upload with `hf upload` hits `cas`, which classifies the payload
+(inline LFS vs xet-chunk), writes metadata to Postgres, and caches
+large buffers in `xorb_bodies` while an async worker pins them to Sia
+via `indexd`.
+
+A download hits `cas` first (resolve + repo lookup), which issues a
+signed URL pointing at `gateway`. The client follows the redirect to
+`gateway`, which verifies the signature, range-fetches from Sia
+hosts, and streams bytes back.
 
 ## cas (Rust, Axum)
 
@@ -62,10 +55,11 @@ contracts. SiaHub talks to its admin API for host geolocation
 
 | Table | Holds |
 |---|---|
-| `users`, `api_keys`, `sessions` | Auth state |
+| `users`, `api_keys`, `sessions`, `oauth_state` | Auth state |
 | `repos`, `repo_refs`, `repo_commits`, `repo_files` | Model catalog |
 | `xorbs`, `shards` | Xet-protocol objects |
 | `xorb_bodies` | Local cache of xorb bytes (until pinned) |
 | `lfs_objects` | Inline small-file LFS content |
 | `repo_downloads` | Per-repo daily download counters |
 | `usage_log` | Append-only event log |
+| `reconstruction_files`, `reconstruction_terms` | Xet reconstruction manifests |
