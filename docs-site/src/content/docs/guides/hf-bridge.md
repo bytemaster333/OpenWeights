@@ -32,10 +32,3 @@ already be done on your machine.
   author profile + search, with no download button. Visitors who follow
   the README instructions hit SiaHub for the weights.
 - **On SiaHub**: unchanged — your upload stays authoritative.
-
-## Caveats
-
-- HF's "Use in transformers" button won't work — there are no weights
-  on HF to back it. That's the tradeoff.
-- If you rename or unlist on SiaHub, update the HF pointer README
-  manually; the bridge is one-shot.
