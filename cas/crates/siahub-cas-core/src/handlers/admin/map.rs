@@ -108,21 +108,20 @@ pub async fn get_map<S: MapState>(
     let hosts = upstream
         .into_iter()
         .filter_map(|h| {
-            // Only surface hosts we can actually plot. Null coords are
-            // common on freshly-announced hosts before GeoIP lookup
-            // completes.
+            // only surface hosts we can plot. null coords are common on
+            // freshly-announced hosts before geoip lookup completes.
+            // note: we already query ?usable=true upstream, so every
+            // returned host is usable — treat h.usable as true regardless
+            // of whether the field was present in the response.
             let (Some(lat), Some(lon)) = (h.latitude, h.longitude) else {
                 return None;
             };
-            if !h.usable {
-                return None;
-            }
             Some(MapHost {
                 public_key: h.public_key,
                 country_code: h.country_code,
                 lat,
                 lon,
-                usable: h.usable,
+                usable: true,
                 contract_count: h.contract_count,
             })
         })
