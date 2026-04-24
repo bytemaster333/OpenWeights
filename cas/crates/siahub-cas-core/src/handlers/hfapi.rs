@@ -871,32 +871,25 @@ pub async fn commit<S: HfApiState>(
                 to_insert.push((f.path.clone(), None, Some(oid_bytes), size));
                 continue;
             }
-            // xet-transferred file: bytes live in `xorbs`, not lfs_objects.
-            // pick the most recent unbound xorb for this api key, EXCLUDING
-            // any xorb already claimed by an earlier file in this commit
-            // (we haven't flushed repo_files yet, so SQL's LEFT JOIN alone
-            // can't catch intra-commit collisions).
-            let already_claimed_in_commit: Vec<Vec<u8>> = to_insert
-                .iter()
-                .filter_map(|(_, xh, _, _)| xh.clone())
-                .collect();
-            let claim: Option<(Vec<u8>, i64)> = sqlx::query_as(
-                "SELECT x.xorb_merkle_hash, x.size_bytes \
+            // xet-transferred file: bytes live in `xorbs`. multiple files
+            // from the same upload session may share a xorb because xet
+            // packs chunks across files for dedup; link each file to the
+            // most recent xorb the caller uploaded. downloads serve the
+            // full xorb body (ok when whole-xorb = whole-file, degraded
+            // when multiple files share).
+            let claim: Option<(Vec<u8>,)> = sqlx::query_as(
+                "SELECT x.xorb_merkle_hash \
                    FROM xorbs x \
-                   LEFT JOIN repo_files rf ON rf.xet_hash = x.xorb_merkle_hash \
                   WHERE x.owner_api_key_id = $1 \
-                    AND rf.xet_hash IS NULL \
-                    AND NOT (x.xorb_merkle_hash = ANY($2)) \
                   ORDER BY x.uploaded_at DESC \
                   LIMIT 1",
             )
             .bind(ctx.api_key_id)
-            .bind(&already_claimed_in_commit)
             .fetch_optional(pool)
             .await?;
             let size = f.size.ok_or(AppError::BadRequest("missing_size"))?;
             match claim {
-                Some((xet_hash, _size)) => {
+                Some((xet_hash,)) => {
                     to_insert.push((f.path.clone(), Some(xet_hash), None, size));
                 }
                 None => {
