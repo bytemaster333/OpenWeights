@@ -39,17 +39,6 @@ HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
 HF_ENDPOINT=http://localhost:8080 hf download <owner>/<repo>
 ```
 
-## layout
-
-```
-cas/          rust CAS + hf-api-compat (axum 0.8)
-gateway/      go gateway (chi v5)
-console/      react console (vite + tanstack)
-hf-proxy/     go reverse proxy (rewrites X-Xet-Cas-Url)
-ops/          docker-compose + caddy + env
-docs-site/    public documentation (astro + starlight)
-```
-
 ## license
 
 apache-2.0.
