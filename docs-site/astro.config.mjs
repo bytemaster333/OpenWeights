@@ -7,6 +7,7 @@ export default defineConfig({
     starlight({
       title: "SiaHub Docs",
       description: "Xet-compatible model hub on Sia",
+      favicon: "/favicon.svg",
       sidebar: [
         {
           label: "Start here",
