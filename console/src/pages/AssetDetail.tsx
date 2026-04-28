@@ -42,6 +42,15 @@ function pinMeta(s: string): PinMeta {
         summary: "Durable on Sia.",
         detail: "Acknowledged by a Sia host.",
       }
+    case "inline":
+      return {
+        label: "Stored inline",
+        variant: "outline",
+        Icon: InfoIcon,
+        summary: "Stored inline in metadata DB.",
+        detail:
+          "Small LFS file kept as a Postgres BYTEA blob, not pinned to Sia. Bulk model bytes (xet xorbs) go through the Sia path.",
+      }
     case "pinning":
       return {
         label: "Sia-pending",
@@ -186,12 +195,17 @@ function AssetDetailBody({
         />
       </div>
 
-      {/* Sia pin section*/}
+      {/* Sia pin / inline storage section*/}
       <section className="rounded border bg-muted/10 p-4">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Sia pin
+          {x.pin_state === "inline" ? "Storage" : "Sia pin"}
         </h2>
-        {x.sia_object_id ? (
+        {x.pin_state === "inline" ? (
+          <div className="space-y-1">
+            <div className="text-sm">Stored inline (Postgres BYTEA).</div>
+            <p className="text-xs text-muted-foreground">{pm.detail}</p>
+          </div>
+        ) : x.sia_object_id ? (
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Object ID</div>
             <div className="flex items-start gap-2">

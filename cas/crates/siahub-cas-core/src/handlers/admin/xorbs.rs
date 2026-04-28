@@ -80,11 +80,15 @@ pub async fn list_xorbs<S: AuthStateRef>(
         DateTime<Utc>,
         Uuid,
     );
-    // unified blob listing: real xorbs (when xet writes lands) + lfs_objects
-    // (the basic-transfer path that backs every upload right now).
-    // lfs rows synthesize a uploader_key_id derived from the most-recent
-    // repo_files row that references the oid; falls back to a zero UUID
-    // when the lfs object isn't yet bound to any repo.
+    // unified blob listing: real xorbs (xet write path) + lfs_objects
+    // (the small-file legacy path that stores bytes inline as BYTEA in
+    // Postgres). lfs rows synthesize pin_state='inline' to truthfully
+    // distinguish "stored as a metadata blob, never on Sia" from "pinned
+    // on Sia" — the column is `xorbs.pin_state::text` cast plus a literal
+    // 'inline' for the LFS branch, NOT a value from the xorb_pin_state
+    // enum. uploader_key_id is derived from the most-recent repo_files
+    // row that references the oid; falls back to a zero UUID when the
+    // lfs object isn't yet bound to any repo.
     let rows: Vec<XorbDbRow> = sqlx::query_as(
         "WITH base AS ( \
              SELECT xorb_merkle_hash AS hash, sia_object_id, size_bytes, \
@@ -93,7 +97,7 @@ pub async fn list_xorbs<S: AuthStateRef>(
                FROM xorbs \
              UNION ALL \
              SELECT lo.oid AS hash, NULL::bytea AS sia_object_id, \
-                    lo.size_bytes, 'pinned'::text AS pin_state, \
+                    lo.size_bytes, 'inline'::text AS pin_state, \
                     lo.created_at AS uploaded_at, \
                     COALESCE( \
                       ( SELECT ak.id \
@@ -208,7 +212,7 @@ pub async fn get_xorb_detail<S: AuthStateRef>(
           WHERE xorb_merkle_hash = $1 \
           UNION ALL \
           SELECT lo.oid, NULL::bytea, lo.size_bytes, \
-                 'pinned'::text, lo.created_at, \
+                 'inline'::text, lo.created_at, \
                  COALESCE( \
                    ( SELECT ak.id FROM api_keys ak \
                        JOIN repos r2 ON r2.owner_user_id = ak.user_id \

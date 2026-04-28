@@ -22,7 +22,15 @@ export type Xorb = {
   hash: string
   sia_object_id: string | null
   size_bytes: number
-  pin_state: "uploading" | "pinning" | "pinned" | "orphaned"
+  /**
+   * Real xorbs go through the Sia reconciler (uploading → pinning → pinned,
+   * orphaned on retry-budget exhaustion). The synthetic 'inline' state is
+   * only emitted by the admin handler's UNION over `lfs_objects`: small
+   * legacy LFS files are stored as Postgres BYTEA and never reach Sia, so
+   * they're labeled distinctly to avoid the "Pinned on Sia" + "no Sia
+   * object id" contradiction.
+   */
+  pin_state: "uploading" | "pinning" | "pinned" | "orphaned" | "inline"
   uploaded_at: string
   uploader_key_id: string
 }
