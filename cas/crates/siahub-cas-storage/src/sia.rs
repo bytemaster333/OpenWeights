@@ -76,6 +76,9 @@ pub struct SiaAdapterConfig {
     pub app_key_bytes: [u8; 32],
     /// Application metadata (locked at compile time — see [`DEFAULT_APP_META`]).
     pub app_meta: AppMetadata,
+    /// Erasure coding redundancy for uploads. Demos with few hosts must
+    /// dial this below the SDK default of 10/20.
+    pub redundancy: RedundancyConfig,
 }
 
 /// Default metadata used when wiring `RustSdkAdapter` from `main.rs`.
@@ -87,16 +90,47 @@ pub const DEFAULT_APP_META_NAME: &str = "SiaHub CAS";
 pub const DEFAULT_APP_META_DESC: &str = "SiaHub content-addressed storage service";
 pub const DEFAULT_APP_META_URL: &str = "https://siahub.app";
 
+/// Erasure-coding redundancy used on every upload. The SDK default is
+/// 10 data + 20 parity = 30 hosts per slab — production-grade but
+/// unrunnable on a small demo deployment with only a handful of formed
+/// contracts. We expose this via env so operators can dial it down for a
+/// 6-host demo (e.g. 2 + 4) without recompiling.
+#[derive(Debug, Clone, Copy)]
+pub struct RedundancyConfig {
+    pub data_shards: u8,
+    pub parity_shards: u8,
+}
+
+impl Default for RedundancyConfig {
+    fn default() -> Self {
+        Self {
+            data_shards: 10,
+            parity_shards: 20,
+        }
+    }
+}
+
 /// Thin wrapper around `sia_storage::Sdk` implementing [`SiaAdapter`].
 pub struct RustSdkAdapter {
     sdk: Sdk,
+    redundancy: RedundancyConfig,
 }
 
 impl RustSdkAdapter {
     /// Construct directly from a pre-built `Sdk`. Used in tests and after the
     /// builder handshake in `main.rs`.
     pub fn from_sdk(sdk: Sdk) -> Self {
-        Self { sdk }
+        Self {
+            sdk,
+            redundancy: RedundancyConfig::default(),
+        }
+    }
+
+    /// Override the erasure-coding redundancy. Call once after `from_sdk` /
+    /// `connect` based on operator env config.
+    pub fn with_redundancy(mut self, redundancy: RedundancyConfig) -> Self {
+        self.redundancy = redundancy;
+        self
     }
 
     /// Full connect sequence per A1 probe snippet: `Builder::new(url, meta)?
@@ -106,6 +140,7 @@ impl RustSdkAdapter {
     /// verifies account balance + registration with indexd; if that handshake
     /// succeeds the SDK is by-construction ready to form contracts.
     pub async fn connect(cfg: SiaAdapterConfig) -> Result<Self, SiaAdapterError> {
+        let redundancy = cfg.redundancy;
         let app_key = AppKey::import(cfg.app_key_bytes);
         let builder =
             Builder::new(&cfg.indexd_url, cfg.app_meta).map_err(SiaAdapterError::unavailable)?;
@@ -118,7 +153,7 @@ impl RustSdkAdapter {
                     "sia_storage::Builder::connected returned None — app key not registered"
                 ))
             })?;
-        Ok(Self { sdk })
+        Ok(Self { sdk, redundancy })
     }
 
     /// Access the raw Sdk ( reconciler may use `sdk.object(&id)`
@@ -149,9 +184,17 @@ impl SiaAdapter for RustSdkAdapter {
         let reader = Cursor::new(owned);
 
         // A1 probe: upload takes Object by VALUE and returns a NEW Object.
+        // Redundancy is operator-tunable so a small demo deployment with
+        // ~6 contracts can still write (the SDK default of 10+20=30 hosts
+        // would `queue error: not enough initial hosts` here otherwise).
+        let opts = UploadOptions {
+            data_shards: self.redundancy.data_shards,
+            parity_shards: self.redundancy.parity_shards,
+            ..UploadOptions::default()
+        };
         let obj: Object = self
             .sdk
-            .upload(Object::default(), reader, UploadOptions::default())
+            .upload(Object::default(), reader, opts)
             .await
             .map_err(SiaAdapterError::unavailable)?;
 

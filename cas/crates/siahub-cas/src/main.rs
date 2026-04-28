@@ -188,10 +188,32 @@ async fn build_sia_adapter(
         callback_url: None,
     };
 
+    // Redundancy from env. Demo deployments with few hosts must dial this
+    // below the SDK default of 10+20=30 (e.g. 2+4 for a 6-host demo). Both
+    // values must fit in u8 and total ≤ formed contracts.
+    let data_shards: u8 = std::env::var("SIAHUB_DATA_SHARDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
+    let parity_shards: u8 = std::env::var("SIAHUB_PARITY_SHARDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(20);
+    tracing::info!(
+        data_shards,
+        parity_shards,
+        total = data_shards as u16 + parity_shards as u16,
+        "sia upload redundancy configured"
+    );
+
     let sia_cfg = siahub_cas_storage::sia::SiaAdapterConfig {
         indexd_url: cfg.indexd_url.clone(),
         app_key_bytes,
         app_meta: meta,
+        redundancy: siahub_cas_storage::sia::RedundancyConfig {
+            data_shards,
+            parity_shards,
+        },
     };
 
     let adapter = siahub_cas_storage::sia::RustSdkAdapter::connect(sia_cfg)
