@@ -153,7 +153,10 @@ where
                 terms: Vec::new(),
             }
         }
-        Err(e) => return Err(map_parse_err_with_metrics(e, st.metrics().as_ref())),
+        Err(e) => {
+            tracing::warn!(err = %e, bytes = collected.len(), "shard parse error");
+            return Err(map_parse_err_with_metrics(e, st.metrics().as_ref()));
+        }
     };
 
     // (5) cross-check — BEFORE opening the DB transaction so a malformed
