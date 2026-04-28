@@ -2,6 +2,7 @@ import {
   ClockIcon,
   CubeIcon,
   GaugeIcon,
+  GlobeIcon,
   KeyIcon,
   RocketLaunchIcon,
 } from "@phosphor-icons/react"
@@ -13,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useKeys } from "@/hooks/useKeys"
 import { useMe } from "@/hooks/useMe"
 import { useModels } from "@/hooks/useModels"
-import { useStats } from "@/hooks/useStats"
+import { usePlatformStats, useStats } from "@/hooks/useStats"
 import { CAS_URL } from "@/lib/api"
 import { eventHasCacheSemantics, formatEvent } from "@/lib/eventLabels"
 import { formatBytes, formatRelative } from "@/lib/format"
@@ -36,6 +37,7 @@ const RECENT_ACTIVITY_LIMIT = 5
 export function DashboardPage() {
   const { data: user } = useMe()
   const { data: stats, isPending: statsPending } = useStats()
+  const { data: platform, isPending: platformPending } = usePlatformStats()
   const { data: keys } = useKeys()
   const { data: models, isPending: modelsPending } = useModels()
 
@@ -73,32 +75,72 @@ export function DashboardPage() {
         </p>
       </header>
 
-      {/* KPI strip*/}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatsTile
-          label="Bytes uploaded"
-          loading={statsPending}
-          value={stats ? formatBytes(stats.total_bytes_stored) : "—"}
-          subtext="Sia-pending + Sia-pinned"
-        />
-        <StatsTile
-          label="Downloads"
-          loading={modelsPending}
-          value={String(myDownloadsTotal)}
-          subtext="on your models"
-        />
-        <StatsTile
-          label="Your models"
-          loading={modelsPending}
-          value={String(myModels.length)}
-          subtext={`${models?.length ?? 0} total`}
-        />
-        <StatsTile
-          label="API keys"
-          value={String(keys?.length ?? 0)}
-          subtext="active"
-        />
-      </div>
+      {/* Platform-wide totals — same numbers for everyone signed in*/}
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <GlobeIcon size={14} weight="light" /> Platform totals
+        </h2>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatsTile
+            label="Models"
+            loading={platformPending}
+            value={platform ? String(platform.total_models) : "—"}
+            subtext={
+              platform ? `${platform.total_users} contributor${platform.total_users === 1 ? "" : "s"}` : ""
+            }
+          />
+          <StatsTile
+            label="Stored"
+            loading={platformPending}
+            value={platform ? formatBytes(platform.total_size_bytes) : "—"}
+            subtext={platform ? `${platform.total_files} file${platform.total_files === 1 ? "" : "s"}` : ""}
+          />
+          <StatsTile
+            label="Downloads"
+            loading={platformPending}
+            value={platform ? String(platform.total_downloads) : "—"}
+            subtext={platform ? `+${platform.downloads_24h} today` : ""}
+          />
+          <StatsTile
+            label="Bytes served"
+            loading={platformPending}
+            value={platform ? formatBytes(platform.total_bytes_served) : "—"}
+            subtext={platform ? `+${formatBytes(platform.bytes_served_24h)} today` : ""}
+          />
+        </div>
+      </section>
+
+      {/* User KPI strip*/}
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <GaugeIcon size={14} weight="light" /> Your footprint
+        </h2>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatsTile
+            label="Bytes uploaded"
+            loading={statsPending}
+            value={stats ? formatBytes(stats.total_bytes_stored) : "—"}
+            subtext="Sia-pending + Sia-pinned"
+          />
+          <StatsTile
+            label="Downloads"
+            loading={modelsPending}
+            value={String(myDownloadsTotal)}
+            subtext="on your models"
+          />
+          <StatsTile
+            label="Your models"
+            loading={modelsPending}
+            value={String(myModels.length)}
+            subtext={`${models?.length ?? 0} total`}
+          />
+          <StatsTile
+            label="API keys"
+            value={String(keys?.length ?? 0)}
+            subtext="active"
+          />
+        </div>
+      </section>
 
       {/* Two-column: Your models / Recent activity*/}
       <div className="grid gap-6 lg:grid-cols-2">

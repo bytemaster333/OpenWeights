@@ -1001,10 +1001,10 @@ pub async fn commit<S: HfApiState>(
 
     tx.commit().await?;
 
-    // hf_hub expects `commitOid` to look vaguely git-ish. Our commit_id
-    // is a BIGSERIAL; stringify as 40-hex by zero-padding so the client's
-    // hash-shape check passes.
-    let oid_str = format!("{:040x}", commit_id);
+    // hf_hub expects `commitOid` to look vaguely git-ish. We hash the
+    // BIGSERIAL commit_id deterministically into a 40-hex value so the URL
+    // doesn't display as 38 zeroes followed by the counter.
+    let oid_str = commit_oid_for(commit_id);
     // `commit_url` is passed through hf_hub's `RepoUrl` parser, which
     // only accepts URLs whose authority matches the client's
     // HF_ENDPOINT. We don't know that endpoint at config time (reverse
@@ -1035,6 +1035,24 @@ pub async fn commit<S: HfApiState>(
 // ---------------------------------------------------------------------------
 // Helpers.
 // ---------------------------------------------------------------------------
+
+/// Build a git-ish 40-hex commit identifier from the BIGSERIAL `commit_id`.
+/// hf_hub only uses `commitOid` as an opaque string, so any 40-char hex
+/// passes its hash-shape check. SHA-256 over a stable salt-prefixed input
+/// gives a deterministic, repo-uniformly-distributed value that doesn't
+/// look like a 38-zero-padded counter to humans inspecting the URL.
+pub(crate) fn commit_oid_for(commit_id: i64) -> String {
+    let mut h = Sha256::new();
+    h.update(b"siahub:commit:");
+    h.update(commit_id.to_be_bytes());
+    let digest = h.finalize();
+    let mut out = String::with_capacity(40);
+    for b in &digest[..20] {
+        use std::fmt::Write as _;
+        let _ = write!(out, "{b:02x}");
+    }
+    out
+}
 
 /// Look up caller's GitHub login (or synthetic `hf:...` for xet-JWT users).
 async fn caller_login(pool: &sqlx::PgPool, user_id: i64) -> Result<String, AppError> {
@@ -1260,6 +1278,80 @@ fn looks_like_jwt_local(token: &str) -> bool {
 // ---------------------------------------------------------------------------
 // GET /api/models — public catalog list.
 // ---------------------------------------------------------------------------
+// Platform-wide aggregate counters. Powers the "platform totals" KPIs on
+// `/dashboard` and `/stats` — every signed-in user sees the same numbers
+// (HF home page parallel: total models, total downloads). Anonymous-readable
+// because the Console mounts these tiles before the session resolves.
+
+#[derive(Debug, Serialize)]
+pub struct PlatformStats {
+    pub total_models: i64,
+    pub total_users: i64,
+    pub total_files: i64,
+    pub total_size_bytes: i64,
+    pub total_downloads: i64,
+    pub total_bytes_served: i64,
+    pub downloads_24h: i64,
+    pub bytes_served_24h: i64,
+}
+
+pub async fn platform_stats<S: HfApiState>(
+    State(st): State<S>,
+) -> Result<Json<PlatformStats>, AppError> {
+    // One round-trip. Each subselect is independently scoped so an empty
+    // table (e.g. zero repos) doesn't NULL-out the unrelated counters.
+    let row: (i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+        "SELECT \
+            (SELECT COUNT(*)::BIGINT FROM repos WHERE visibility = 'public') AS total_models, \
+            (SELECT COUNT(DISTINCT u.id)::BIGINT \
+               FROM users u JOIN repos r ON r.owner_user_id = u.id \
+              WHERE r.visibility = 'public') AS total_users, \
+            (SELECT COALESCE(SUM(c)::BIGINT, 0) FROM ( \
+               SELECT COUNT(*) AS c \
+                 FROM repos r \
+                 JOIN repo_refs rr ON rr.repo_id = r.id AND rr.ref_name = 'main' \
+                 JOIN repo_files rf ON rf.commit_id = rr.commit_id \
+                WHERE r.visibility = 'public' \
+                GROUP BY rr.commit_id \
+              ) sub) AS total_files, \
+            (SELECT COALESCE(SUM(rf.size_bytes)::BIGINT, 0) \
+               FROM repos r \
+               JOIN repo_refs rr ON rr.repo_id = r.id AND rr.ref_name = 'main' \
+               JOIN repo_files rf ON rf.commit_id = rr.commit_id \
+              WHERE r.visibility = 'public') AS total_size_bytes, \
+            (SELECT COALESCE(SUM(rd.count)::BIGINT, 0) \
+               FROM repo_downloads rd \
+               JOIN repos r ON r.id = rd.repo_id \
+              WHERE r.visibility = 'public') AS total_downloads, \
+            (SELECT COALESCE(SUM(rd.bytes)::BIGINT, 0) \
+               FROM repo_downloads rd \
+               JOIN repos r ON r.id = rd.repo_id \
+              WHERE r.visibility = 'public') AS total_bytes_served, \
+            (SELECT COALESCE(SUM(rd.count)::BIGINT, 0) \
+               FROM repo_downloads rd \
+               JOIN repos r ON r.id = rd.repo_id \
+              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS downloads_24h, \
+            (SELECT COALESCE(SUM(rd.bytes)::BIGINT, 0) \
+               FROM repo_downloads rd \
+               JOIN repos r ON r.id = rd.repo_id \
+              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS bytes_served_24h",
+    )
+    .fetch_one(st.pool())
+    .await?;
+
+    Ok(Json(PlatformStats {
+        total_models: row.0,
+        total_users: row.1,
+        total_files: row.2,
+        total_size_bytes: row.3,
+        total_downloads: row.4,
+        total_bytes_served: row.5,
+        downloads_24h: row.6,
+        bytes_served_24h: row.7,
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Anonymous-readable list of `public` repos. Used by the Console `/models`
 // page. Private repos stay hidden. Pagination is minimal (limit param)
 // V1 demo scale fits in one page.
@@ -1446,7 +1538,7 @@ async fn build_model_info<S: HfApiState>(
     Ok(Json(ModelInfo {
         id: format!("{owner}/{repo}"),
         author: owner.to_string(),
-        sha: format!("{:040x}", commit_id),
+        sha: commit_oid_for(commit_id),
         // hf_hub parses timestamps with `%Y-%m-%dT%H:%M:%S.%fZ` — a strict
         // `Z`-suffix shape. chrono's `.to_rfc3339` emits `+00:00` which
         // trips the parser. Format with explicit microseconds + `Z`.

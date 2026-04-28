@@ -208,6 +208,10 @@ pub fn build(state: AppState) -> Router {
         )
         // Download side (task #46). Public catalog + model metadata.
         .route(
+            "/api/platform/stats",
+            get(handlers::hfapi::platform_stats::<AppState>),
+        )
+        .route(
             "/api/models",
             get(handlers::hfapi::list_models::<AppState>),
         )

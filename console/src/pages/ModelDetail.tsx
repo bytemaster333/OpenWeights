@@ -156,12 +156,12 @@ export function ModelDetailPage() {
               <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 README.md
               </h2>
-              <div className="prose prose-sm prose-invert max-w-none">
+              <div className="readme-prose font-sans text-sm leading-7 text-foreground/90">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={markdownComponents}
                 >
-                  {readme}
+                  {stripFrontmatter(readme)}
                 </ReactMarkdown>
               </div>
             </section>
@@ -515,18 +515,41 @@ function CodeBlock({ code }: { code: string }) {
 // Markdown renderer overrides
 // ---------------------------------------------------------------------------
 
+// Strip a leading YAML frontmatter block (`---\n...\n---\n`) before rendering.
+// HF model READMEs almost always start with a license/tags block that's not
+// meant for the rendered card view. ReactMarkdown has no built-in frontmatter
+// awareness — without this, the YAML lines render as a literal table or
+// horizontal rule wall at the top of every card.
+function stripFrontmatter(md: string): string {
+  if (!md.startsWith("---")) return md
+  const close = md.indexOf("\n---", 3)
+  if (close < 0) return md
+  return md.slice(close + 4).replace(/^\s*\n/, "")
+}
+
 const markdownComponents = {
   h1: ({ children }: { children?: React.ReactNode }) => (
-    <h1 className="mb-4 mt-2 text-2xl font-semibold">{children}</h1>
+    <h1 className="mb-4 mt-6 border-b pb-2 font-heading text-2xl font-semibold tracking-tight first:mt-0">
+      {children}
+    </h1>
   ),
   h2: ({ children }: { children?: React.ReactNode }) => (
-    <h2 className="mb-2 mt-5 text-lg font-semibold">{children}</h2>
+    <h2 className="mb-3 mt-8 font-heading text-xl font-semibold tracking-tight first:mt-0">
+      {children}
+    </h2>
   ),
   h3: ({ children }: { children?: React.ReactNode }) => (
-    <h3 className="mb-2 mt-4 text-base font-semibold">{children}</h3>
+    <h3 className="mb-2 mt-6 font-heading text-base font-semibold tracking-tight first:mt-0">
+      {children}
+    </h3>
+  ),
+  h4: ({ children }: { children?: React.ReactNode }) => (
+    <h4 className="mb-2 mt-4 font-heading text-sm font-semibold tracking-tight">
+      {children}
+    </h4>
   ),
   p: ({ children }: { children?: React.ReactNode }) => (
-    <p className="mb-3 leading-relaxed text-foreground/90">{children}</p>
+    <p className="mb-4 leading-7">{children}</p>
   ),
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
     <a
@@ -539,28 +562,59 @@ const markdownComponents = {
     </a>
   ),
   ul: ({ children }: { children?: React.ReactNode }) => (
-    <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>
+    <ul className="mb-4 list-disc space-y-1.5 pl-6 leading-7">{children}</ul>
   ),
   ol: ({ children }: { children?: React.ReactNode }) => (
-    <ol className="mb-3 list-decimal space-y-1 pl-5">{children}</ol>
+    <ol className="mb-4 list-decimal space-y-1.5 pl-6 leading-7">{children}</ol>
+  ),
+  li: ({ children }: { children?: React.ReactNode }) => (
+    <li className="pl-1">{children}</li>
   ),
   code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) =>
     inline ? (
-      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
         {children}
       </code>
     ) : (
-      <code className="block font-mono text-xs">{children}</code>
+      <code className="block font-mono text-xs leading-relaxed">{children}</code>
     ),
   pre: ({ children }: { children?: React.ReactNode }) => (
-    <pre className="mb-3 overflow-x-auto rounded border bg-muted/30 p-3 font-mono text-xs">
+    <pre className="mb-4 overflow-x-auto rounded border bg-muted/40 p-4 font-mono text-xs leading-relaxed">
       {children}
     </pre>
   ),
   blockquote: ({ children }: { children?: React.ReactNode }) => (
-    <blockquote className="mb-3 border-l-2 border-border pl-3 italic text-muted-foreground">
+    <blockquote className="mb-4 border-l-2 border-primary/40 bg-muted/20 px-4 py-2 italic text-muted-foreground">
       {children}
     </blockquote>
+  ),
+  hr: () => <hr className="my-6 border-border" />,
+  table: ({ children }: { children?: React.ReactNode }) => (
+    <div className="mb-4 overflow-x-auto rounded border">
+      <table className="w-full border-collapse text-sm">{children}</table>
+    </div>
+  ),
+  thead: ({ children }: { children?: React.ReactNode }) => (
+    <thead className="bg-muted/40">{children}</thead>
+  ),
+  th: ({ children }: { children?: React.ReactNode }) => (
+    <th className="border-b border-border px-3 py-2 text-left font-semibold">
+      {children}
+    </th>
+  ),
+  td: ({ children }: { children?: React.ReactNode }) => (
+    <td className="border-b border-border/50 px-3 py-2 align-top">{children}</td>
+  ),
+  img: ({ src, alt }: { src?: string; alt?: string }) => (
+    <img
+      src={src}
+      alt={alt}
+      className="mb-4 max-w-full rounded border"
+      loading="lazy"
+    />
+  ),
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <strong className="font-semibold text-foreground">{children}</strong>
   ),
 }
 

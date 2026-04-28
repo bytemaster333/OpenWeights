@@ -1,4 +1,4 @@
-import { ChartLineIcon } from "@phosphor-icons/react"
+import { ChartLineIcon, GlobeIcon } from "@phosphor-icons/react"
 import { Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 
@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useKeys } from "@/hooks/useKeys"
-import { useStats } from "@/hooks/useStats"
+import { usePlatformStats, useStats } from "@/hooks/useStats"
 import { eventHasCacheSemantics, formatEvent } from "@/lib/eventLabels"
 import { formatBytes, formatRelative } from "@/lib/format"
 
@@ -30,6 +30,7 @@ import { formatBytes, formatRelative } from "@/lib/format"
 
 export function StatsPage() {
   const { data, isPending } = useStats()
+  const { data: platform, isPending: platformPending } = usePlatformStats()
   const { data: keys } = useKeys()
   const [showIdle, setShowIdle] = useState(false)
 
@@ -57,32 +58,77 @@ export function StatsPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsTile
-          label="Bytes uploaded"
-          loading={isPending}
-          value={data ? formatBytes(data.total_bytes_stored) : "—"}
-          subtext="pending + pinned"
-        />
-        <StatsTile
-          label="Downloads"
-          loading={isPending}
-          value={data ? String(data.total_downloads) : "—"}
-          subtext={data ? formatBytes(data.total_bytes_served) : "bytes"}
-        />
-        <StatsTile
-          label="Cache hit rate"
-          loading={isPending}
-          value={data ? `${(data.cache_hit_rate * 100).toFixed(1)}%` : "—"}
-          subtext="of downloads"
-        />
-        <StatsTile
-          label="Keys with usage"
-          loading={isPending}
-          value={data ? String(data.provider_count) : "—"}
-          subtext="distinct downloaders"
-        />
-      </div>
+      {/* Platform-wide totals*/}
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <GlobeIcon size={14} weight="light" /> Platform totals
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatsTile
+            label="Models"
+            loading={platformPending}
+            value={platform ? String(platform.total_models) : "—"}
+            subtext={
+              platform
+                ? `${platform.total_users} contributor${platform.total_users === 1 ? "" : "s"}`
+                : ""
+            }
+          />
+          <StatsTile
+            label="Stored"
+            loading={platformPending}
+            value={platform ? formatBytes(platform.total_size_bytes) : "—"}
+            subtext={
+              platform ? `${platform.total_files} file${platform.total_files === 1 ? "" : "s"}` : ""
+            }
+          />
+          <StatsTile
+            label="Downloads"
+            loading={platformPending}
+            value={platform ? String(platform.total_downloads) : "—"}
+            subtext={platform ? `+${platform.downloads_24h} today` : ""}
+          />
+          <StatsTile
+            label="Bytes served"
+            loading={platformPending}
+            value={platform ? formatBytes(platform.total_bytes_served) : "—"}
+            subtext={platform ? `+${formatBytes(platform.bytes_served_24h)} today` : ""}
+          />
+        </div>
+      </section>
+
+      {/* Your usage*/}
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <ChartLineIcon size={14} weight="light" /> Your usage
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatsTile
+            label="Bytes uploaded"
+            loading={isPending}
+            value={data ? formatBytes(data.total_bytes_stored) : "—"}
+            subtext="pending + pinned"
+          />
+          <StatsTile
+            label="Downloads"
+            loading={isPending}
+            value={data ? String(data.total_downloads) : "—"}
+            subtext={data ? formatBytes(data.total_bytes_served) : "bytes"}
+          />
+          <StatsTile
+            label="Cache hit rate"
+            loading={isPending}
+            value={data ? `${(data.cache_hit_rate * 100).toFixed(1)}%` : "—"}
+            subtext="of downloads"
+          />
+          <StatsTile
+            label="Keys with usage"
+            loading={isPending}
+            value={data ? String(data.provider_count) : "—"}
+            subtext="distinct downloaders"
+          />
+        </div>
+      </section>
 
       {/* Per-key usage*/}
       <section>

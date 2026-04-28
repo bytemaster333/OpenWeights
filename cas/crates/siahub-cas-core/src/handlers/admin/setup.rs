@@ -75,13 +75,13 @@ pub struct SetupStatusResponse {
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub async fn get_setup_status<S: SetupState>(
-    Session(user): Session,
+    Session(_user): Session,
     State(st): State<S>,
 ) -> Result<Json<SetupStatusResponse>, AppError> {
-    if !user.is_admin {
-        return Err(AppError::Forbidden);
-    }
-
+    // Platform health is informational and surfaced on `/setup` for any
+    // signed-in user — the page is the dashboard's "is the deployment
+    // alive" panel. No secrets cross the wire (latencies + sync flag
+    // only); admin-only would just hide a health card from end users.
     let postgres = probe_postgres(&st).await;
     let redis = probe_redis(&st).await;
     let indexd = probe_indexd(&st).await;

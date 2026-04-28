@@ -64,6 +64,34 @@ export type StatsResponse = {
  */
 export const STATS_REFETCH_INTERVAL_MS = 10_000
 
+export type PlatformStats = {
+  total_models: number
+  total_users: number
+  total_files: number
+  total_size_bytes: number
+  total_downloads: number
+  total_bytes_served: number
+  downloads_24h: number
+  bytes_served_24h: number
+}
+
+/**
+ * Public platform-wide aggregate counters. Used on `/dashboard` and
+ * `/stats` to surface the deployment's collective footprint alongside the
+ * per-user numbers from `/admin/stats`. Anonymous-readable so the tiles
+ * mount before session resolution (parallels HF's home page counters).
+ */
+export function usePlatformStats() {
+  return useQuery<PlatformStats, ApiError>({
+    queryKey: ["platform-stats"],
+    queryFn: () => casFetch<PlatformStats>("/api/platform/stats"),
+    refetchInterval: STATS_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    retry: false,
+    staleTime: 0,
+  })
+}
+
 export function useStats() {
   return useQuery<StatsResponse, ApiError>({
     queryKey: ["stats"],
