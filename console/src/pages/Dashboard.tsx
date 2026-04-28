@@ -33,6 +33,7 @@ import { formatBytes, formatRelative } from "@/lib/format"
 
 const MY_MODELS_LIMIT = 5
 const RECENT_ACTIVITY_LIMIT = 5
+const ALL_MODELS_LIMIT = 8
 
 export function DashboardPage() {
   const { data: user } = useMe()
@@ -57,6 +58,10 @@ export function DashboardPage() {
     0,
     RECENT_ACTIVITY_LIMIT,
   )
+
+  // "All models" widget — top N by recency across the platform. `useModels`
+  // already returns rows ORDER BY r.updated_at DESC; we just slice.
+  const allModels = (models ?? []).slice(0, ALL_MODELS_LIMIT)
 
   const uploadCmd = `HF_TOKEN=<your-siahub-key> HF_ENDPOINT=${CAS_URL} \\
   hf upload ${user.login}/<repo-name> ./files`
@@ -255,6 +260,65 @@ export function DashboardPage() {
           )}
         </section>
       </div>
+
+      {/* All models — platform-wide recency feed */}
+      <section className="rounded border bg-muted/10 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <GlobeIcon size={16} weight="light" /> All models
+          </h2>
+          <Link
+            to="/models"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            See all →
+          </Link>
+        </div>
+
+        {modelsPending && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        )}
+
+        {!modelsPending && allModels.length === 0 && (
+          <div className="py-6 text-center text-xs text-muted-foreground">
+            No models on this deployment yet.
+          </div>
+        )}
+
+        {!modelsPending && allModels.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {allModels.map((m) => {
+              const [owner, name] = m.id.split("/")
+              return (
+                <Link
+                  key={m.id}
+                  to="/models/$owner/$repo"
+                  params={{ owner, repo: name }}
+                  className="rounded border bg-background/40 p-3 text-sm transition-colors hover:border-primary/40 hover:bg-muted/30"
+                >
+                  <div className="truncate font-medium" title={m.id}>
+                    {name}
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                    @{owner}
+                  </div>
+                  <div className="mt-2 flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                    <span>{formatBytes(m.size)}</span>
+                    <span>
+                      {(m.downloadsTotal ?? 0).toLocaleString()}{" "}
+                      <span className="text-muted-foreground/70">dl</span>
+                    </span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Quick upload*/}
       <section className="rounded border bg-muted/20 p-4">
