@@ -165,6 +165,17 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
             }
 
             let chunks = xorb_index.get(&xorb_hash).ok_or_else(|| {
+                let parsed: Vec<String> =
+                    xorb_index.keys().map(hex_of).collect();
+                tracing::warn!(
+                    file_id = %hex_of(&file_id),
+                    term_index = idx as i32,
+                    referenced_xorb = %hex_of(&xorb_hash),
+                    parsed_xorbs = ?parsed,
+                    parsed_xorb_count = xorb_index.len(),
+                    file_count = file_infos.len(),
+                    "xorb referenced by file segment is not in shard XorbInfo"
+                );
                 ShardParseError::InconsistentTermRange {
                     file_id_hex: hex_of(&file_id),
                     term_index: idx as i32,
