@@ -21,7 +21,7 @@ license      = "MIT"
 # import identifier is `xet_core_structures`. The README of the crate disclaims
 # public use, but /2 policy is to pin exact and live within the
 # structures-only subset.
-xet-core-structures = "=1.5.1"
+xet-core-structures = "=1.5.2"
 
 # Runtime
 axum       = "0.8"

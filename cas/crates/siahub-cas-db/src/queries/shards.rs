@@ -75,14 +75,21 @@ pub async fn insert_shard_with_reconstruction(
         let file_ids: Vec<Vec<u8>> = files.iter().map(|f| f.file_id.to_vec()).collect();
         let shard_hashes: Vec<Vec<u8>> = files.iter().map(|_| shard_hash.to_vec()).collect();
         let total_sizes: Vec<i64> = files.iter().map(|f| f.total_size).collect();
+        // sha256 may be absent on shards that didn't write FileMetadataExt;
+        // we pass an Option<Vec<u8>> per-row and let postgres store NULL.
+        let sha256s: Vec<Option<Vec<u8>>> =
+            files.iter().map(|f| f.sha256.map(|h| h.to_vec())).collect();
 
         sqlx::query(
-            "INSERT INTO reconstruction_files (file_id, shard_hash, total_size) \
-             SELECT * FROM UNNEST($1::bytea[], $2::bytea[], $3::bigint[])",
+            "INSERT INTO reconstruction_files (file_id, shard_hash, total_size, sha256) \
+             SELECT * FROM UNNEST($1::bytea[], $2::bytea[], $3::bigint[], $4::bytea[]) \
+             ON CONFLICT (file_id) DO UPDATE \
+                SET sha256 = COALESCE(EXCLUDED.sha256, reconstruction_files.sha256)",
         )
         .bind(&file_ids)
         .bind(&shard_hashes)
         .bind(&total_sizes)
+        .bind(&sha256s)
         .execute(&mut **tx)
         .await?;
     }

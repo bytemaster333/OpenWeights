@@ -116,22 +116,6 @@ where
         return Err(AppError::BadRequest("shard_too_large"));
     }
 
-    // debug: dump raw shard to /tmp for offline parsing analysis
-    if std::env::var("SIAHUB_DEBUG_SHARD_DUMP").as_deref() == Ok("1") {
-        let h: [u8; 32] = Sha256::digest(&collected).into();
-        let path = format!("/tmp/shard-{}.bin", &hex_of_short(&h));
-        let _ = std::fs::write(&path, &collected);
-        let head_hex: String = collected.iter().take(48).map(|b| format!("{b:02x}")).collect();
-        let foot_hex: String = collected.iter().rev().take(8).rev().map(|b| format!("{b:02x}")).collect();
-        tracing::info!(
-            path = %path,
-            len = collected.len(),
-            head32 = %head_hex,
-            tail8 = %foot_hex,
-            "raw shard dumped"
-        );
-    }
-
     // (3) Shard hash = SHA-256 of body. Distinct from xorb merkle hash codec:
     // xet-core does NOT publish a canonical "shard content hash" function
     // at 1.5.1, so we use SHA-256 per PATTERNS + RESEARCH §2.3 default.
@@ -311,15 +295,6 @@ fn map_parse_err_with_metrics(e: ShardParseError, metrics: &Metrics) -> AppError
         }
         _ => AppError::BadRequest("malformed_shard"),
     }
-}
-
-fn hex_of_short(h: &[u8; 32]) -> String {
-    let mut s = String::with_capacity(16);
-    for b in h.iter().take(8) {
-        use std::fmt::Write;
-        let _ = write!(s, "{b:02x}");
-    }
-    s
 }
 
 /// Small wrapper used to bound the Sia upload+pin roundtrip. Mirror of the

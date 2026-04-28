@@ -32,6 +32,11 @@ use sqlx::PgPool;
 pub struct ParsedFile {
     pub file_id: [u8; 32],
     pub total_size: i64,
+    /// optional — the file content sha256 stored in the shard's
+    /// FileMetadataExt, decoded via DataHash::hex() (xet's per-8-byte-group
+    /// LE encoding). matches the OID hf_hub sends in commit lfsFile entries.
+    /// when None, the shard didn't carry the metadata_ext block.
+    pub sha256: Option<[u8; 32]>,
 }
 
 /// DTO: one row destined for `reconstruction_terms`.

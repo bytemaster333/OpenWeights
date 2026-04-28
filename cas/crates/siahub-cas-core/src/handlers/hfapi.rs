@@ -879,26 +879,29 @@ pub async fn commit<S: HfApiState>(
                 to_insert.push((f.path.clone(), None, Some(oid_bytes), size));
                 continue;
             }
-            // xet-transferred file: bytes live in `xorbs`. multiple files
-            // from the same upload session may share a xorb because xet
-            // packs chunks across files for dedup; link each file to the
-            // most recent xorb the caller uploaded. downloads serve the
-            // full xorb body (ok when whole-xorb = whole-file, degraded
-            // when multiple files share).
+            // xet-transferred file: bytes live in `xorbs` and per-file
+            // reconstruction is in `reconstruction_files` + `_terms`. the
+            // shard upload populated those tables with `sha256` matching
+            // hf_hub's commit-time `oid`. lookup is exact by sha256,
+            // disambiguated by size when the same content exists in
+            // multiple shards (rare but possible during retries).
+            let size = f.size.ok_or(AppError::BadRequest("missing_size"))?;
             let claim: Option<(Vec<u8>,)> = sqlx::query_as(
-                "SELECT x.xorb_merkle_hash \
-                   FROM xorbs x \
-                  WHERE x.owner_api_key_id = $1 \
-                  ORDER BY x.uploaded_at DESC \
-                  LIMIT 1",
+                "SELECT file_id \
+                   FROM reconstruction_files \
+                  WHERE sha256 = $1 AND total_size = $2 \
+                  ORDER BY registered_at DESC LIMIT 1",
             )
-            .bind(ctx.api_key_id)
+            .bind(&oid_bytes[..])
+            .bind(size)
             .fetch_optional(pool)
             .await?;
-            let size = f.size.ok_or(AppError::BadRequest("missing_size"))?;
             match claim {
-                Some((xet_hash,)) => {
-                    to_insert.push((f.path.clone(), Some(xet_hash), None, size));
+                Some((file_id,)) => {
+                    // we store file_id (xet's per-file merkle hash) in
+                    // repo_files.xet_hash. resolve handler joins through
+                    // reconstruction_terms to mint byte-range signed URLs.
+                    to_insert.push((f.path.clone(), Some(file_id), None, size));
                 }
                 None => {
                     return Err(AppError::BadRequest("lfs_oid_not_uploaded"));
@@ -1742,47 +1745,90 @@ pub async fn xet_file_serve<S: HfApiState>(
     Query(dp): Query<DownloadParams>,
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
-    // V1 download path (migration 0009): fetch the inline-cached xorb
-    // body, iterate xet-core chunk headers, decompress each chunk, and
-    // stream the concatenation. Works for the single-file-per-xorb case
-    // that `hf upload` produces on small/medium models.
-    // 's will replace this with:
-    // * /v1/reconstructions/{file_id} returning per-term signed URLs
-    // * the gateway range-fetching specific xorb byte windows from Sia
-    // * proper shard-parsed boundaries for multi-file xorbs
-    // Until then this is the honest demo close: bytes upload to
-    // Sia via the Xet protocol AND round-trip through `hf download`.
+    // proper per-file reconstruction:
+    // 1. xet_hash_hex == reconstruction_files.file_id (xet's per-file merkle hash)
+    // 2. join reconstruction_terms ORDER BY term_index — gives us the
+    //    sequence of (xorb_hash, xorb_byte_start..xorb_byte_end) windows
+    //    that, decompressed in order, are the file's content
+    // 3. for each term: load the xorb body, slice [byte_start..byte_end],
+    //    iterate xet chunk headers in that slice, decompress to writer
+    // 4. concatenate; that's the reconstructed file
     use siahub_cas_proto::xorb_object::deserialize_chunk_to_writer;
     use std::io::Cursor;
 
-    let hash_bytes = hex_decode(&xet_hash_hex).ok_or(AppError::BadRequest("bad_xet_hash"))?;
-    let row: Option<(Vec<u8>,)> = sqlx::query_as(
-        "SELECT content FROM xorb_bodies WHERE xorb_hash = $1",
+    let file_id = hex_decode(&xet_hash_hex).ok_or(AppError::BadRequest("bad_xet_hash"))?;
+
+    // verify file exists
+    let file_row: Option<(i64,)> = sqlx::query_as(
+        "SELECT total_size FROM reconstruction_files WHERE file_id = $1",
     )
-    .bind(&hash_bytes)
+    .bind(&file_id[..])
     .fetch_optional(st.pool())
     .await?;
-    let body = row.ok_or(AppError::NotFound)?.0;
+    let total_size = file_row.ok_or(AppError::NotFound)?.0;
 
-    // Chunks are packed back-to-back: <header><compressed-payload>*. We
-    // iterate until we hit end-of-stream OR a chunk-header's field fails
-    // the xet-core validator (which would mean we've walked into the
-    // footer — safe exit condition for V1 since we ignore footer).
-    let mut cursor = Cursor::new(body.as_slice());
-    let mut out: Vec<u8> = Vec::with_capacity(body.len());
-    let total = body.len() as u64;
-    loop {
-        if cursor.position() >= total {
-            break;
+    // load all terms for this file in order
+    type TermRow = (Vec<u8>, i64, i64);
+    let term_rows: Vec<TermRow> = sqlx::query_as(
+        "SELECT xorb_hash, xorb_byte_start, xorb_byte_end \
+           FROM reconstruction_terms \
+          WHERE file_id = $1 \
+          ORDER BY term_index ASC",
+    )
+    .bind(&file_id[..])
+    .fetch_all(st.pool())
+    .await?;
+    if term_rows.is_empty() {
+        return Err(AppError::NotFound);
+    }
+
+    let mut out: Vec<u8> = Vec::with_capacity(total_size as usize);
+    for (xorb_hash, byte_start, byte_end) in &term_rows {
+        // pull the xorb body once (could cache; small set of xorbs per file)
+        let xorb_row: Option<(Vec<u8>,)> = sqlx::query_as(
+            "SELECT content FROM xorb_bodies WHERE xorb_hash = $1",
+        )
+        .bind(&xorb_hash[..])
+        .fetch_optional(st.pool())
+        .await?;
+        let body = xorb_row.ok_or(AppError::NotFound)?.0;
+
+        // bounds-check
+        let start = *byte_start as usize;
+        let end = *byte_end as usize;
+        if end > body.len() || start >= end {
+            return Err(AppError::Other(anyhow::anyhow!(
+                "term byte range out of bounds: [{start}..{end}) of {} byte xorb",
+                body.len()
+            )));
         }
-        // `deserialize_chunk_to_writer` reads one chunk header + payload.
-        // A non-chunk tail (e.g., footer bytes) returns CoreError, which
-        // we treat as "end of chunk stream" and stop; we've already
-        // collected the file bytes by that point.
-        match deserialize_chunk_to_writer(&mut cursor, &mut out) {
-            Ok(_) => continue,
-            Err(_) => break,
+        let slice = &body[start..end];
+        let mut cur = Cursor::new(slice);
+        let span = slice.len() as u64;
+        loop {
+            if cur.position() >= span {
+                break;
+            }
+            match deserialize_chunk_to_writer(&mut cur, &mut out) {
+                Ok(_) => continue,
+                Err(e) => {
+                    return Err(AppError::Other(anyhow::anyhow!(
+                        "chunk decompress failed at offset {}: {e}",
+                        cur.position()
+                    )));
+                }
+            }
         }
+    }
+
+    // size sanity-check — the reconstruction must produce exactly total_size
+    // bytes, otherwise we have a parser/persistence drift.
+    if out.len() as i64 != total_size {
+        return Err(AppError::Other(anyhow::anyhow!(
+            "reconstruction size mismatch: got {}, expected {}",
+            out.len(),
+            total_size
+        )));
     }
 
     let api_key_id = optional_api_key_id(&st, &headers).await;
@@ -1791,7 +1837,7 @@ pub async fn xet_file_serve<S: HfApiState>(
         dp.r,
         api_key_id,
         out.len() as i64,
-        Some(hash_bytes),
+        Some(file_id),
         None,
     )
     .await;
