@@ -162,7 +162,14 @@ where
     // (5) cross-check — BEFORE opening the DB transaction so a malformed
     // shard never half-inserts. `which_xorbs_are_pinned` does one
     // `WHERE xorb_merkle_hash = ANY($1) AND pin_state='pinned'` round-trip.
+    // First revive any orphans the new shard re-references — they're
+    // accepted by the cross-check, but should re-enter the pin reconciler.
     let pool = st.pool();
+    let revived =
+        shard_q::revive_orphaned_xorbs(pool, &parsed.referenced_xorb_hashes).await?;
+    if revived > 0 {
+        tracing::info!(count = revived, "revived orphaned xorbs from new shard");
+    }
     let present = shard_q::which_xorbs_are_pinned(pool, &parsed.referenced_xorb_hashes).await?;
     // Materialize as set for O(1) missing-diff.
     let present_set: std::collections::HashSet<[u8; 32]> = present.into_iter().collect();

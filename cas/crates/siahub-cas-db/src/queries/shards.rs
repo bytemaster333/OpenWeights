@@ -184,6 +184,32 @@ pub async fn set_pin_state(
     Ok(())
 }
 
+/// Flip any orphaned xorbs in the input list back to 'pinning' and reset
+/// their pin attempts. Called when a fresh shard re-references xorbs that
+/// were demoted by a sweep (because their original shard never committed).
+/// hf_xet's chunk dedup makes this common after a failed upload retry.
+pub async fn revive_orphaned_xorbs(
+    pool: &PgPool,
+    xorb_hashes: &[[u8; 32]],
+) -> Result<u64, sqlx::Error> {
+    if xorb_hashes.is_empty() {
+        return Ok(0);
+    }
+    let flat: Vec<Vec<u8>> = xorb_hashes.iter().map(|h| h.to_vec()).collect();
+    let res = sqlx::query(
+        "UPDATE xorbs \
+         SET pin_state = 'pinning', \
+             pin_attempts = 0, \
+             last_pin_attempt_at = NULL \
+         WHERE xorb_merkle_hash = ANY($1) \
+           AND pin_state = 'orphaned'",
+    )
+    .bind(&flat)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
+}
+
 /// `true` iff the shard has been successfully pinned to Sia. Mirrors
 /// `xorbs::exists_pinned`. Available for future gateway lookups.
 pub async fn exists_pinned(
@@ -214,14 +240,20 @@ pub async fn which_xorbs_are_pinned(
     }
     let flat: Vec<Vec<u8>> = xorb_hashes.iter().map(|h| h.to_vec()).collect();
 
-    // accept pinning xorbs too: bytes are durable in xorb_bodies even
-    // before sia confirms the contract, and the reconciler will flip
-    // pin_state to 'pinned' asynchronously. rejecting here would block
-    // every multi-file upload while contracts form.
+    // accept pinning xorbs too (bytes are already durable in xorb_bodies
+    // before sia confirms the contract) and orphaned xorbs (a previous
+    // upload claimed them, the shard never committed, and the sweep
+    // demoted them — but the bytes are still here in xorb_bodies until
+    // the body GC runs separately). hf_xet's chunk dedup may legitimately
+    // re-reference an orphan from a prior failed session; reviving it
+    // here lets the shard land. Rejecting here would block every
+    // multi-file upload while contracts form OR every retry of a
+    // previously-interrupted upload.
     let rows: Vec<(Vec<u8>,)> = sqlx::query_as(
-        "SELECT xorb_merkle_hash FROM xorbs \
-         WHERE xorb_merkle_hash = ANY($1) \
-           AND pin_state IN ('pinning', 'pinned')",
+        "SELECT x.xorb_merkle_hash FROM xorbs x \
+         JOIN xorb_bodies b ON b.xorb_hash = x.xorb_merkle_hash \
+         WHERE x.xorb_merkle_hash = ANY($1) \
+           AND x.pin_state IN ('pinning', 'pinned', 'orphaned')",
     )
     .bind(&flat)
     .fetch_all(pool)

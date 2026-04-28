@@ -164,44 +164,37 @@ pub fn parse_and_validate(bytes: &[u8]) -> Result<ParsedShard, ShardParseError> 
                 });
             }
 
-            let chunks = xorb_index.get(&xorb_hash).ok_or_else(|| {
-                let parsed: Vec<String> =
-                    xorb_index.keys().map(hex_of).collect();
-                tracing::warn!(
-                    file_id = %hex_of(&file_id),
-                    term_index = idx as i32,
-                    referenced_xorb = %hex_of(&xorb_hash),
-                    parsed_xorbs = ?parsed,
-                    parsed_xorb_count = xorb_index.len(),
-                    file_count = file_infos.len(),
-                    "xorb referenced by file segment is not in shard XorbInfo"
-                );
-                ShardParseError::InconsistentTermRange {
-                    file_id_hex: hex_of(&file_id),
-                    term_index: idx as i32,
-                    reason: "xorb referenced but not present in shard XorbInfo",
+            // chunk byte ranges are only known for xorbs whose XorbInfo is in
+            // THIS shard. hf_xet may reference xorbs from prior upload
+            // sessions (chunk dedup) without re-listing them — accept those
+            // and leave byte ranges as 0,0. xet_file_serve iterates by chunk
+            // index anyway and never reads these byte columns.
+            let (xorb_byte_start, xorb_byte_end) = match xorb_index.get(&xorb_hash) {
+                Some(chunks) => {
+                    let first_idx = xorb_start as usize;
+                    let last_idx = (xorb_end - 1) as usize;
+                    if last_idx >= chunks.len() {
+                        return Err(ShardParseError::InconsistentTermRange {
+                            file_id_hex: hex_of(&file_id),
+                            term_index: idx as i32,
+                            reason: "xorb_end exceeds chunk count in XorbInfo",
+                        });
+                    }
+                    let (first_start, _) = chunks[first_idx];
+                    let (last_start, last_len) = chunks[last_idx];
+                    let bs = first_start as i64;
+                    let be = last_start as i64 + last_len as i64;
+                    if bs >= be {
+                        return Err(ShardParseError::InconsistentTermRange {
+                            file_id_hex: hex_of(&file_id),
+                            term_index: idx as i32,
+                            reason: "xorb_byte_start must be strictly less than xorb_byte_end",
+                        });
+                    }
+                    (bs, be)
                 }
-            })?;
-            let first_idx = xorb_start as usize;
-            let last_idx = (xorb_end - 1) as usize;
-            if last_idx >= chunks.len() {
-                return Err(ShardParseError::InconsistentTermRange {
-                    file_id_hex: hex_of(&file_id),
-                    term_index: idx as i32,
-                    reason: "xorb_end exceeds chunk count in XorbInfo",
-                });
-            }
-            let (first_start, _) = chunks[first_idx];
-            let (last_start, last_len) = chunks[last_idx];
-            let xorb_byte_start = first_start as i64;
-            let xorb_byte_end = last_start as i64 + last_len as i64;
-            if xorb_byte_start >= xorb_byte_end {
-                return Err(ShardParseError::InconsistentTermRange {
-                    file_id_hex: hex_of(&file_id),
-                    term_index: idx as i32,
-                    reason: "xorb_byte_start must be strictly less than xorb_byte_end",
-                });
-            }
+                None => (0, 0), // external xorb — chunk metadata recorded by an earlier shard
+            };
 
             let unpacked_start = unpacked_cursor;
             let unpacked_end = unpacked_cursor + seg.unpacked_segment_bytes as i64;
