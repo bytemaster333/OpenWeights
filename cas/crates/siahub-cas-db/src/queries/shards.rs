@@ -208,9 +208,14 @@ pub async fn which_xorbs_are_pinned(
     }
     let flat: Vec<Vec<u8>> = xorb_hashes.iter().map(|h| h.to_vec()).collect();
 
+    // accept pinning xorbs too: bytes are durable in xorb_bodies even
+    // before sia confirms the contract, and the reconciler will flip
+    // pin_state to 'pinned' asynchronously. rejecting here would block
+    // every multi-file upload while contracts form.
     let rows: Vec<(Vec<u8>,)> = sqlx::query_as(
         "SELECT xorb_merkle_hash FROM xorbs \
-         WHERE xorb_merkle_hash = ANY($1) AND pin_state = 'pinned'",
+         WHERE xorb_merkle_hash = ANY($1) \
+           AND pin_state IN ('pinning', 'pinned')",
     )
     .bind(&flat)
     .fetch_all(pool)
