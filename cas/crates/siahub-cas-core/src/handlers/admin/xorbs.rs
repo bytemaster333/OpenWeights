@@ -206,6 +206,20 @@ pub async fn get_xorb_detail<S: AuthStateRef>(
                 pin_state::text, uploaded_at, owner_api_key_id \
            FROM xorbs \
           WHERE xorb_merkle_hash = $1 \
+          UNION ALL \
+          SELECT lo.oid, NULL::bytea, lo.size_bytes, \
+                 'pinned'::text, lo.created_at, \
+                 COALESCE( \
+                   ( SELECT ak.id FROM api_keys ak \
+                       JOIN repos r2 ON r2.owner_user_id = ak.user_id \
+                       JOIN repo_commits rc ON rc.repo_id = r2.id \
+                       JOIN repo_files rf ON rf.commit_id = rc.id \
+                                         AND rf.lfs_oid = lo.oid \
+                      ORDER BY ak.created_at DESC LIMIT 1 ), \
+                   '00000000-0000-0000-0000-000000000000'::uuid \
+                 ) \
+            FROM lfs_objects lo \
+           WHERE lo.oid = $1 \
           LIMIT 1",
     )
     .bind(&hash_bytes[..])
@@ -234,7 +248,7 @@ pub async fn get_xorb_detail<S: AuthStateRef>(
            JOIN repo_refs rr ON rr.commit_id = rf.commit_id AND rr.ref_name = 'main' \
            JOIN repos r ON r.id = rr.repo_id \
            JOIN users u ON u.id = r.owner_user_id \
-          WHERE rf.xet_hash = $1",
+          WHERE rf.xet_hash = $1 OR rf.lfs_oid = $1",
     )
     .bind(&hash_bytes[..])
     .fetch_all(st.pool())

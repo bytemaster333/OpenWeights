@@ -479,11 +479,11 @@ pub async fn lfs_objects_batch<S: HfApiState>(
         require_ownership(st.pool(), repo_id, ctx.user_id).await?;
     }
 
-    // force basic transfer — xet packs multiple files into a single xorb
-    // which we can't split back on download without parsing xet shard
-    // v2 manifests (upstream format mismatch). basic LFS stores each
-    // file as a distinct lfs_objects row, so round-trips are byte-exact.
-    let transfer = "basic".to_string();
+    let transfer = if req.transfers.iter().any(|t| t == "xet") {
+        "xet".to_string()
+    } else {
+        "basic".to_string()
+    };
 
     let cas_base = st.cas_public_url().trim_end_matches('/');
     let mut objects = Vec::with_capacity(req.objects.len());
