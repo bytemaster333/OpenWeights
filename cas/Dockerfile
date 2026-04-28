@@ -5,6 +5,9 @@ WORKDIR /src
 # Copy workspace manifests first for cached dep layer.
 COPY cas/Cargo.toml cas/rust-toolchain.toml ./cas/
 COPY cas/crates ./cas/crates
+# Vendored sia_storage 0.7.0 (one-constant patch — see cas/Cargo.toml
+# [patch.crates-io]).
+COPY cas/vendored ./cas/vendored
 
 # migrations/ must be present at build time so sqlx::migrate!("./migrations") can
 # compile-time-embed the SQL files into the binary. populates these.

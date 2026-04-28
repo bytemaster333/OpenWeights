@@ -229,22 +229,49 @@ where
     //     them and re-run `upload_and_pin` from the reconciler so the row
     //     can finally reach Sia. This is the recovery path for "the demo
     //     ran without a funded wallet, then the wallet got funded".
+    // Per-row Sia op timeout. Without this, a single hung upload to a
+    // misbehaving host would freeze the reconciler indefinitely (every
+    // tick re-awaits the same future). 120 s is generous on Zen testnet
+    // for a 64 MiB xorb across 6 erasure shards. Times out → bump
+    // attempts, move on, retry next sweep.
+    const SIA_OP_TIMEOUT: Duration = Duration::from_secs(120);
+
     match row.sia_object_id.as_deref() {
-        Some(oid) => match sia.pin_only(oid).await {
-            Ok(()) => {
-                set_pinned_xorb(pool, &row.hash, oid).await?;
-                Ok(true)
-            }
-            Err(e) => bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await,
-        },
-        None => match load_xorb_body(pool, &row.hash).await? {
-            Some(bytes) => match sia.upload_and_pin(&bytes).await {
-                Ok(sia_id) => {
-                    set_pinned_xorb(pool, &row.hash, &sia_id).await?;
+        Some(oid) => {
+            match tokio::time::timeout(SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
+                Ok(Ok(())) => {
+                    set_pinned_xorb(pool, &row.hash, oid).await?;
                     Ok(true)
                 }
-                Err(e) => bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await,
-            },
+                Ok(Err(e)) => {
+                    bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await
+                }
+                Err(_) => {
+                    let to = SiaAdapterError::Other(anyhow::anyhow!(
+                        "sia pin_only exceeded {SIA_OP_TIMEOUT:?} budget"
+                    ));
+                    bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &to).await
+                }
+            }
+        }
+        None => match load_xorb_body(pool, &row.hash).await? {
+            Some(bytes) => {
+                match tokio::time::timeout(SIA_OP_TIMEOUT, sia.upload_and_pin(&bytes)).await {
+                    Ok(Ok(sia_id)) => {
+                        set_pinned_xorb(pool, &row.hash, &sia_id).await?;
+                        Ok(true)
+                    }
+                    Ok(Err(e)) => {
+                        bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await
+                    }
+                    Err(_) => {
+                        let to = SiaAdapterError::Other(anyhow::anyhow!(
+                            "sia upload_and_pin exceeded {SIA_OP_TIMEOUT:?} budget"
+                        ));
+                        bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &to).await
+                    }
+                }
+            }
             None => {
                 // Bytes truly gone — can't recover. Bump so the row eventually orphans.
                 let noent = SiaAdapterError::Other(anyhow::anyhow!(
