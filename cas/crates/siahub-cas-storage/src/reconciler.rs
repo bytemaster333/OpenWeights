@@ -355,7 +355,7 @@ where
         .bind(&hash[..])
         .execute(pool)
         .await?;
-        tracing::debug!(err = %err, hash = %hex(hash), attempts = new_attempts, "xorb pin retry failed; will sweep again");
+        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "xorb pin retry failed; will sweep again");
     }
     Ok(true)
 }
