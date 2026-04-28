@@ -231,10 +231,11 @@ where
     //     ran without a funded wallet, then the wallet got funded".
     // Per-row Sia op timeout. Without this, a single hung upload to a
     // misbehaving host would freeze the reconciler indefinitely (every
-    // tick re-awaits the same future). 120 s is generous on Zen testnet
-    // for a 64 MiB xorb across 6 erasure shards. Times out → bump
-    // attempts, move on, retry next sweep.
-    const SIA_OP_TIMEOUT: Duration = Duration::from_secs(120);
+    // tick re-awaits the same future). 600 s = 10 min is what we observe
+    // on Zen testnet for the slowest 64 MiB xorbs across 6 erasure shards
+    // (slab allocation + per-host QUIC RPC latency dominates). Times out
+    // → bump attempts, move on, retry next sweep.
+    const SIA_OP_TIMEOUT: Duration = Duration::from_secs(600);
 
     match row.sia_object_id.as_deref() {
         Some(oid) => {
