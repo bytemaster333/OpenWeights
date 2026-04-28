@@ -11,4 +11,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // rename from default `assets` so the SPA route /assets/* doesn't
+    // collide with the static bundle dir (nginx serves the real dir and
+    // autoindex 403s instead of falling through to index.html on /assets/).
+    assetsDir: "static",
+  },
 })
