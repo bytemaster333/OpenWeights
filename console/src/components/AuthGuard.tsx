@@ -25,7 +25,7 @@ export function AuthGuard({ children }: PropsWithChildren) {
     // `user === null` is the "unauthenticated" sentinel that `useMe` returns
     // on 401 (NOT `undefined`, which is the pending state in TanStack Query).
     if (!isPending && user === null) {
-      void navigate({ to: "/login" })
+      void navigate({ to: "/" })
     }
   }, [isPending, user, navigate])
 
