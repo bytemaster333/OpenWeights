@@ -80,11 +80,37 @@ pub async fn list_xorbs<S: AuthStateRef>(
         DateTime<Utc>,
         Uuid,
     );
+    // unified blob listing: real xorbs (when xet writes lands) + lfs_objects
+    // (the basic-transfer path that backs every upload right now).
+    // lfs rows synthesize a uploader_key_id derived from the most-recent
+    // repo_files row that references the oid; falls back to a zero UUID
+    // when the lfs object isn't yet bound to any repo.
     let rows: Vec<XorbDbRow> = sqlx::query_as(
-        "SELECT xorb_merkle_hash, sia_object_id, size_bytes, \
-                pin_state::text, uploaded_at, owner_api_key_id \
-           FROM xorbs \
-          WHERE ($1::text IS NULL OR hash_prefix_8 = $1) \
+        "WITH base AS ( \
+             SELECT xorb_merkle_hash AS hash, sia_object_id, size_bytes, \
+                    pin_state::text AS pin_state, uploaded_at, \
+                    owner_api_key_id \
+               FROM xorbs \
+             UNION ALL \
+             SELECT lo.oid AS hash, NULL::bytea AS sia_object_id, \
+                    lo.size_bytes, 'pinned'::text AS pin_state, \
+                    lo.created_at AS uploaded_at, \
+                    COALESCE( \
+                      ( SELECT ak.id \
+                          FROM api_keys ak \
+                          JOIN repos r2 ON r2.owner_user_id = ak.user_id \
+                          JOIN repo_commits rc ON rc.repo_id = r2.id \
+                          JOIN repo_files rf ON rf.commit_id = rc.id \
+                                            AND rf.lfs_oid = lo.oid \
+                         ORDER BY ak.created_at DESC LIMIT 1 ), \
+                      '00000000-0000-0000-0000-000000000000'::uuid \
+                    ) AS owner_api_key_id \
+               FROM lfs_objects lo \
+         ) \
+         SELECT hash, sia_object_id, size_bytes, pin_state, \
+                uploaded_at, owner_api_key_id \
+           FROM base \
+          WHERE ($1::text IS NULL OR substring(encode(hash,'hex') from 1 for 8) = $1) \
             AND ($2::uuid IS NULL OR owner_api_key_id = $2) \
           ORDER BY uploaded_at DESC \
           LIMIT 500",
