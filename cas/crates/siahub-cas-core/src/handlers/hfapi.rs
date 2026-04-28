@@ -1767,10 +1767,13 @@ pub async fn xet_file_serve<S: HfApiState>(
     .await?;
     let total_size = file_row.ok_or(AppError::NotFound)?.0;
 
-    // load all terms for this file in order
+    // load all terms (chunk INDICES — byte offsets are not pre-computable
+    // because shard's chunk_byte_range_start is the compressed offset only,
+    // and unpacked_segment_bytes is the *unpacked* length, so the two
+    // can't be combined to get the compressed length of the last chunk).
     type TermRow = (Vec<u8>, i64, i64);
     let term_rows: Vec<TermRow> = sqlx::query_as(
-        "SELECT xorb_hash, xorb_byte_start, xorb_byte_end \
+        "SELECT xorb_hash, xorb_start, xorb_end \
            FROM reconstruction_terms \
           WHERE file_id = $1 \
           ORDER BY term_index ASC",
@@ -1783,8 +1786,8 @@ pub async fn xet_file_serve<S: HfApiState>(
     }
 
     let mut out: Vec<u8> = Vec::with_capacity(total_size as usize);
-    for (xorb_hash, byte_start, byte_end) in &term_rows {
-        // pull the xorb body once (could cache; small set of xorbs per file)
+    let mut sink = Vec::<u8>::new();
+    for (xorb_hash, chunk_start, chunk_end) in &term_rows {
         let xorb_row: Option<(Vec<u8>,)> = sqlx::query_as(
             "SELECT content FROM xorb_bodies WHERE xorb_hash = $1",
         )
@@ -1793,31 +1796,38 @@ pub async fn xet_file_serve<S: HfApiState>(
         .await?;
         let body = xorb_row.ok_or(AppError::NotFound)?.0;
 
-        // bounds-check
-        let start = *byte_start as usize;
-        let end = *byte_end as usize;
-        if end > body.len() || start >= end {
-            return Err(AppError::Other(anyhow::anyhow!(
-                "term byte range out of bounds: [{start}..{end}) of {} byte xorb",
-                body.len()
-            )));
-        }
-        let slice = &body[start..end];
-        let mut cur = Cursor::new(slice);
-        let span = slice.len() as u64;
-        loop {
-            if cur.position() >= span {
-                break;
-            }
-            match deserialize_chunk_to_writer(&mut cur, &mut out) {
-                Ok(_) => continue,
-                Err(e) => {
+        let mut cur = Cursor::new(body.as_slice());
+        let total = body.len() as u64;
+        let want_start = *chunk_start as usize;
+        let want_end = *chunk_end as usize;
+        let mut idx: usize = 0;
+
+        // walk every chunk in xorb order; decompress only the indices in
+        // [want_start, want_end). cheap because the first 7 chunks of a
+        // 277-chunk xorb are tiny relative to the total.
+        while cur.position() < total && idx < want_end {
+            if idx >= want_start {
+                // emit decompressed chunk
+                if let Err(e) = deserialize_chunk_to_writer(&mut cur, &mut out) {
                     return Err(AppError::Other(anyhow::anyhow!(
-                        "chunk decompress failed at offset {}: {e}",
-                        cur.position()
+                        "decompress chunk {idx}: {e}"
+                    )));
+                }
+            } else {
+                // skip chunk (decompress to discard buffer)
+                sink.clear();
+                if let Err(e) = deserialize_chunk_to_writer(&mut cur, &mut sink) {
+                    return Err(AppError::Other(anyhow::anyhow!(
+                        "skip chunk {idx}: {e}"
                     )));
                 }
             }
+            idx += 1;
+        }
+        if idx < want_end {
+            return Err(AppError::Other(anyhow::anyhow!(
+                "xorb ran out at chunk {idx}, term wanted [{want_start}..{want_end})"
+            )));
         }
     }
 
