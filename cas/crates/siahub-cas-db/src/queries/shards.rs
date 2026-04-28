@@ -115,6 +115,11 @@ pub async fn insert_shard_with_reconstruction(
         // END-EXCLUSIVE — see.
         let unpacked_ends: Vec<i64> = terms.iter().map(|t| t.unpacked_end).collect();
 
+        // ON CONFLICT DO NOTHING because the same xet file_id reappears
+        // across uploads (e.g. shared vocab.txt across bert-* models). xet
+        // file_id is content-addressed, so duplicate (file_id, term_index)
+        // rows would describe identical reconstruction info — re-insert is
+        // a no-op.
         sqlx::query(
             "INSERT INTO reconstruction_terms \
                (file_id, term_index, xorb_hash, \
@@ -125,7 +130,8 @@ pub async fn insert_shard_with_reconstruction(
                $1::bytea[], $2::int[], $3::bytea[], \
                $4::bigint[], $5::bigint[], \
                $6::bigint[], $7::bigint[], \
-               $8::bigint[], $9::bigint[])",
+               $8::bigint[], $9::bigint[]) \
+             ON CONFLICT (file_id, term_index) DO NOTHING",
         )
         .bind(&file_ids)
         .bind(&term_indices)
