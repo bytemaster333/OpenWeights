@@ -93,10 +93,15 @@ pub async fn get_stats<S: AuthStateRef>(
                 ) \
          ) \
          SELECT \
-             COALESCE((SELECT SUM(size_bytes) \
-                         FROM xorbs \
-                        WHERE owner_user_id = $1 \
-                          AND pin_state <> 'uploading'), 0)::bigint, \
+             ( \
+               COALESCE((SELECT SUM(size_bytes) \
+                           FROM xorbs \
+                          WHERE owner_user_id = $1 \
+                            AND pin_state <> 'uploading'), 0) \
+             + COALESCE((SELECT SUM(lo.size_bytes) \
+                           FROM lfs_objects lo \
+                          WHERE lo.oid IN (SELECT lfs_oid FROM my_lfs)), 0) \
+             )::bigint, \
              COALESCE((SELECT SUM(bytes) FROM my_downloads \
                         WHERE bytes IS NOT NULL), 0)::bigint, \
              COALESCE((SELECT COUNT(*) FROM my_downloads), 0)::bigint, \
