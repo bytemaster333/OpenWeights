@@ -3125,8 +3125,6 @@ dependencies = [
 [[package]]
 name = "sia_storage"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a957c0413e39f2c235282fc43aa4166ba8ab35d4ec44c22879426796daa169be"
 dependencies = [
  "base64",
  "blake2",

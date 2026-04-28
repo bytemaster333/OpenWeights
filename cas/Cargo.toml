@@ -67,3 +67,15 @@ envy = "0.4"
 lto           = "thin"
 codegen-units = 1
 strip         = "symbols"
+
+# SiaHub patch over upstream sia_storage 0.7.0:
+# upstream UploadOptions::validate hard-codes RECOVERY_PROBABILITY=0.75 (a
+# conservative mainnet adversarial assumption). For our Zen testnet demo
+# the active host pool sustains ~95% uptime and we form ~6 contracts;
+# strict 0.75 would force ≥12 hosts to clear the 99.99% recovery
+# threshold and we'd never pin. The vendored copy bumps the constant to
+# 0.90 with a comment + math derivation in-place. Diff is one constant
+# only — no behavioral, API, or correctness change beyond admitting a
+# 2-of-6 erasure scheme.
+[patch.crates-io]
+sia_storage = { path = "vendored/sia_storage" }
