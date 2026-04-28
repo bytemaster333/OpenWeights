@@ -220,13 +220,15 @@ where
         return Ok(true);
     }
 
-    // 'pinning' state: if we have a sia_object_id, retry `pin_only`. On
-    // success transition to 'pinned'; on failure bump attempts (or orphan
-    // at the cap).
-    // If sia_object_id is NULL (handler recorded a Sia-upload failure and
-    // left the row for us), we have no id to pin. We still bump attempts so
-    // the row eventually hits the cap and orphans — that's the correct ops
-    // signal that the original upload never durably reached Sia.
+    // 'pinning' state, two paths:
+    // (a) sia_object_id is set → handler successfully uploaded but the host
+    //     pin step failed; retry `pin_only` (cheap, idempotent).
+    // (b) sia_object_id is NULL → handler hit `Sia unavailable` on the
+    //     initial upload (e.g. wallet was empty when uploads started) and
+    //     left the row pending. Bytes are durable in `xorb_bodies` — load
+    //     them and re-run `upload_and_pin` from the reconciler so the row
+    //     can finally reach Sia. This is the recovery path for "the demo
+    //     ran without a funded wallet, then the wallet got funded".
     match row.sia_object_id.as_deref() {
         Some(oid) => match sia.pin_only(oid).await {
             Ok(()) => {
@@ -235,12 +237,36 @@ where
             }
             Err(e) => bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await,
         },
-        None => {
-            let noent =
-                SiaAdapterError::Other(anyhow::anyhow!("pin_state='pinning' but sia_object_id is NULL"));
-            bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &noent).await
-        }
+        None => match load_xorb_body(pool, &row.hash).await? {
+            Some(bytes) => match sia.upload_and_pin(&bytes).await {
+                Ok(sia_id) => {
+                    set_pinned_xorb(pool, &row.hash, &sia_id).await?;
+                    Ok(true)
+                }
+                Err(e) => bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await,
+            },
+            None => {
+                // Bytes truly gone — can't recover. Bump so the row eventually orphans.
+                let noent = SiaAdapterError::Other(anyhow::anyhow!(
+                    "pin_state='pinning' but xorb_bodies row is missing"
+                ));
+                bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &noent).await
+            }
+        },
     }
+}
+
+/// Load the raw xorb body from the durable Postgres cache. Returns None if
+/// the row is missing (which only happens after a manual purge — handlers
+/// always co-insert the body alongside the metadata row inside one txn).
+async fn load_xorb_body(pool: &PgPool, hash: &[u8; 32]) -> Result<Option<Vec<u8>>, sqlx::Error> {
+    let row: Option<(Vec<u8>,)> = sqlx::query_as(
+        "SELECT content FROM xorb_bodies WHERE xorb_hash = $1",
+    )
+    .bind(&hash[..])
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(b,)| b))
 }
 
 async fn reconcile_shard_row<M>(
