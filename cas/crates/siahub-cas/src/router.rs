@@ -151,6 +151,10 @@ pub fn build(state: AppState) -> Router {
             get(handlers::admin::setup::get_setup_status::<AppState>),
         )
         .route(
+            "/api/platform/sia",
+            get(handlers::admin::setup::platform_sia::<AppState>),
+        )
+        .route(
             "/auth/github/start",
             get(handlers::auth::github::start::<AppState>),
         )

@@ -177,3 +177,143 @@ fn elapsed_ms(start: Instant) -> f64 {
     let d = start.elapsed();
     (d.as_secs() as f64 * 1000.0) + (d.subsec_nanos() as f64 / 1_000_000.0)
 }
+
+// ---------------------------------------------------------------------------
+// `GET /api/platform/sia` — public Sia subsystem snapshot. Surfaces the
+// renter wallet, current contracts, and the siascan.com explorer base so
+// the console can prove "this deployment is actually pushing to Sia" with
+// real on-chain links. Anonymous-readable: only summary aggregates and the
+// public renter address cross the wire — no admin password, no host private
+// keys, nothing the operator wouldn't put in a tweet.
+
+#[derive(Debug, Serialize)]
+pub struct ContractSummary {
+    pub id: String,
+    pub host_key: String,
+    pub formation: Option<String>,
+    pub size: u64,
+    pub remaining_allowance: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlatformSia {
+    pub wallet_address: Option<String>,
+    /// Spendable balance in raw hastings (Sia's atomic unit; 1 SC = 1e24 H).
+    /// String to preserve precision past JS number range; UI formats to SC.
+    pub wallet_spendable_hastings: Option<String>,
+    pub wallet_immature_hastings: Option<String>,
+    pub contract_count: i64,
+    pub distinct_host_count: i64,
+    pub contracts: Vec<ContractSummary>,
+    pub siascan_base: &'static str,
+    pub indexd_synced: Option<bool>,
+}
+
+const SIASCAN_BASE: &str = "https://siascan.com";
+
+pub async fn platform_sia<S: SetupState>(
+    State(st): State<S>,
+) -> Result<Json<PlatformSia>, AppError> {
+    let url_base = st.indexd_url().trim_end_matches('/').to_string();
+    let client = st.http_client();
+    let pwd = st.indexd_admin_password();
+
+    // Three best-effort indexd calls. Any failure → null fields, never 500
+    // (we don't want a transient indexd hiccup to take down the dashboard).
+    let wallet = client
+        .get(format!("{url_base}/api/wallet"))
+        .basic_auth("", Some(pwd))
+        .timeout(PROBE_TIMEOUT)
+        .send()
+        .await
+        .ok()
+        .and_then(|r| if r.status().is_success() { Some(r) } else { None });
+    let wallet_json: Option<serde_json::Value> = match wallet {
+        Some(r) => r.json().await.ok(),
+        None => None,
+    };
+
+    let contracts = client
+        .get(format!("{url_base}/api/contracts"))
+        .basic_auth("", Some(pwd))
+        .timeout(PROBE_TIMEOUT)
+        .send()
+        .await
+        .ok()
+        .and_then(|r| if r.status().is_success() { Some(r) } else { None });
+    let contracts_json: Vec<serde_json::Value> = match contracts {
+        Some(r) => r.json().await.unwrap_or_default(),
+        None => Vec::new(),
+    };
+
+    let synced = client
+        .get(format!("{url_base}/api/state"))
+        .basic_auth("", Some(pwd))
+        .timeout(PROBE_TIMEOUT)
+        .send()
+        .await
+        .ok()
+        .and_then(|r| if r.status().is_success() { Some(r) } else { None });
+    let synced_flag: Option<bool> = match synced {
+        Some(r) => r.json::<serde_json::Value>().await.ok().and_then(|v| {
+            v.get("consensus")
+                .and_then(|c| c.get("synced"))
+                .and_then(|b| b.as_bool())
+        }),
+        None => None,
+    };
+
+    let mut distinct_hosts = std::collections::HashSet::<String>::new();
+    let summaries: Vec<ContractSummary> = contracts_json
+        .iter()
+        .map(|c| {
+            let host_key = c
+                .get("hostKey")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            distinct_hosts.insert(host_key.clone());
+            ContractSummary {
+                id: c
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                host_key,
+                formation: c
+                    .get("formation")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string),
+                size: c.get("size").and_then(|v| v.as_u64()).unwrap_or(0),
+                remaining_allowance: c
+                    .get("remainingAllowance")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0")
+                    .to_string(),
+            }
+        })
+        .collect();
+
+    Ok(Json(PlatformSia {
+        wallet_address: wallet_json
+            .as_ref()
+            .and_then(|v| v.get("address"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        wallet_spendable_hastings: wallet_json
+            .as_ref()
+            .and_then(|v| v.get("spendable"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        wallet_immature_hastings: wallet_json
+            .as_ref()
+            .and_then(|v| v.get("immature"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        contract_count: contracts_json.len() as i64,
+        distinct_host_count: distinct_hosts.len() as i64,
+        contracts: summaries,
+        siascan_base: SIASCAN_BASE,
+        indexd_synced: synced_flag,
+    }))
+}
