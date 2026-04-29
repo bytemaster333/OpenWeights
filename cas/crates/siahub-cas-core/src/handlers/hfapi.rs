@@ -1293,6 +1293,14 @@ pub struct PlatformStats {
     pub total_bytes_served: i64,
     pub downloads_24h: i64,
     pub bytes_served_24h: i64,
+    /// Number of xorbs that successfully landed on Sia hosts (have a real
+    /// `sia_object_id` set + `pin_state='pinned'`).
+    pub xorbs_pinned: i64,
+    /// Total xorb count regardless of pin_state.
+    pub xorbs_total: i64,
+    /// Sum of `size_bytes` for xorbs in `pin_state='pinned'`. Surfaces the
+    /// "real bytes durable on Sia" number in the dashboard.
+    pub bytes_on_sia: i64,
 }
 
 pub async fn platform_stats<S: HfApiState>(
@@ -1300,7 +1308,7 @@ pub async fn platform_stats<S: HfApiState>(
 ) -> Result<Json<PlatformStats>, AppError> {
     // One round-trip. Each subselect is independently scoped so an empty
     // table (e.g. zero repos) doesn't NULL-out the unrelated counters.
-    let row: (i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+    let row: (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
         "SELECT \
             (SELECT COUNT(*)::BIGINT FROM repos WHERE visibility = 'public') AS total_models, \
             (SELECT COUNT(DISTINCT u.id)::BIGINT \
@@ -1334,7 +1342,10 @@ pub async fn platform_stats<S: HfApiState>(
             (SELECT COALESCE(SUM(rd.bytes)::BIGINT, 0) \
                FROM repo_downloads rd \
                JOIN repos r ON r.id = rd.repo_id \
-              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS bytes_served_24h",
+              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS bytes_served_24h, \
+            (SELECT COUNT(*)::BIGINT FROM xorbs WHERE pin_state = 'pinned' AND sia_object_id IS NOT NULL) AS xorbs_pinned, \
+            (SELECT COUNT(*)::BIGINT FROM xorbs) AS xorbs_total, \
+            (SELECT COALESCE(SUM(size_bytes)::BIGINT, 0) FROM xorbs WHERE pin_state = 'pinned' AND sia_object_id IS NOT NULL) AS bytes_on_sia",
     )
     .fetch_one(st.pool())
     .await?;
@@ -1348,6 +1359,9 @@ pub async fn platform_stats<S: HfApiState>(
         total_bytes_served: row.5,
         downloads_24h: row.6,
         bytes_served_24h: row.7,
+        xorbs_pinned: row.8,
+        xorbs_total: row.9,
+        bytes_on_sia: row.10,
     }))
 }
 

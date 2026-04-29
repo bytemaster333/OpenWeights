@@ -73,6 +73,13 @@ export type PlatformStats = {
   total_bytes_served: number
   downloads_24h: number
   bytes_served_24h: number
+  /** Xorbs that have a real `sia_object_id` and are `pin_state='pinned'` —
+   * the bytes that ACTUALLY landed on Sia hosts (vs durable Postgres cache).*/
+  xorbs_pinned: number
+  /** Total xorb count regardless of pin state. */
+  xorbs_total: number
+  /** Sum of size_bytes for pinned xorbs — "bytes really on Sia". */
+  bytes_on_sia: number
 }
 
 /**

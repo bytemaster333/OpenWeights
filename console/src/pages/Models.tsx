@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import {
   ClockIcon,
+  CloudCheckIcon,
   CubeIcon,
   DownloadIcon,
   FileIcon,
@@ -16,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useModels } from "@/hooks/useModels"
+import { usePlatformStats } from "@/hooks/useStats"
 import { formatBytes, formatRelative } from "@/lib/format"
 
 /**
@@ -27,17 +29,38 @@ import { formatBytes, formatRelative } from "@/lib/format"
 
 export function ModelsPage() {
   const { data, isLoading, isError, error } = useModels()
+  const { data: platform } = usePlatformStats()
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
-      <header>
-        <div className="flex items-center gap-3">
-          <CubeIcon size={22} weight="light" className="text-muted-foreground" />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Models</h1>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <CubeIcon size={22} weight="light" className="text-muted-foreground" />
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">Models</h1>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Public models hosted on this SiaHub deployment — byte-stored on Sia.
+          </p>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Public models hosted on this SiaHub deployment — byte-stored on Sia.
-        </p>
+        {platform && platform.xorbs_total > 0 && (
+          <Link
+            to="/setup"
+            className="inline-flex items-center gap-2 rounded border bg-muted/10 px-3 py-1.5 text-xs hover:border-primary/40 hover:bg-muted/30"
+          >
+            <CloudCheckIcon size={14} weight="light" className="text-primary" />
+            <span>
+              <span className="font-mono font-medium">
+                {formatBytes(platform.bytes_on_sia)}
+              </span>{" "}
+              on Sia ·{" "}
+              <span className="font-mono">
+                {platform.xorbs_pinned}/{platform.xorbs_total}
+              </span>{" "}
+              xorbs
+            </span>
+          </Link>
+        )}
       </header>
 
       {isLoading && (

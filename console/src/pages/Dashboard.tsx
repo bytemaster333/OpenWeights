@@ -106,12 +106,24 @@ export function DashboardPage() {
             value={platform ? String(platform.total_downloads) : "—"}
             subtext={platform ? `+${platform.downloads_24h} today` : ""}
           />
-          <StatsTile
-            label="Bytes served"
-            loading={platformPending}
-            value={platform ? formatBytes(platform.total_bytes_served) : "—"}
-            subtext={platform ? `+${formatBytes(platform.bytes_served_24h)} today` : ""}
-          />
+          {/* "On Sia" — the load-bearing demo number: bytes really pinned on
+              Sia hosts (vs the durable Postgres cache). Click-through to
+              /setup which has the explorer drilldown. */}
+          <Link
+            to="/setup"
+            className="rounded transition-colors hover:bg-muted/30"
+          >
+            <StatsTile
+              label="On Sia"
+              loading={platformPending}
+              value={platform ? formatBytes(platform.bytes_on_sia) : "—"}
+              subtext={
+                platform
+                  ? `${platform.xorbs_pinned}/${platform.xorbs_total} xorbs pinned`
+                  : ""
+              }
+            />
+          </Link>
         </div>
       </section>
 
