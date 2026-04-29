@@ -1,4 +1,5 @@
 import {
+  ArrowSquareOutIcon,
   CheckIcon,
   CircleNotchIcon,
   CloudCheckIcon,
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/table"
 import { type Xorb, useAssets } from "@/hooks/useAssets"
 import { useKeys } from "@/hooks/useKeys"
+import { usePlatformSia } from "@/hooks/useSetupStatus"
 import { formatBytes, formatRelative } from "@/lib/format"
 
 /**
@@ -204,6 +206,7 @@ export function AssetsPage() {
   }, [debouncedPrefix, apiKeyId])
 
   const { data: keys = [] } = useKeys()
+  const { data: sia } = usePlatformSia()
   const {
     data: xorbs = [],
     isPending,
@@ -331,6 +334,18 @@ export function AssetsPage() {
                       >
                         <Icon size={14} weight="light" />
                         <Badge variant={pm.variant}>{pm.label}</Badge>
+                        {x.pin_state === "pinned" && sia?.wallet_address && (
+                          <a
+                            href={`${sia.siascan_base}/address/${sia.wallet_address}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-muted-foreground hover:text-primary"
+                            title="View renter wallet on siascan"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ArrowSquareOutIcon size={12} weight="light" />
+                          </a>
+                        )}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

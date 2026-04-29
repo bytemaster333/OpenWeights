@@ -1,14 +1,23 @@
-import { ArrowRight, CloudArrowUp, DownloadSimple, GithubLogo } from "@phosphor-icons/react"
-import { useSearch } from "@tanstack/react-router"
+import {
+  ArrowRight,
+  CloudArrowUp,
+  CloudCheckIcon,
+  DownloadSimple,
+  GithubLogo,
+} from "@phosphor-icons/react"
+import { Link, useSearch } from "@tanstack/react-router"
 
 import { OAuthErrorBanner, type OAuthErrorCode } from "@/components/OAuthErrorBanner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { usePlatformStats } from "@/hooks/useStats"
 import { CAS_URL } from "@/lib/api"
+import { formatBytes } from "@/lib/format"
 
 export function LandingPage() {
   const search = useSearch({ strict: false }) as { error?: string }
   const errorCode = isOAuthErrorCode(search.error) ? search.error : undefined
+  const { data: platform } = usePlatformStats()
 
   return (
     <main className="mx-auto max-w-4xl space-y-10 px-6 py-16">
@@ -22,6 +31,22 @@ export function LandingPage() {
           a siahub deployment and use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli as usual.
         </p>
       </section>
+
+      {/* Live platform numbers — proves "actually on Sia" without scrolling. */}
+      {platform && (
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Models" value={String(platform.total_models)} />
+          <Stat label="Stored" value={formatBytes(platform.total_size_bytes)} />
+          <Stat label="Downloads" value={String(platform.total_downloads)} />
+          <Stat
+            label="On Sia"
+            value={formatBytes(platform.bytes_on_sia)}
+            sub={`${platform.xorbs_pinned}/${platform.xorbs_total} xorbs`}
+            href="/setup"
+            highlight
+          />
+        </section>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2">
         <Card>
@@ -82,4 +107,39 @@ const OAUTH_ERROR_CODES = [
 
 function isOAuthErrorCode(v: unknown): v is OAuthErrorCode {
   return typeof v === "string" && (OAUTH_ERROR_CODES as readonly string[]).includes(v)
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  href,
+  highlight,
+}: {
+  label: string
+  value: string
+  sub?: string
+  href?: string
+  highlight?: boolean
+}) {
+  const content = (
+    <>
+      <div className="flex items-center gap-1.5 text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+        {highlight && <CloudCheckIcon size={12} weight="light" className="text-primary" />}
+        {label}
+      </div>
+      <div className="font-heading text-xl font-medium tabular-nums">{value}</div>
+      {sub && <div className="text-[0.7rem] text-muted-foreground">{sub}</div>}
+    </>
+  )
+  const className = `rounded border bg-muted/10 px-4 py-3 ${
+    highlight ? "border-primary/30 bg-primary/5" : ""
+  } ${href ? "transition-colors hover:bg-muted/30" : ""}`
+  return href ? (
+    <Link to={href} className={className}>
+      {content}
+    </Link>
+  ) : (
+    <div className={className}>{content}</div>
+  )
 }
