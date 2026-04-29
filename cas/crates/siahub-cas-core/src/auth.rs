@@ -16,6 +16,13 @@
 
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+/// Maximum age of a cached key entry before it is re-fetched from
+/// Postgres. Bounds the window where a `revoke_key` UPDATE remains
+/// invisible to the bearer-auth path (per-process; multi-replica
+/// deployments need the same TTL or a pubsub invalidation).
+pub const KEY_CACHE_TTL: Duration = Duration::from_secs(5);
 
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
@@ -34,6 +41,11 @@ pub struct ActiveKey {
     pub id: Uuid,
     pub user_id: i64,
     pub scopes: Vec<ApiKeyScope>,
+    /// When this row was loaded from Postgres. Used by `KeyCache::get`
+    /// to bound revocation staleness — entries older than `KEY_CACHE_TTL`
+    /// are evicted on read so a `revoke_key` SQL update propagates within
+    /// that window without a process restart.
+    pub loaded_at: Instant,
 }
 
 /// Context carried into handlers once auth succeeds.
@@ -70,9 +82,18 @@ impl KeyCache {
     }
 
     /// Clone-out the cached row (cache holds the authoritative copy; callers
-    /// get an owned view).
+    /// get an owned view). Entries older than `KEY_CACHE_TTL` are
+    /// invalidated and `pop`'d so a stale revoked-key cache hit cannot
+    /// authenticate past the TTL window.
     pub fn get(&self, hash: &[u8; 32]) -> Option<ActiveKey> {
-        self.inner.lock().ok()?.get(hash).cloned()
+        let mut g = self.inner.lock().ok()?;
+        let key = g.get(hash)?;
+        if key.loaded_at.elapsed() > KEY_CACHE_TTL {
+            g.pop(hash);
+            None
+        } else {
+            Some(key.clone())
+        }
     }
 
     pub fn put(&self, hash: [u8; 32], key: ActiveKey) {
@@ -126,6 +147,7 @@ pub async fn fetch_active_key_by_hash(
         id,
         user_id,
         scopes,
+        loaded_at: Instant::now(),
     }))
 }
 
@@ -361,6 +383,7 @@ mod tests {
             id: Uuid::from_u128(id),
             user_id: 1,
             scopes: vec![ApiKeyScope::Upload],
+            loaded_at: Instant::now(),
         };
         cache.put(h1, k(1));
         cache.put(h2, k(2));

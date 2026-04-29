@@ -43,7 +43,9 @@ export type StatsResponse = {
   /** COUNT of `event='download'` rows attributed to the caller's content. */
   total_downloads: number
   /** `[0, 1]` — UI multiplies by 100 for percent display. */
-  cache_hit_rate: number
+  /** `[0, 1]` over downloads with non-null `cache_hit`. `null` when there
+   * are zero eligible rows — UI should render "—" not "0.0%". */
+  cache_hit_rate: number | null
   provider_count: number
   per_key: PerKeyStats[]
   recent_activity: ActivityRow[]

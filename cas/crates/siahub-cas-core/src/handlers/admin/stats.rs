@@ -26,7 +26,10 @@ pub struct StatsResponse {
     /// Count of `event='download'` rows. Attribution-neutral — any
     /// download (anon + keyed + across repos) counts.
     pub total_downloads: i64,
-    pub cache_hit_rate: f64,
+    /// `[0, 1]` over downloads with non-null `cache_hit`. `None` when
+    /// there are zero eligible rows — UI renders "—" instead of a
+    /// misleading 0.0%.
+    pub cache_hit_rate: Option<f64>,
     /// Number of distinct API keys the user has emitted events from. Real
     /// Sia host count surfaces separately via `/admin/stats/map` to keep
     /// this endpoint off the indexd hot path.
@@ -72,7 +75,21 @@ pub async fn get_stats<S: AuthStateRef>(
     // * provider_count — distinct api_key_id seen in download events
     // on the user's content (anonymous downloads
     // are excluded from the distinct count)
-    let row: (i64, i64, i64, f64, i64) = sqlx::query_as(
+    // Note on scope:
+    // * `my_xorbs` is the legacy gateway-write attribution path (real xorb
+    //   merkle hashes in `usage_log.xorb_hash`). The CAS download writers
+    //   (xet_file_serve / lfs_download) populate `usage_log.file_id` and
+    //   `usage_log.shard_hash` instead — `xorb_hash` is only ever set by
+    //   the gateway.
+    // * `my_files` covers the modern Xet path: every file_id in any of the
+    //   user's HEAD repo files. Joins via `usage_log.file_id`.
+    // * `my_lfs` covers inline LFS oids — joins via `usage_log.shard_hash`.
+    // `bytes_stored` excludes 'orphaned' xorbs (the original `<> 'uploading'`
+    // mistakenly counted retry-budget-exhausted bytes as "uploaded").
+    // `cache_hit_rate` returns NULL when no eligible rows so the UI can
+    // render "—" instead of a misleading "0.0%".
+    type StatsRow = (i64, i64, i64, Option<f64>, i64);
+    let row: StatsRow = sqlx::query_as(
         "WITH my_xorbs AS ( \
              SELECT xorb_merkle_hash FROM xorbs WHERE owner_user_id = $1 \
          ), \
@@ -83,13 +100,21 @@ pub async fn get_stats<S: AuthStateRef>(
                JOIN repos r ON r.id = rc.repo_id \
               WHERE r.owner_user_id = $1 AND rf.lfs_oid IS NOT NULL \
          ), \
+         my_files AS ( \
+             SELECT DISTINCT rf.xet_hash \
+               FROM repo_files rf \
+               JOIN repo_commits rc ON rc.id = rf.commit_id \
+               JOIN repos r ON r.id = rc.repo_id \
+              WHERE r.owner_user_id = $1 AND rf.xet_hash IS NOT NULL \
+         ), \
          my_downloads AS ( \
              SELECT ul.bytes, ul.cache_hit, ul.api_key_id \
                FROM usage_log ul \
               WHERE ul.event = 'download' \
                 AND ( \
-                     ul.xorb_hash IN (SELECT xorb_merkle_hash FROM my_xorbs) \
+                     ul.xorb_hash  IN (SELECT xorb_merkle_hash FROM my_xorbs) \
                   OR ul.shard_hash IN (SELECT lfs_oid FROM my_lfs) \
+                  OR ul.file_id   IN (SELECT xet_hash FROM my_files) \
                 ) \
          ) \
          SELECT \
@@ -97,7 +122,7 @@ pub async fn get_stats<S: AuthStateRef>(
                COALESCE((SELECT SUM(size_bytes) \
                            FROM xorbs \
                           WHERE owner_user_id = $1 \
-                            AND pin_state <> 'uploading'), 0) \
+                            AND pin_state IN ('pinning','pinned')), 0) \
              + COALESCE((SELECT SUM(lo.size_bytes) \
                            FROM lfs_objects lo \
                           WHERE lo.oid IN (SELECT lfs_oid FROM my_lfs)), 0) \
@@ -105,9 +130,9 @@ pub async fn get_stats<S: AuthStateRef>(
              COALESCE((SELECT SUM(bytes) FROM my_downloads \
                         WHERE bytes IS NOT NULL), 0)::bigint, \
              COALESCE((SELECT COUNT(*) FROM my_downloads), 0)::bigint, \
-             COALESCE((SELECT AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END) \
-                         FROM my_downloads \
-                        WHERE cache_hit IS NOT NULL), 0.0)::double precision, \
+             (SELECT AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END)::double precision \
+                FROM my_downloads \
+               WHERE cache_hit IS NOT NULL), \
              COALESCE((SELECT COUNT(DISTINCT api_key_id) \
                          FROM my_downloads \
                         WHERE api_key_id IS NOT NULL), 0)::bigint",
@@ -125,23 +150,47 @@ pub async fn get_stats<S: AuthStateRef>(
     ) = row;
 
     // --- Per-key breakdown. ---
-    // Groups by api_key_id. bytes_served = SUM(bytes) over download rows;
-    // bytes_stored = SUM(size_bytes) of xorbs owned by this key.
+    // bytes_served is now scoped to "downloads OF the user's content",
+    // matching the top-level total. Without scope it counted "bytes pulled
+    // BY this key from anyone's content" — different universe, didn't sum.
+    // bytes_stored excludes orphaned xorbs (consistent with the top-level).
     let per_key_rows: Vec<(Uuid, i64, i64)> = sqlx::query_as(
-        "SELECT ak.id, \
+        "WITH my_xorbs AS ( \
+             SELECT xorb_merkle_hash FROM xorbs WHERE owner_user_id = $1 \
+         ), \
+         my_lfs AS ( \
+             SELECT DISTINCT rf.lfs_oid \
+               FROM repo_files rf \
+               JOIN repo_commits rc ON rc.id = rf.commit_id \
+               JOIN repos r ON r.id = rc.repo_id \
+              WHERE r.owner_user_id = $1 AND rf.lfs_oid IS NOT NULL \
+         ), \
+         my_files AS ( \
+             SELECT DISTINCT rf.xet_hash \
+               FROM repo_files rf \
+               JOIN repo_commits rc ON rc.id = rf.commit_id \
+               JOIN repos r ON r.id = rc.repo_id \
+              WHERE r.owner_user_id = $1 AND rf.xet_hash IS NOT NULL \
+         ) \
+         SELECT ak.id, \
                 COALESCE(served.bytes_served, 0)::bigint, \
                 COALESCE(stored.bytes_stored, 0)::bigint \
            FROM api_keys ak \
            LEFT JOIN ( \
-               SELECT api_key_id, SUM(bytes) AS bytes_served \
-                 FROM usage_log \
-                WHERE event = 'download' AND bytes IS NOT NULL \
-                GROUP BY api_key_id \
+               SELECT ul.api_key_id, SUM(ul.bytes) AS bytes_served \
+                 FROM usage_log ul \
+                WHERE ul.event = 'download' AND ul.bytes IS NOT NULL \
+                  AND ( \
+                       ul.xorb_hash  IN (SELECT xorb_merkle_hash FROM my_xorbs) \
+                    OR ul.shard_hash IN (SELECT lfs_oid FROM my_lfs) \
+                    OR ul.file_id   IN (SELECT xet_hash FROM my_files) \
+                  ) \
+                GROUP BY ul.api_key_id \
            ) AS served ON served.api_key_id = ak.id \
            LEFT JOIN ( \
                SELECT owner_api_key_id, SUM(size_bytes) AS bytes_stored \
                  FROM xorbs \
-                WHERE pin_state <> 'uploading' \
+                WHERE pin_state IN ('pinning','pinned') \
                 GROUP BY owner_api_key_id \
            ) AS stored ON stored.owner_api_key_id = ak.id \
           WHERE ak.user_id = $1 \
@@ -181,9 +230,16 @@ pub async fn get_stats<S: AuthStateRef>(
                     JOIN repo_commits rc ON rc.id = rf.commit_id \
                     JOIN repos r ON r.id = rc.repo_id \
                    WHERE r.owner_user_id = $1 AND rf.lfs_oid IS NOT NULL \
+              ), \
+              my_files AS ( \
+                  SELECT DISTINCT rf.xet_hash \
+                    FROM repo_files rf \
+                    JOIN repo_commits rc ON rc.id = rf.commit_id \
+                    JOIN repos r ON r.id = rc.repo_id \
+                   WHERE r.owner_user_id = $1 AND rf.xet_hash IS NOT NULL \
               ) \
          SELECT ul.occurred_at, \
-                COALESCE(ul.xorb_hash, ul.shard_hash) AS hash, \
+                COALESCE(ul.xorb_hash, ul.shard_hash, ul.file_id) AS hash, \
                 ul.event::text, \
                 ul.bytes, \
                 ul.cache_hit \
@@ -191,6 +247,7 @@ pub async fn get_stats<S: AuthStateRef>(
           WHERE ul.api_key_id IN (SELECT id FROM my_keys) \
              OR ul.xorb_hash  IN (SELECT xorb_merkle_hash FROM my_xorbs) \
              OR ul.shard_hash IN (SELECT lfs_oid FROM my_lfs) \
+             OR ul.file_id   IN (SELECT xet_hash FROM my_files) \
           ORDER BY ul.occurred_at DESC \
           LIMIT 20",
     )

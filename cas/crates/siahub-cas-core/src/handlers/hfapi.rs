@@ -652,12 +652,17 @@ pub struct DownloadParams {
 /// own range-fetch path, so `/stats` aggregations count both sources
 /// uniformly. `cache_hit=true` because the bytes were served from
 /// `xorb_bodies` or `lfs_objects` (local Postgres) without touching Sia.
+// `file_id` carries the Xet per-file content hash (= reconstruction_files.file_id =
+// repo_files.xet_hash). It is NOT a xorb merkle hash. Routed to
+// `usage_log.file_id` so the /stats join can attribute via
+// `repo_files.xet_hash`; the legacy `xorb_hash` column is reserved for
+// real xorb merkle hashes (gateway-only writers).
 async fn record_download(
     pool: &sqlx::PgPool,
     repo_id: Option<i64>,
     api_key_id: Option<uuid::Uuid>,
     bytes: i64,
-    xorb_hash: Option<Vec<u8>>,
+    file_id: Option<Vec<u8>>,
     lfs_oid: Option<Vec<u8>>,
 ) {
     // 1. repo_downloads — only if we have a repo attribution.
@@ -681,12 +686,15 @@ async fn record_download(
     // 2. usage_log — unified audit trail for /stats + Recent activity.
     // `api_key_id` is populated when the request carried a Bearer token;
     // anonymous downloads stay NULL (migration 0003 allows it).
+    // file_id gets its own column (added in migration 0003); shard_hash
+    // continues to receive lfs_oid for legacy LFS downloads. Stats SQL
+    // walks all three columns to attribute back to the owning user.
     let _ = sqlx::query(
-        "INSERT INTO usage_log (event, api_key_id, user_id, xorb_hash, shard_hash, bytes, cache_hit) \
+        "INSERT INTO usage_log (event, api_key_id, user_id, file_id, shard_hash, bytes, cache_hit) \
          VALUES ('download', $1, NULL, $2, $3, $4, TRUE)",
     )
     .bind(api_key_id)
-    .bind(xorb_hash.as_deref())
+    .bind(file_id.as_deref())
     .bind(lfs_oid.as_deref())
     .bind(bytes)
     .execute(pool)
@@ -1409,11 +1417,20 @@ pub async fn list_models<S: HfApiState>(
         // Explicit ::BIGINT casts: COALESCE(SUM(...), 0) returns NUMERIC
         // in Postgres, which sqlx refuses to decode into Option<i64>.
         // Download aggregates pull from migration 0010's `repo_downloads`
-        // counter.
+        // counter. last_modified mirrors model_info: derived from the
+        // HEAD commit's `committed_at`, not `repos.updated_at` (which
+        // bumps on description/visibility edits and would diverge from
+        // ModelDetail's "Updated …" header).
         "SELECT u.github_login AS owner, \
                 r.name         AS name, \
                 r.description  AS description, \
-                r.updated_at   AS last_modified, \
+                COALESCE( \
+                  (SELECT rc.committed_at \
+                     FROM repo_refs rr \
+                     JOIN repo_commits rc ON rc.id = rr.commit_id \
+                    WHERE rr.repo_id = r.id AND rr.ref_name = 'main'), \
+                  r.updated_at \
+                )::TIMESTAMPTZ AS last_modified, \
                 (SELECT COALESCE(SUM(rf.size_bytes), 0)::BIGINT \
                    FROM repo_refs rr \
                    JOIN repo_files rf ON rf.commit_id = rr.commit_id \
@@ -1519,19 +1536,24 @@ async fn build_model_info<S: HfApiState>(
     repo_id: i64,
     revision: &str,
 ) -> Result<Json<ModelInfo>, AppError> {
-    let commit: Option<(i64, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(
-            "SELECT rc.id, rc.committed_at, r.created_at \
-               FROM repo_refs rr \
-               JOIN repo_commits rc ON rc.id = rr.commit_id \
-               JOIN repos r ON r.id = rr.repo_id \
-              WHERE rr.repo_id = $1 AND rr.ref_name = $2",
-        )
-        .bind(repo_id)
-        .bind(revision)
-        .fetch_optional(st.pool())
-        .await?;
-    let (commit_id, committed_at, created_at) = commit.ok_or(AppError::NotFound)?;
+    let commit: Option<(
+        i64,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+        String,
+    )> = sqlx::query_as(
+        "SELECT rc.id, rc.committed_at, r.created_at, r.visibility::text \
+           FROM repo_refs rr \
+           JOIN repo_commits rc ON rc.id = rr.commit_id \
+           JOIN repos r ON r.id = rr.repo_id \
+          WHERE rr.repo_id = $1 AND rr.ref_name = $2",
+    )
+    .bind(repo_id)
+    .bind(revision)
+    .fetch_optional(st.pool())
+    .await?;
+    let (commit_id, committed_at, created_at, visibility) =
+        commit.ok_or(AppError::NotFound)?;
 
     let files: Vec<(String, i64, Option<Vec<u8>>, Option<Vec<u8>>)> = sqlx::query_as(
         "SELECT path, size_bytes, xet_hash, lfs_oid FROM repo_files WHERE commit_id = $1",
@@ -1576,7 +1598,11 @@ async fn build_model_info<S: HfApiState>(
         last_modified: committed_at
             .format("%Y-%m-%dT%H:%M:%S%.6fZ")
             .to_string(),
-        private: false,
+        // Surface real visibility instead of the previous hardcoded false.
+        // The HF API distinction is binary (`private: bool`), so unlisted
+        // and private both serialize as `private: true` to keep the wire
+        // shape simple.
+        private: visibility != "public",
         siblings,
         created_at: created_at
             .format("%Y-%m-%dT%H:%M:%S%.6fZ")

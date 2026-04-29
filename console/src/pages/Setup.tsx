@@ -196,7 +196,9 @@ export function SetupPage() {
                   <div className="text-[0.7rem] uppercase text-muted-foreground">
                     Network
                   </div>
-                  <div className="font-mono text-sm">Zen testnet</div>
+                  <div className="font-mono text-sm">
+                    {sia.siascan_base.includes("zen") ? "Zen testnet" : "Mainnet"}
+                  </div>
                 </div>
               </div>
 

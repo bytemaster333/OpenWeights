@@ -118,8 +118,16 @@ export function StatsPage() {
           <StatsTile
             label="Cache hit rate"
             loading={isPending}
-            value={data ? `${(data.cache_hit_rate * 100).toFixed(1)}%` : "—"}
-            subtext="of downloads"
+            value={
+              data && data.cache_hit_rate !== null
+                ? `${(data.cache_hit_rate * 100).toFixed(1)}%`
+                : "—"
+            }
+            subtext={
+              data && data.cache_hit_rate === null
+                ? "no downloads yet"
+                : "of downloads"
+            }
           />
           <StatsTile
             label="Keys with usage"

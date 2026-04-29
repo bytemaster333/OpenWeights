@@ -199,7 +199,7 @@ export function MapPage() {
                   <div className="flex items-center gap-2">
                     <MapPinIcon size={12} weight="light" className="text-muted-foreground" />
                     <span className="font-mono">
-                      {h.public_key.slice(0, 16)}…
+                      {h.public_key.replace(/^ed25519:/, "").slice(0, 12)}…
                     </span>
                     {h.country_code && (
                       <span className="ml-auto text-base leading-none">
