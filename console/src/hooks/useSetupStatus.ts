@@ -49,3 +49,37 @@ export function useSetupStatus() {
     refetchIntervalInBackground: false,
   })
 }
+
+/**
+ * Public Sia subsystem snapshot — wallet address, formed contracts,
+ * distinct host count, plus the siascan.com base for explorer deep-links.
+ * Powers the "On Sia" panel that proves the deployment is actually
+ * pinning bytes on the Sia network (vs. the local Postgres durable cache).
+ */
+export type ContractSummary = {
+  id: string
+  host_key: string
+  formation: string | null
+  size: number
+  remaining_allowance: string
+}
+
+export type PlatformSia = {
+  wallet_address: string | null
+  wallet_spendable_hastings: string | null
+  wallet_immature_hastings: string | null
+  contract_count: number
+  distinct_host_count: number
+  contracts: ContractSummary[]
+  siascan_base: string
+  indexd_synced: boolean | null
+}
+
+export function usePlatformSia() {
+  return useQuery<PlatformSia>({
+    queryKey: ["platform-sia"],
+    queryFn: () => casFetch<PlatformSia>("/api/platform/sia"),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  })
+}

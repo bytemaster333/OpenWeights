@@ -41,3 +41,26 @@ export function formatRelative(iso: string): string {
 export function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString()
 }
+
+/**
+ * Format a hastings (Sia's atomic unit) value to a human-readable SC
+ * string. 1 SC = 1e24 hastings. The CAS endpoint returns these as decimal
+ * strings to preserve precision past JS number range.
+ *
+ * Rounded to 2 decimal places; appends " SC". Empty input → "—".
+ */
+export function formatHastingsToSC(hastings: string | null | undefined): string {
+  if (!hastings) return "—"
+  let h: bigint
+  try {
+    h = BigInt(hastings)
+  } catch {
+    return "—"
+  }
+  // 1 SC = 10^24 hastings. Compute SC * 100 (for 2-decimal precision) by
+  // dividing by 10^22, then format with one decimal point.
+  const scTimes100 = h / 10000000000000000000000n
+  const intPart = scTimes100 / 100n
+  const fracPart = scTimes100 % 100n
+  return `${intPart}.${fracPart.toString().padStart(2, "0")} SC`
+}

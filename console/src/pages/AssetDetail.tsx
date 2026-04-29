@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  ArrowSquareOutIcon,
   CheckIcon,
   CircleNotchIcon,
   CloudCheckIcon,
@@ -15,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAsset } from "@/hooks/useAssets"
+import { usePlatformSia } from "@/hooks/useSetupStatus"
 import { formatBytes } from "@/lib/format"
 
 /**
@@ -152,6 +154,7 @@ function AssetDetailBody({
   const x = data.xorb
   const pm = pinMeta(x.pin_state)
   const Icon = pm.Icon
+  const { data: sia } = usePlatformSia()
 
   return (
     <>
@@ -206,12 +209,54 @@ function AssetDetailBody({
             <p className="text-xs text-muted-foreground">{pm.detail}</p>
           </div>
         ) : x.sia_object_id ? (
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Object ID</div>
-            <div className="flex items-start gap-2">
-              <code className="break-all font-mono text-xs">{x.sia_object_id}</code>
-              <CopyInline value={x.sia_object_id} label="sia object id" />
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Object ID</div>
+              <div className="flex flex-wrap items-start gap-2">
+                <code className="break-all font-mono text-xs">{x.sia_object_id}</code>
+                <CopyInline value={x.sia_object_id} label="sia object id" />
+              </div>
             </div>
+
+            {/* Explorer drill-down — siascan links for the renter wallet
+                + every host currently storing this xorb. We can't link the
+                object id directly (siascan indexes contracts and hosts,
+                not renter-internal object ids), but the wallet + host
+                pages give the reader a verifiable on-chain trail. */}
+            {sia && (
+              <div className="space-y-2 border-t pt-3">
+                <div className="text-xs text-muted-foreground">
+                  Explore on Sia ({sia.contract_count} contracts ·{" "}
+                  {sia.distinct_host_count} hosts)
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {sia.wallet_address && (
+                    <a
+                      href={`${sia.siascan_base}/address/${sia.wallet_address}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-muted/40"
+                    >
+                      Renter wallet
+                      <ArrowSquareOutIcon size={12} weight="light" />
+                    </a>
+                  )}
+                  {sia.contracts.slice(0, 6).map((c) => (
+                    <a
+                      key={c.id}
+                      href={`${sia.siascan_base}/contract/${c.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-xs hover:bg-muted/40"
+                      title={`Contract ${c.id} · host ${c.host_key}`}
+                    >
+                      {c.id.slice(0, 8)}…
+                      <ArrowSquareOutIcon size={12} weight="light" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-1">

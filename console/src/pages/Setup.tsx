@@ -1,5 +1,7 @@
 import {
+  ArrowSquareOutIcon,
   CheckCircle,
+  CloudCheckIcon,
   HeartbeatIcon,
   Warning,
   WarningCircle,
@@ -8,8 +10,13 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { type SubsystemStatus, useSetupStatus } from "@/hooks/useSetupStatus"
+import {
+  type SubsystemStatus,
+  usePlatformSia,
+  useSetupStatus,
+} from "@/hooks/useSetupStatus"
 import { CAS_URL } from "@/lib/api"
+import { formatBytes, formatHastingsToSC } from "@/lib/format"
 
 /**
  * `/setup` — platform status.
@@ -43,6 +50,7 @@ function latencyText(ms?: number): string {
 
 export function SetupPage() {
   const { data, isPending, error, refetch } = useSetupStatus()
+  const { data: sia } = usePlatformSia()
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-6 py-8" data-testid="setup-page">
@@ -139,6 +147,143 @@ export function SetupPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* On-Sia network panel — proof we're actually pinning bytes
+              on the Sia network. Every link below opens siascan.com. */}
+          {sia && (
+            <section
+              className="rounded border bg-muted/10 p-4"
+              data-testid="setup-tile-sia"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <CloudCheckIcon size={14} weight="light" /> On Sia network
+                </h2>
+                {sia.indexd_synced != null && (
+                  <Badge
+                    variant={sia.indexd_synced ? "default" : "secondary"}
+                  >
+                    {sia.indexd_synced ? "synced" : "syncing"}
+                  </Badge>
+                )}
+              </div>
+
+              {/* KPIs */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div>
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">
+                    Renter wallet
+                  </div>
+                  <div className="font-mono text-xs">
+                    {formatHastingsToSC(sia.wallet_spendable_hastings)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">
+                    Active contracts
+                  </div>
+                  <div className="font-mono text-sm">{sia.contract_count}</div>
+                </div>
+                <div>
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">
+                    Distinct hosts
+                  </div>
+                  <div className="font-mono text-sm">
+                    {sia.distinct_host_count}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">
+                    Network
+                  </div>
+                  <div className="font-mono text-sm">Zen testnet</div>
+                </div>
+              </div>
+
+              {/* Wallet → siascan */}
+              {sia.wallet_address && (
+                <div className="mt-4 space-y-1">
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">
+                    Renter address
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="break-all font-mono text-xs">
+                      {sia.wallet_address}
+                    </code>
+                    <a
+                      href={`${sia.siascan_base}/address/${sia.wallet_address}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 hover:no-underline"
+                    >
+                      View on siascan
+                      <ArrowSquareOutIcon size={12} weight="light" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Contracts list */}
+              {sia.contracts.length > 0 && (
+                <div className="mt-4">
+                  <div className="mb-2 text-[0.7rem] uppercase text-muted-foreground">
+                    Contracts
+                  </div>
+                  <div className="overflow-x-auto rounded border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40">
+                        <tr>
+                          <th className="px-2 py-1 text-left font-medium">
+                            Contract
+                          </th>
+                          <th className="px-2 py-1 text-left font-medium">
+                            Host
+                          </th>
+                          <th className="px-2 py-1 text-right font-medium">
+                            Stored
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sia.contracts.map((c) => (
+                          <tr
+                            key={c.id}
+                            className="border-t border-border/60"
+                          >
+                            <td className="px-2 py-1 font-mono">
+                              <a
+                                href={`${sia.siascan_base}/contract/${c.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary underline underline-offset-2 hover:no-underline"
+                                title={c.id}
+                              >
+                                {c.id.slice(0, 12)}…
+                              </a>
+                            </td>
+                            <td className="px-2 py-1 font-mono">
+                              <a
+                                href={`${sia.siascan_base}/host/${c.host_key.replace(/^ed25519:/, "")}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-muted-foreground hover:text-foreground hover:underline"
+                                title={c.host_key}
+                              >
+                                {c.host_key.replace(/^ed25519:/, "").slice(0, 10)}…
+                              </a>
+                            </td>
+                            <td className="px-2 py-1 text-right tabular-nums">
+                              {formatBytes(c.size)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="rounded border bg-muted/10 p-4">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
