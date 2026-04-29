@@ -73,8 +73,8 @@ export type PlatformStats = {
   total_size_bytes: number
   total_downloads: number
   total_bytes_served: number
-  downloads_24h: number
-  bytes_served_24h: number
+  downloads_today: number
+  bytes_served_today: number
   /** Xorbs that have a real `sia_object_id` and are `pin_state='pinned'` —
    * the bytes that ACTUALLY landed on Sia hosts (vs durable Postgres cache).*/
   xorbs_pinned: number

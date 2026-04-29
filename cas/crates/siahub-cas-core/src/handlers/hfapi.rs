@@ -1299,8 +1299,10 @@ pub struct PlatformStats {
     pub total_size_bytes: i64,
     pub total_downloads: i64,
     pub total_bytes_served: i64,
-    pub downloads_24h: i64,
-    pub bytes_served_24h: i64,
+    /// Downloads on `repo_downloads.day = CURRENT_DATE` (UTC). NOT a
+    /// 24-hour rolling window — wraps at 00:00 UTC.
+    pub downloads_today: i64,
+    pub bytes_served_today: i64,
     /// Number of xorbs that successfully landed on Sia hosts (have a real
     /// `sia_object_id` set + `pin_state='pinned'`).
     pub xorbs_pinned: i64,
@@ -1346,11 +1348,11 @@ pub async fn platform_stats<S: HfApiState>(
             (SELECT COALESCE(SUM(rd.count)::BIGINT, 0) \
                FROM repo_downloads rd \
                JOIN repos r ON r.id = rd.repo_id \
-              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS downloads_24h, \
+              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS downloads_today, \
             (SELECT COALESCE(SUM(rd.bytes)::BIGINT, 0) \
                FROM repo_downloads rd \
                JOIN repos r ON r.id = rd.repo_id \
-              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS bytes_served_24h, \
+              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS bytes_served_today, \
             (SELECT COUNT(*)::BIGINT FROM xorbs WHERE pin_state = 'pinned' AND sia_object_id IS NOT NULL) AS xorbs_pinned, \
             (SELECT COUNT(*)::BIGINT FROM xorbs) AS xorbs_total, \
             (SELECT COALESCE(SUM(size_bytes)::BIGINT, 0) FROM xorbs WHERE pin_state = 'pinned' AND sia_object_id IS NOT NULL) AS bytes_on_sia",
@@ -1365,8 +1367,8 @@ pub async fn platform_stats<S: HfApiState>(
         total_size_bytes: row.3,
         total_downloads: row.4,
         total_bytes_served: row.5,
-        downloads_24h: row.6,
-        bytes_served_24h: row.7,
+        downloads_today: row.6,
+        bytes_served_today: row.7,
         xorbs_pinned: row.8,
         xorbs_total: row.9,
         bytes_on_sia: row.10,

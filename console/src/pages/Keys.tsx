@@ -117,10 +117,11 @@ export function KeysPage() {
 
   const keys = list.data ?? []
 
-  // For the usage snippets: if the user just created a key this session
-  // AND the modal is still dismissed (`created === null`), surface its
-  // plaintext once. Otherwise render a `<your-siahub-key>` placeholder
-  // plaintext never round-trips through storage or the list endpoint.
+  // The usage snippets always show a `<your-siahub-key>` placeholder.
+  // Plaintext keys are shown ONCE in the CreatedKeyModal at mint time
+  // (line 293) and are never reflected back into the keys list — copy
+  // the plaintext from the modal and paste it into your shell. The list
+  // endpoint only ever returns the masked prefix.
   const keyPlaceholder = "<your-siahub-key>"
   const uploadSnippet = `HF_TOKEN=${keyPlaceholder} HF_ENDPOINT=${CAS_URL} \\
   hf upload <your-username>/<repo-name> ./your-files`

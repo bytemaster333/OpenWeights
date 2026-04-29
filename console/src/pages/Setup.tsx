@@ -177,6 +177,12 @@ export function SetupPage() {
                   <div className="font-mono text-xs">
                     {formatHastingsToSC(sia.wallet_spendable_hastings)}
                   </div>
+                  {sia.wallet_immature_hastings &&
+                    sia.wallet_immature_hastings !== "0" && (
+                      <div className="text-[0.65rem] text-muted-foreground">
+                        +{formatHastingsToSC(sia.wallet_immature_hastings)} immature
+                      </div>
+                    )}
                 </div>
                 <div>
                   <div className="text-[0.7rem] uppercase text-muted-foreground">

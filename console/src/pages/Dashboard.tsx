@@ -104,7 +104,7 @@ export function DashboardPage() {
             label="Downloads"
             loading={platformPending}
             value={platform ? String(platform.total_downloads) : "—"}
-            subtext={platform ? `+${platform.downloads_24h} today` : ""}
+            subtext={platform ? `+${platform.downloads_today} today` : ""}
           />
           {/* "On Sia" — the load-bearing demo number: bytes really pinned on
               Sia hosts (vs the durable Postgres cache). Click-through to

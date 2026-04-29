@@ -86,13 +86,13 @@ export function StatsPage() {
             label="Downloads"
             loading={platformPending}
             value={platform ? String(platform.total_downloads) : "—"}
-            subtext={platform ? `+${platform.downloads_24h} today` : ""}
+            subtext={platform ? `+${platform.downloads_today} today` : ""}
           />
           <StatsTile
             label="Bytes served"
             loading={platformPending}
             value={platform ? formatBytes(platform.total_bytes_served) : "—"}
-            subtext={platform ? `+${formatBytes(platform.bytes_served_24h)} today` : ""}
+            subtext={platform ? `+${formatBytes(platform.bytes_served_today)} today` : ""}
           />
         </div>
       </section>
