@@ -50,6 +50,9 @@ import { formatBytes, formatRelative } from "@/lib/format"
 const SEARCH_DEBOUNCE_MS = 250
 const HASH_TRUNC = 16
 const KEY_ID_TRUNC = 8
+/** Sentinel uploader_key_id emitted by the admin handler when an inline LFS
+ * row exists with no api_keys binding (orphan upload pre-commit). */
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
 type PinMeta = {
   label: string
@@ -359,8 +362,10 @@ export function AssetsPage() {
                       {formatRelative(x.uploaded_at)}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {keyLabel.get(x.uploader_key_id) ??
-                        `${x.uploader_key_id.slice(0, KEY_ID_TRUNC)}…`}
+                      {x.uploader_key_id === ZERO_UUID
+                        ? "—"
+                        : (keyLabel.get(x.uploader_key_id) ??
+                          `${x.uploader_key_id.slice(0, KEY_ID_TRUNC)}…`)}
                     </TableCell>
                   </TableRow>
                 )

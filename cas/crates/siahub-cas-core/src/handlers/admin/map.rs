@@ -105,6 +105,37 @@ pub async fn get_map<S: MapState>(
         IndexdError::Unreachable
     })?;
 
+    // indexd /api/hosts does NOT return a per-host `contractCount`. Fetch
+    // the contracts list separately and group by hostKey so the map UI
+    // can render a real number instead of always-0. Best-effort: any
+    // failure here leaves contract_count as None, not a 5xx.
+    let contracts_url = format!(
+        "{}/api/contracts",
+        st.indexd_url().trim_end_matches('/')
+    );
+    let contracts_by_host: std::collections::HashMap<String, u32> = match st
+        .http_client()
+        .get(&contracts_url)
+        .basic_auth("", Some(st.indexd_admin_password()))
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => match r.json::<Vec<serde_json::Value>>().await {
+            Ok(list) => {
+                let mut m = std::collections::HashMap::new();
+                for c in list {
+                    if let Some(hk) = c.get("hostKey").and_then(|v| v.as_str()) {
+                        *m.entry(hk.to_string()).or_insert(0) += 1;
+                    }
+                }
+                m
+            }
+            Err(_) => std::collections::HashMap::new(),
+        },
+        _ => std::collections::HashMap::new(),
+    };
+
     let hosts = upstream
         .into_iter()
         .filter_map(|h| {
@@ -116,13 +147,14 @@ pub async fn get_map<S: MapState>(
             let (Some(lat), Some(lon)) = (h.latitude, h.longitude) else {
                 return None;
             };
+            let cc = contracts_by_host.get(&h.public_key).copied();
             Some(MapHost {
                 public_key: h.public_key,
                 country_code: h.country_code,
                 lat,
                 lon,
                 usable: true,
-                contract_count: h.contract_count,
+                contract_count: cc.or(h.contract_count),
             })
         })
         .collect();

@@ -185,9 +185,13 @@ function AssetDetailBody({
         <InfoCard
           label="Uploader key"
           value={
-            <code className="font-mono text-xs break-all">
-              {x.uploader_key_id.slice(0, 13)}…
-            </code>
+            x.uploader_key_id === "00000000-0000-0000-0000-000000000000" ? (
+              <span className="text-xs text-muted-foreground">—</span>
+            ) : (
+              <code className="font-mono text-xs break-all">
+                {x.uploader_key_id.slice(0, 13)}…
+              </code>
+            )
           }
         />
         <InfoCard
@@ -218,16 +222,20 @@ function AssetDetailBody({
               </div>
             </div>
 
-            {/* Explorer drill-down — siascan links for the renter wallet
-                + every host currently storing this xorb. We can't link the
-                object id directly (siascan indexes contracts and hosts,
-                not renter-internal object ids), but the wallet + host
-                pages give the reader a verifiable on-chain trail. */}
+            {/* Explorer drill-down — sia indexd doesn't expose a
+                public per-object → contracts mapping, so we link the
+                renter wallet (proves the renter exists on-chain) and the
+                full deployment-wide contract pool (any of which COULD
+                hold this xorb's slabs given erasure coding spreads
+                shards across all formed contracts). Wording is honest
+                about the deployment-wide scope so reviewers don't think
+                the contract list is per-xorb. */}
             {sia && (
               <div className="space-y-2 border-t pt-3">
                 <div className="text-xs text-muted-foreground">
-                  Explore on Sia ({sia.contract_count} contracts ·{" "}
-                  {sia.distinct_host_count} hosts)
+                  Deployment Sia footprint — {sia.contract_count} contracts ·{" "}
+                  {sia.distinct_host_count} hosts (any of these may hold this
+                  xorb&apos;s shards)
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {sia.wallet_address && (
