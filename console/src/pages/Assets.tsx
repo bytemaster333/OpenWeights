@@ -231,14 +231,41 @@ export function AssetsPage() {
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
-      <header>
-        <div className="flex items-center gap-3">
-          <DatabaseIcon size={22} weight="light" className="text-muted-foreground" />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Assets</h1>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <DatabaseIcon size={22} weight="light" className="text-muted-foreground" />
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">Assets</h1>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every xorb on this deployment. Click a hash to see its repo.
+          </p>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every xorb on this deployment. Click a hash to see its repo.
-        </p>
+        {sia && (
+          <a
+            href={
+              sia.wallet_address
+                ? `${sia.siascan_base}/address/${sia.wallet_address}`
+                : sia.siascan_base
+            }
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded border bg-muted/10 px-3 py-1.5 text-xs hover:border-primary/40 hover:bg-muted/30"
+            title={
+              sia.wallet_address
+                ? `View renter wallet on ${sia.siascan_base.replace(/^https?:\/\//, "")}`
+                : "View Sia explorer"
+            }
+          >
+            <CloudCheckIcon size={14} weight="light" className="text-primary" />
+            <span>
+              <span className="font-mono">{sia.contract_count}</span> contracts ·{" "}
+              <span className="font-mono">{sia.distinct_host_count}</span> hosts on{" "}
+              {sia.siascan_base.includes("zen") ? "Zen testnet" : "Sia"}
+            </span>
+            <ArrowSquareOutIcon size={12} weight="light" />
+          </a>
+        )}
       </header>
 
       <SummaryStrip xorbs={xorbs} />
