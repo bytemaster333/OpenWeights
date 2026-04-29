@@ -228,6 +228,10 @@ pub fn build(state: AppState) -> Router {
             get(handlers::hfapi::model_downloads_trend::<AppState>),
         )
         .route(
+            "/api/models/{owner}/{repo}/objects",
+            get(handlers::hfapi::model_objects::<AppState>),
+        )
+        .route(
             "/api/models/{owner}/{repo}/revision/{revision}",
             get(handlers::hfapi::model_info_rev::<AppState>),
         )

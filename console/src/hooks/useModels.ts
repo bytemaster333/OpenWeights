@@ -104,6 +104,39 @@ export function useModelInfo(owner: string | undefined, repo: string | undefined
 }
 
 /**
+ * Underlying objects (xorbs + inline LFS blobs) referenced by a model's
+ * HEAD commit. Used by the ModelDetail "Objects on Sia" panel so reviewers
+ * can deep-link from a model down to the actual content-addressed blobs
+ * (and verify their pin state on Sia).
+ */
+export type ModelObject = {
+  hash: string
+  /** "xorb" for Xet xorbs (go through Sia), "inline" for small LFS blobs
+   * (Postgres BYTEA, never reach Sia).*/
+  kind: "xorb" | "inline"
+  size_bytes: number
+  pin_state: "uploading" | "pinning" | "pinned" | "orphaned" | "inline"
+  sia_object_id: string | null
+  /** Repo-relative file paths sharing this xorb (xet packs multi-file). */
+  files: string[]
+}
+
+export function useModelObjects(
+  owner: string | undefined,
+  repo: string | undefined,
+) {
+  return useQuery<ModelObject[], ApiError>({
+    queryKey: ["models", owner, repo, "objects"],
+    queryFn: () =>
+      casFetch<{ objects: ModelObject[] }>(
+        `/api/models/${owner}/${repo}/objects`,
+      ).then((r) => r.objects),
+    enabled: Boolean(owner && repo),
+    staleTime: 10_000,
+  })
+}
+
+/**
  * Fetch the raw README.md bytes for the given repo's main HEAD via the
  * LFS-resolve redirect path. Returns `null` when the repo has no README.
  * The fetch follows redirects (default), so we end up reading from

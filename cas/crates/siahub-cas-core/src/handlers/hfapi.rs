@@ -1621,6 +1621,111 @@ pub struct TrendPoint {
     pub bytes: i64,
 }
 
+// ---------------------------------------------------------------------------
+// `GET /api/models/{owner}/{repo}/objects` — surface the underlying xorbs
+// (and inline LFS objects) a model's HEAD commit depends on. Drives the
+// "Objects on Sia" panel on `/models/{owner}/{repo}` so reviewers can
+// click through to the actual content-addressed blobs and verify pinning.
+
+#[derive(Debug, Serialize)]
+pub struct ModelObject {
+    /// Lowercase 64-char hex of either `xorbs.xorb_merkle_hash` or
+    /// `lfs_objects.oid`. Stable identifier for `/assets/{hash}` deep-links.
+    pub hash: String,
+    /// "xorb" for content-addressed Xet xorbs, "inline" for small LFS files
+    /// stored as Postgres BYTEA blobs that bypass Sia entirely.
+    pub kind: String,
+    pub size_bytes: i64,
+    /// `'pinned'`, `'pinning'`, `'orphaned'`, etc. for xorbs; `'inline'` for
+    /// LFS rows. UI maps these to the same labels as `/assets`.
+    pub pin_state: String,
+    /// Hex-encoded `xorbs.sia_object_id` when the xorb has actually
+    /// reached a Sia host. None for pinning/orphaned/inline rows.
+    pub sia_object_id: Option<String>,
+    /// Repo-relative file paths whose reconstruction references this xorb
+    /// (or which directly own this LFS oid). Helps reviewers see which
+    /// files share which xorbs (xet's multi-file packing).
+    pub files: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelObjectsResponse {
+    pub objects: Vec<ModelObject>,
+}
+
+pub async fn model_objects<S: HfApiState>(
+    State(st): State<S>,
+    Path((owner, repo)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Json<ModelObjectsResponse>, AppError> {
+    let repo_id = find_repo_id(st.pool(), &owner, &repo).await?;
+    let viewer = optional_viewer_id(&st, &headers).await;
+    require_readable(st.pool(), repo_id, viewer).await?;
+
+    // Single round-trip rollup. UNION the two paths:
+    //   (a) Xet xorbs: walk repo_files.xet_hash → reconstruction_terms →
+    //       xorbs/xorb_bodies; aggregate distinct file paths sharing each
+    //       xorb so multi-file packing is visible.
+    //   (b) LFS inline objects: repo_files.lfs_oid → lfs_objects.
+    // Sort by size desc so the heavy `pytorch_model.bin` xorbs land at top.
+    type Row = (Vec<u8>, String, i64, String, Option<Vec<u8>>, Vec<String>);
+    let rows: Vec<Row> = sqlx::query_as(
+        "WITH head_files AS ( \
+             SELECT rep_f.path, rep_f.xet_hash, rep_f.lfs_oid \
+               FROM repo_refs rr \
+               JOIN repo_files rep_f ON rep_f.commit_id = rr.commit_id \
+              WHERE rr.repo_id = $1 AND rr.ref_name = 'main' \
+         ), \
+         xorb_objects AS ( \
+             SELECT x.xorb_merkle_hash AS hash, \
+                    'xorb'::text AS kind, \
+                    x.size_bytes, \
+                    x.pin_state::text AS pin_state, \
+                    x.sia_object_id, \
+                    ARRAY_AGG(DISTINCT hf.path ORDER BY hf.path) AS files \
+               FROM xorbs x \
+               JOIN reconstruction_terms rt ON rt.xorb_hash = x.xorb_merkle_hash \
+               JOIN reconstruction_files rfi ON rfi.file_id = rt.file_id \
+               JOIN head_files hf ON hf.xet_hash = rfi.file_id \
+              GROUP BY x.xorb_merkle_hash, x.size_bytes, x.pin_state, x.sia_object_id \
+         ), \
+         inline_objects AS ( \
+             SELECT lo.oid AS hash, \
+                    'inline'::text AS kind, \
+                    lo.size_bytes, \
+                    'inline'::text AS pin_state, \
+                    NULL::bytea AS sia_object_id, \
+                    ARRAY_AGG(DISTINCT hf.path ORDER BY hf.path) AS files \
+               FROM lfs_objects lo \
+               JOIN head_files hf ON hf.lfs_oid = lo.oid \
+              GROUP BY lo.oid, lo.size_bytes \
+         ) \
+         SELECT hash, kind, size_bytes, pin_state, sia_object_id, files \
+           FROM xorb_objects \
+         UNION ALL \
+         SELECT hash, kind, size_bytes, pin_state, sia_object_id, files \
+           FROM inline_objects \
+          ORDER BY size_bytes DESC",
+    )
+    .bind(repo_id)
+    .fetch_all(st.pool())
+    .await?;
+
+    let objects: Vec<ModelObject> = rows
+        .into_iter()
+        .map(|(hash, kind, size_bytes, pin_state, sia_object_id, files)| ModelObject {
+            hash: hex_encode(&hash),
+            kind,
+            size_bytes,
+            pin_state,
+            sia_object_id: sia_object_id.map(|b| hex_encode(&b)),
+            files,
+        })
+        .collect();
+
+    Ok(Json(ModelObjectsResponse { objects }))
+}
+
 pub async fn model_downloads_trend<S: HfApiState>(
     State(st): State<S>,
     Path((owner, repo)): Path<(String, String)>,

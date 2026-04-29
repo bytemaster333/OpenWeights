@@ -1,6 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router"
 import { useState } from "react"
 import {
+  ArrowSquareOutIcon,
   BroadcastIcon,
   CheckIcon,
   CopyIcon,
@@ -27,9 +28,11 @@ import { useMe } from "@/hooks/useMe"
 import {
   type ModelInfo,
   useModelInfo,
+  useModelObjects,
   useModelReadme,
   useModelTrend,
 } from "@/hooks/useModels"
+import { usePlatformSia } from "@/hooks/useSetupStatus"
 import { formatBytes, formatRelative } from "@/lib/format"
 
 /**
@@ -172,6 +175,8 @@ export function ModelDetailPage() {
           )}
 
           <FilesSection owner={owner} repo={repo} info={info} />
+
+          <ObjectsSection owner={owner} repo={repo} />
         </div>
 
         {/* Sidebar*/}
@@ -254,6 +259,140 @@ curl -L -o ${firstFile} \\
         </div>
       </div>
       <CodeBlock code={active} />
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Objects on Sia section — surfaces the underlying xorbs (and inline LFS
+// blobs) this model's HEAD commit references. Each row is a content-
+// addressed blob with a pin-state pill, the per-host shard count, and a
+// click-through to /assets/{hash} for the full siascan drilldown.
+// ---------------------------------------------------------------------------
+
+function ObjectsSection({ owner, repo }: { owner: string; repo: string }) {
+  const { data: objects, isPending } = useModelObjects(owner, repo)
+  const { data: sia } = usePlatformSia()
+
+  const totals = (objects ?? []).reduce(
+    (acc, o) => {
+      acc.size += o.size_bytes
+      acc.count += 1
+      if (o.pin_state === "pinned") {
+        acc.pinned += 1
+        acc.pinnedSize += o.size_bytes
+      }
+      return acc
+    },
+    { count: 0, size: 0, pinned: 0, pinnedSize: 0 },
+  )
+
+  return (
+    <section className="rounded border bg-muted/10 p-6">
+      <div className="mb-4 flex items-baseline justify-between gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Objects on Sia
+        </h2>
+        {objects && objects.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            <span className="font-mono text-foreground">
+              {totals.pinned}/{totals.count}
+            </span>{" "}
+            pinned ·{" "}
+            <span className="font-mono text-foreground">
+              {formatBytes(totals.pinnedSize)}
+            </span>{" "}
+            on Sia
+          </span>
+        )}
+      </div>
+
+      {isPending && <Skeleton className="h-32 w-full" />}
+
+      {!isPending && (!objects || objects.length === 0) && (
+        <div className="py-6 text-center text-xs text-muted-foreground">
+          No objects in this revision.
+        </div>
+      )}
+
+      {!isPending && objects && objects.length > 0 && (
+        <div className="overflow-x-auto rounded border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Object</TableHead>
+                <TableHead>Pin state</TableHead>
+                <TableHead>Files</TableHead>
+                <TableHead className="text-right">Size</TableHead>
+                <TableHead className="text-right">Sia</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {objects.map((o) => (
+                <TableRow key={o.hash}>
+                  <TableCell>
+                    <Link
+                      to="/assets/$hash"
+                      params={{ hash: o.hash }}
+                      className="font-mono text-xs text-primary hover:underline"
+                      title={o.hash}
+                    >
+                      {o.hash.slice(0, 16)}…
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        o.pin_state === "pinned"
+                          ? "default"
+                          : o.pin_state === "inline"
+                            ? "outline"
+                            : o.pin_state === "orphaned"
+                              ? "destructive"
+                              : "secondary"
+                      }
+                    >
+                      {o.pin_state}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {o.files.length === 1 ? (
+                      <code className="font-mono text-muted-foreground">
+                        {o.files[0]}
+                      </code>
+                    ) : (
+                      <span
+                        className="text-muted-foreground"
+                        title={o.files.join("\n")}
+                      >
+                        {o.files.length} files
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatBytes(o.size_bytes)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {o.pin_state === "pinned" && sia ? (
+                      <a
+                        href={`${sia.siascan_base}/address/${sia.wallet_address}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+                        title="View renter wallet on siascan"
+                      >
+                        <ArrowSquareOutIcon size={12} weight="light" />
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground/50">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </section>
   )
 }
