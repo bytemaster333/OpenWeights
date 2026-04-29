@@ -1487,9 +1487,26 @@ pub async fn model_info_rev<S: HfApiState>(
     let repo_id = find_repo_id(st.pool(), &owner, &repo).await?;
     let viewer = optional_viewer_id(&st, &headers).await;
     require_readable(st.pool(), repo_id, viewer).await?;
-    // V1 only knows "main". Any other ref → 404. Revision SHAs aren't
-    // resolved here — hf_hub tolerates a simple "main" fallback.
-    if revision != "main" {
+    // Accept "main" verbatim, or a pinned commit SHA produced by
+    // `commit_oid_for`. hf_hub re-fetches model_info under `/revision/<sha>`
+    // when a client passes `revision=<sha>` to its API; if we 404'd here,
+    // sub-snapshot calls would all blow up after the first model_info hit.
+    if revision == "main" {
+        return build_model_info(&st, &owner, &repo, repo_id, &revision).await;
+    }
+    // SHA path — find a matching commit by recomputing every commit's
+    // SHA. v1 single-commit-per-repo makes this O(1) effectively.
+    let commit_ids: Vec<(i64,)> = sqlx::query_as(
+        "SELECT id FROM repo_commits WHERE repo_id = $1",
+    )
+    .bind(repo_id)
+    .fetch_all(st.pool())
+    .await?;
+    let target_lower = revision.to_lowercase();
+    let matched = commit_ids
+        .into_iter()
+        .find(|(id,)| commit_oid_for(*id) == target_lower);
+    if matched.is_none() {
         return Err(AppError::NotFound);
     }
     build_model_info(&st, &owner, &repo, repo_id, &revision).await
@@ -1880,23 +1897,30 @@ async fn resolve_lookup<S: HfApiState>(
         .fetch_optional(st.pool())
         .await?
     } else {
-        // Strip leading zeros and parse as i64. Invalid → 404.
-        let commit_id: i64 = i64::from_str_radix(revision.trim_start_matches('0'), 16)
-            .or_else(|_| {
-                if revision.chars().all(|c| c == '0') {
-                    Ok(0)
-                } else {
-                    Err(())
-                }
-            })
-            .map_err(|_| AppError::NotFound)?;
-        sqlx::query_as(
-            "SELECT rf.size_bytes, rf.xet_hash, rf.lfs_oid \
-               FROM repo_commits rc \
-               JOIN repo_files rf ON rf.commit_id = rc.id \
-              WHERE rc.repo_id = $1 AND rc.id = $2 AND rf.path = $3",
+        // hf_hub pins the HEAD SHA from `model_info` and then requests
+        // every file under `/resolve/<sha>/<path>`. Our SHA is the SHA-256
+        // of a salt + commit_id (see `commit_oid_for`), which can't be
+        // reversed. Walk the repo's commits, recompute each `commit_oid_for`,
+        // and pick the match. v1 demo has one commit per repo so this is
+        // typically a single hash compare.
+        let commit_ids: Vec<(i64,)> = sqlx::query_as(
+            "SELECT id FROM repo_commits WHERE repo_id = $1",
         )
         .bind(repo_id)
+        .fetch_all(st.pool())
+        .await?;
+        let target_lower = revision.to_lowercase();
+        let matched_commit_id = commit_ids
+            .into_iter()
+            .map(|(id,)| (id, commit_oid_for(id)))
+            .find(|(_, sha)| sha == &target_lower)
+            .map(|(id, _)| id);
+        let commit_id = matched_commit_id.ok_or(AppError::NotFound)?;
+        sqlx::query_as(
+            "SELECT rf.size_bytes, rf.xet_hash, rf.lfs_oid \
+               FROM repo_files rf \
+              WHERE rf.commit_id = $1 AND rf.path = $2",
+        )
         .bind(commit_id)
         .bind(file_path)
         .fetch_optional(st.pool())

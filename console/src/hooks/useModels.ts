@@ -38,13 +38,14 @@ export function useModels() {
 
 /**
  * Sibling file in a model revision. Mirrors `ModelSibling` in hfapi.rs:
- * `blob_id` is the content hash (xet-hash or lfs-oid in hex), `lfs` is
+ * `blobId` is the content hash (xet-hash or lfs-oid in hex; backend emits
+ * camelCase via `serde(rename="blobId")`), `lfs` is
  * populated for every Xet/LFS file so the `<Files>` table can render
  * per-row download links through `/{owner}/{repo}/resolve/main/{path}`.*/
 export type ModelSibling = {
   rfilename: string
   size: number
-  blob_id: string | null
+  blobId?: string | null
   lfs: {
     oid: string
     size: number

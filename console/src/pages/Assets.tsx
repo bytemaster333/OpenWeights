@@ -88,6 +88,13 @@ function pinMeta(s: string): PinMeta {
         variant: "destructive",
         hint: "Reconciler exhausted its retry budget. Manual re-drive needed once Sia hosts are available.",
       }
+    case "inline":
+      return {
+        label: "Stored inline",
+        icon: DatabaseIcon,
+        variant: "outline",
+        hint: "Small LFS file kept as a Postgres BYTEA blob; never goes to Sia.",
+      }
     default:
       return {
         label: s,

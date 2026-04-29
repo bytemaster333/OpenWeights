@@ -442,8 +442,8 @@ function FilesSection({
                   {formatBytes(s.size)}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
-                  {s.blob_id ? (
-                    <CopyableHash value={s.blob_id} />
+                  {s.blobId ? (
+                    <CopyableHash value={s.blobId} />
                   ) : (
                     "—"
                   )}

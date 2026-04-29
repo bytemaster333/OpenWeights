@@ -150,13 +150,13 @@ async fn probe_indexd<S: SetupState>(st: &S) -> IndexdStatus {
 
     let (status, synced) = match result {
         Ok(resp) if resp.status().is_success() => {
-            // Best-effort parse of `{"consensus":{"synced":bool},...}`.
+            // indexd's `/api/state` surfaces `synced` at the top level
+            // (verified live: `{"version":..., "synced": true, ...}`).
+            // Earlier code expected `consensus.synced` — that path has
+            // never existed and made the badge stuck at "no" / "syncing".
             match resp.json::<serde_json::Value>().await {
                 Ok(json) => {
-                    let synced = json
-                        .get("consensus")
-                        .and_then(|c| c.get("synced"))
-                        .and_then(|v| v.as_bool());
+                    let synced = json.get("synced").and_then(|v| v.as_bool());
                     ("ok", synced)
                 }
                 Err(_) => ("ok", None),
@@ -264,9 +264,12 @@ pub async fn platform_sia<S: SetupState>(
         Some(r) if r.status().is_success() => r.json().await.ok(),
         _ => None,
     };
+    // `synced` is top-level on the `/api/state` response (NOT under
+    // `consensus`). Mismatched path was returning null and stranding the
+    // Setup tile + every "On Sia" badge in "syncing" forever.
     let synced_flag: Option<bool> = state_json
         .as_ref()
-        .and_then(|v| v.get("consensus").and_then(|c| c.get("synced")))
+        .and_then(|v| v.get("synced"))
         .and_then(|v| v.as_bool());
     let network = state_json
         .as_ref()

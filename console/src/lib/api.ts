@@ -38,8 +38,12 @@ async function request<T>(base: string, path: string, init: RequestInit = {}): P
   if (!res.ok) {
     let code = res.statusText
     try {
-      const body = (await res.json()) as { code?: string }
-      if (body?.code) code = body.code
+      // Backend AppError emits `{"error": "..."}`; the OAuth callback path
+      // emits `{"code": "..."}`. Read either to surface the semantic
+      // string instead of a generic "Bad Request"/"Unauthorized".
+      const body = (await res.json()) as { code?: string; error?: string }
+      const semantic = body?.code ?? body?.error
+      if (semantic) code = semantic
     } catch {
       // Response body not JSON — fall through with the statusText.
     }
