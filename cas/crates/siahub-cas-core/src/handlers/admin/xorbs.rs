@@ -241,18 +241,32 @@ pub async fn get_xorb_detail<S: AuthStateRef>(
         uploader_key_id: key_id,
     };
 
-    // Look up `{owner}/{repo}` pairs whose main HEAD references this xorb.
-    // Migration 0008 gives us `repo_files.xet_hash` as the bridge; the
-    // JOIN fans out to owner login so the frontend can deep-link without
-    // needing a second round-trip. Empty list == xorb uploaded raw, never
-    // bound to a repo (the demo debug path pre-hfapi).
+    // Look up `{owner}/{repo}` pairs whose main HEAD references this hash.
+    // Two paths after the Xet migration:
+    //   (a) Xorb path — `repo_files.xet_hash` stores the per-file Xet
+    //       file_id (NOT the xorb hash). To get the back-reference from a
+    //       xorb, walk `reconstruction_terms.xorb_hash → file_id →
+    //       repo_files.xet_hash → repo`.
+    //   (b) LFS inline path — `repo_files.lfs_oid` matches directly when
+    //       the looked-up hash is an `lfs_objects.oid`.
+    // UNION'ing the two keeps the handler shape (Vec<(login, name)>) and
+    // surfaces both legacy LFS uploads and modern Xet-reconstructed files
+    // in the AssetDetail "Referencing repos" section.
     let repo_rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT DISTINCT u.github_login, r.name \
+           FROM reconstruction_terms rt \
+           JOIN repo_files rep_f ON rep_f.xet_hash = rt.file_id \
+           JOIN repo_refs rr ON rr.commit_id = rep_f.commit_id AND rr.ref_name = 'main' \
+           JOIN repos r ON r.id = rr.repo_id \
+           JOIN users u ON u.id = r.owner_user_id \
+          WHERE rt.xorb_hash = $1 \
+          UNION \
+         SELECT DISTINCT u.github_login, r.name \
            FROM repo_files rf \
            JOIN repo_refs rr ON rr.commit_id = rf.commit_id AND rr.ref_name = 'main' \
            JOIN repos r ON r.id = rr.repo_id \
            JOIN users u ON u.id = r.owner_user_id \
-          WHERE rf.xet_hash = $1 OR rf.lfs_oid = $1",
+          WHERE rf.lfs_oid = $1",
     )
     .bind(&hash_bytes[..])
     .fetch_all(st.pool())
