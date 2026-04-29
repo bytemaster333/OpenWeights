@@ -209,7 +209,12 @@ pub struct PlatformSia {
     pub indexd_synced: Option<bool>,
 }
 
-const SIASCAN_BASE: &str = "https://siascan.com";
+/// siascan.com base URL. Zen testnet contracts/hosts/addresses do NOT
+/// appear on mainnet siascan.com — they're only indexed by the testnet
+/// instance at https://zen.siascan.com. We pick the right base from the
+/// indexd `/api/state.network` field at boot time.
+const SIASCAN_BASE_MAINNET: &str = "https://siascan.com";
+const SIASCAN_BASE_ZEN: &str = "https://zen.siascan.com";
 
 pub async fn platform_sia<S: SetupState>(
     State(st): State<S>,
@@ -246,21 +251,32 @@ pub async fn platform_sia<S: SetupState>(
         None => Vec::new(),
     };
 
-    let synced = client
+    // /api/state — surfaces both `consensus.synced` (for the badge) and
+    // `network` (for the explorer base — zen.siascan.com vs siascan.com).
+    let state_resp = client
         .get(format!("{url_base}/api/state"))
         .basic_auth("", Some(pwd))
         .timeout(PROBE_TIMEOUT)
         .send()
         .await
-        .ok()
-        .and_then(|r| if r.status().is_success() { Some(r) } else { None });
-    let synced_flag: Option<bool> = match synced {
-        Some(r) => r.json::<serde_json::Value>().await.ok().and_then(|v| {
-            v.get("consensus")
-                .and_then(|c| c.get("synced"))
-                .and_then(|b| b.as_bool())
-        }),
-        None => None,
+        .ok();
+    let state_json: Option<serde_json::Value> = match state_resp {
+        Some(r) if r.status().is_success() => r.json().await.ok(),
+        _ => None,
+    };
+    let synced_flag: Option<bool> = state_json
+        .as_ref()
+        .and_then(|v| v.get("consensus").and_then(|c| c.get("synced")))
+        .and_then(|v| v.as_bool());
+    let network = state_json
+        .as_ref()
+        .and_then(|v| v.get("network"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("mainnet");
+    let siascan_base = if network == "zen" {
+        SIASCAN_BASE_ZEN
+    } else {
+        SIASCAN_BASE_MAINNET
     };
 
     let mut distinct_hosts = std::collections::HashSet::<String>::new();
@@ -313,7 +329,7 @@ pub async fn platform_sia<S: SetupState>(
         contract_count: contracts_json.len() as i64,
         distinct_host_count: distinct_hosts.len() as i64,
         contracts: summaries,
-        siascan_base: SIASCAN_BASE,
+        siascan_base,
         indexd_synced: synced_flag,
     }))
 }

@@ -263,7 +263,7 @@ export function SetupPage() {
                             </td>
                             <td className="px-2 py-1 font-mono">
                               <a
-                                href={`${sia.siascan_base}/host/${c.host_key.replace(/^ed25519:/, "")}`}
+                                href={`${sia.siascan_base}/host/${c.host_key}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-muted-foreground hover:text-foreground hover:underline"
