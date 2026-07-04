@@ -1,15 +1,15 @@
-//! Test harness: bring up siahub-cas + Postgres in Docker via testcontainers,
+//! Test harness: bring up openweights-cas + Postgres in Docker via testcontainers,
 //! seed an API key, and return a handle containing the base URL + bearer
 //! token.
 //! Design choices (CONTEXT ):
 //! - **Testcontainers-driven Postgres** — every test gets a fresh `postgres:17-alpine`
 //! container; shared-pool concerns disappear.
-//! - **Pre-built siahub-cas image** — the cas/Dockerfile is built once via
+//! - **Pre-built openweights-cas image** — the cas/Dockerfile is built once via
 //! `make cas-image`. Per-test rebuilds would cost minutes. If the image
 //! is absent, tests skip with a clear message pointing at `make cas-image`.
-//! - **Sia is mocked via `SIAHUB_SIA_MOCK=true`** — the binary's `sia-mock`
+//! - **Sia is mocked via `OPENWEIGHTS_SIA_MOCK=true`** — the binary's `sia-mock`
 //! feature flag gates this env path; see
-//! `cas/crates/siahub-cas/src/main.rs::build_sia_adapter`. owns
+//! `cas/crates/openweights-cas/src/main.rs::build_sia_adapter`. owns
 //! live-Sia CI.
 //! Skip semantics: every `spawn_cas` callsite uses `match` + early-return
 //! when the result is `Ok(None)` — NEVER panic/fail on missing Docker.
@@ -21,14 +21,14 @@ use std::time::Duration;
 
 /// Tags the test harness probes for in the local Docker daemon, in priority
 /// order. The first match wins. `make cas-image` produces the first; the
-/// latter two are the default `docker compose build siahub-cas` outputs.
+/// latter two are the default `docker compose build openweights-cas` outputs.
 pub const CAS_IMAGE_CANDIDATES: &[&str] = &[
-    "siahub-cas:conformance",
-    "siahub-cas:latest",
-    "ops-siahub-cas:latest",
+    "openweights-cas:conformance",
+    "openweights-cas:latest",
+    "ops-openweights-cas:latest",
 ];
 
-/// An up-and-ready siahub-cas + Postgres stack. Drop this to tear everything
+/// An up-and-ready openweights-cas + Postgres stack. Drop this to tear everything
 /// down.
 pub struct Harness {
     /// Base URL like `http://127.0.0.1:12345` — what the xet-client's
@@ -85,7 +85,7 @@ pub async fn spawn_cas_with(opts: SpawnOpts) -> Result<Option<Harness>> {
         Some(img) => img,
         None => {
             eprintln!(
-                "SKIP spawn_cas: siahub-cas image absent; run `make cas-image` first. \
+                "SKIP spawn_cas: openweights-cas image absent; run `make cas-image` first. \
                  Candidates probed: {CAS_IMAGE_CANDIDATES:?}"
             );
             return Ok(None);
@@ -95,8 +95,8 @@ pub async fn spawn_cas_with(opts: SpawnOpts) -> Result<Option<Harness>> {
     // --- Postgres.
     use testcontainers::runners::AsyncRunner;
     let pg = testcontainers_modules::postgres::Postgres::default()
-        .with_db_name("siahub")
-        .with_user("siahub")
+        .with_db_name("openweights")
+        .with_user("openweights")
         .with_password("test-password-conformance")
         .start()
         .await
@@ -105,14 +105,14 @@ pub async fn spawn_cas_with(opts: SpawnOpts) -> Result<Option<Harness>> {
     let pg_host = pg.get_host().await.context("pg host")?.to_string();
     let pg_port = pg.get_host_port_ipv4(5432).await.context("pg port")?;
     let pg_url_host =
-        format!("postgres://siahub:test-password-conformance@{pg_host}:{pg_port}/siahub");
+        format!("postgres://openweights:test-password-conformance@{pg_host}:{pg_port}/openweights");
     // host.docker.internal resolves from inside containers on macOS/Windows;
     // on Linux testcontainers adds an `/etc/hosts` entry via its helper.
     let pg_url_bridge = format!(
-        "postgres://siahub:test-password-conformance@host.docker.internal:{pg_port}/siahub"
+        "postgres://openweights:test-password-conformance@host.docker.internal:{pg_port}/openweights"
     );
 
-    // --- Env for siahub-cas binary (see cas/crates/siahub-cas/src/config.rs).
+    // --- Env for openweights-cas binary (see cas/crates/openweights-cas/src/config.rs).
     let signing_key_b64 =
         base64::engine::general_purpose::STANDARD.encode([0u8; 32]);
     let app_id_hex = "00".repeat(32);
@@ -124,15 +124,15 @@ pub async fn spawn_cas_with(opts: SpawnOpts) -> Result<Option<Harness>> {
     let cas_image = testcontainers::GenericImage::new(image_name, image_tag)
         .with_exposed_port(testcontainers::core::ContainerPort::Tcp(8080))
         .with_wait_for(testcontainers::core::WaitFor::message_on_stdout(
-            "siahub-cas listening",
+            "openweights-cas listening",
         ));
     let cas = cas_image
         .with_env_var("DATABASE_URL", &pg_url_bridge)
         .with_env_var("REDIS_URL", "redis://127.0.0.1:1/")
         .with_env_var("INDEXD_URL", "http://127.0.0.1:1")
-        .with_env_var("SIAHUB_APP_ID", &app_id_hex)
-        .with_env_var("SIAHUB_APP_KEY", &app_key_b64)
-        .with_env_var("SIAHUB_SIA_MOCK", "true")
+        .with_env_var("OPENWEIGHTS_APP_ID", &app_id_hex)
+        .with_env_var("OPENWEIGHTS_APP_KEY", &app_key_b64)
+        .with_env_var("OPENWEIGHTS_SIA_MOCK", "true")
         .with_env_var("GATEWAY_URL_SIGNING_KEY", &signing_key_b64)
         .with_env_var("GATEWAY_BASE_URL", "http://127.0.0.1:9090")
         .with_env_var(
@@ -148,7 +148,7 @@ pub async fn spawn_cas_with(opts: SpawnOpts) -> Result<Option<Harness>> {
     let cas_container = cas
         .start()
         .await
-        .context("siahub-cas container start — image must be built via `make cas-image`")?;
+        .context("openweights-cas container start — image must be built via `make cas-image`")?;
 
     // CAS has run migrations by the time the "listening" log line prints.
     // Seed the API key NOW via the host-side Postgres URL.

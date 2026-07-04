@@ -4,7 +4,7 @@ import { type ApiError, casFetch } from "@/lib/api"
 
 /**
  * One row in `GET /api/models`. Matches `ModelListItem` in
- * `cas/crates/siahub-cas-core/src/handlers/hfapi.rs`.
+ * `cas/crates/openweights-cas-core/src/handlers/hfapi.rs`.
  *
  * - `id`: canonical `"<owner>/<name>"` (HF-compat shape).
  * - `author`: owner's GitHub login (or `hf:<userId>` for JWT-auth users).

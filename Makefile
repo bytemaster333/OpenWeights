@@ -1,4 +1,4 @@
-# SiaHub root Makefile.
+# OpenWeights root Makefile.
 # Single entry point for every operator task.
 # Targets whose recipes depend on code from later plans emit a clear
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
@@ -21,7 +21,7 @@ BENCH := cd bench &&
 # -----------------------------------------------------------------------------
 
 help:
-	@echo "SiaHub Makefile targets:"
+	@echo "OpenWeights Makefile targets:"
 	@echo " make bootstrap From-zero-to-running wizard (first-time setup)"
 	@echo " make bootstrap-reset Remove .env + ops/indexd.yml for a clean re-bootstrap"
 	@echo " make up docker compose up -d"
@@ -38,8 +38,8 @@ help:
 	@echo " make console-build pnpm run build (tsc + Vite)"
 	@echo " make console-check pnpm run check ( CI gate: biome + tsc + vitest)"
 	@echo " make console-test pnpm run test (Vitest)"
-	@echo " make console-image docker build siahub-console"
-	@echo " make console-up docker compose up -d siahub-console"
+	@echo " make console-image docker build openweights-console"
+	@echo " make console-up docker compose up -d openweights-console"
 	@echo " ---"
 	@echo " make benchmark 3-trial median throughput report ( gate #4)"
 	@echo " make benchmark-dry-run Regenerate benchmark artifacts with placeholder nulls"
@@ -139,12 +139,12 @@ clean:
 	rm -rf bench/*/runs bench/compose-smoke/readiness/bin ops/indexd.yml
 
 # -----------------------------------------------------------------------------
-# : siahub-cas
+# : openweights-cas
 # -----------------------------------------------------------------------------
 .PHONY: cas-build cas-check cas-clippy cas-run cas-image cas-up
 
 cas-build:
-	cd cas && cargo build --release --bin siahub-cas
+	cd cas && cargo build --release --bin openweights-cas
 
 cas-check:
 	cd cas && cargo check --workspace
@@ -153,16 +153,16 @@ cas-clippy:
 	cd cas && cargo clippy --workspace --all-targets -- -D warnings
 
 cas-run:
-	cd cas && cargo run --bin siahub-cas
+	cd cas && cargo run --bin openweights-cas
 
 cas-image:
-	docker compose -f ops/docker-compose.yml build siahub-cas
+	docker compose -f ops/docker-compose.yml build openweights-cas
 
 cas-up: cas-image
-	docker compose -f ops/docker-compose.yml up -d siahub-cas
+	docker compose -f ops/docker-compose.yml up -d openweights-cas
 
 # -----------------------------------------------------------------------------
-# : siahub-gateway
+# : openweights-gateway
 # Plans 03-01..03-07. Wave 1 scaffold ships /health + stub /xorb/{hash} (501)
 # + HMAC-SHA256 signed-URL verifier (cross-language vectors green).
 # -----------------------------------------------------------------------------
@@ -170,7 +170,7 @@ cas-up: cas-image
 
 gateway-build:
 	@mkdir -p gateway/bin
-	cd gateway && $(GO) build -o bin/siahub-gateway .
+	cd gateway && $(GO) build -o bin/openweights-gateway .
 
 gateway-check:
 	cd gateway && $(GO) build ./...
@@ -185,13 +185,13 @@ gateway-run:
 	cd gateway && $(GO) run .
 
 gateway-image:
-	docker compose -f ops/docker-compose.yml build siahub-gateway
+	docker compose -f ops/docker-compose.yml build openweights-gateway
 
 gateway-up: gateway-image
-	docker compose -f ops/docker-compose.yml up -d siahub-gateway
+	docker compose -f ops/docker-compose.yml up -d openweights-gateway
 
 # -----------------------------------------------------------------------------
-# : siahub-console
+# : openweights-console
 # Plans 04-02..04-10. First commit = shadcn init preset b7C9wTXYe (04-02).
 # `console-check` is the CI gate (: biome check + tsc + vitest).
 # -----------------------------------------------------------------------------
@@ -213,13 +213,13 @@ console-test:
 	cd console && pnpm run test
 
 console-image:
-	docker compose -f ops/docker-compose.yml build siahub-console
+	docker compose -f ops/docker-compose.yml build openweights-console
 
 console-up: console-image
-	docker compose -f ops/docker-compose.yml up -d siahub-console
+	docker compose -f ops/docker-compose.yml up -d openweights-console
 
 # -----------------------------------------------------------------------------
-# : siahub-conformance — Xet protocol end-to-end harness.
+# : openweights-conformance — Xet protocol end-to-end harness.
 # (wave 6). Drives the full CAS via xet_client = "=1.5.1" as a
 # dev-dep (never a runtime dep). See conformance/Cargo.toml for the pin
 # rationale + T-02-10-06 guard.
@@ -242,7 +242,7 @@ conformance-check:
 conformance-clippy:
 	cd conformance && cargo clippy --all-targets -- -D warnings
 
-# Full run. Requires a siahub-cas image built via `make cas-image` AND the
+# Full run. Requires a openweights-cas image built via `make cas-image` AND the
 # fixtures cloned. Individual tests skip with eprintln when preconditions
 # aren't met — the invocation itself never fails on a fresh clone.
 conformance: conformance-fixtures
@@ -250,15 +250,15 @@ conformance: conformance-fixtures
 
 # — mirror what the GH Actions `conformance` workflow runs. Brings
 # up the Compose stack with the CI overlay (V2_RECONSTRUCTION_ENABLED=true),
-# waits for every service to report healthy, pre-tags `siahub-cas:conformance`
+# waits for every service to report healthy, pre-tags `openweights-cas:conformance`
 # for the testcontainers harness, runs the conformance crate, then writes
 # console/public/conformance-badge.json via the same script CI uses. Tear
 # the stack down with `make down` when you're finished.
 conformance-local: conformance-fixtures
-	@echo "conformance-local: building + tagging siahub-cas image for conformance harness..."
-	docker compose -f ops/docker-compose.yml --env-file .env build siahub-cas
-	@docker tag ops-siahub-cas:latest siahub-cas:conformance 2>/dev/null \
-	 || docker tag siahub-cas:latest siahub-cas:conformance
+	@echo "conformance-local: building + tagging openweights-cas image for conformance harness..."
+	docker compose -f ops/docker-compose.yml --env-file .env build openweights-cas
+	@docker tag ops-openweights-cas:latest openweights-cas:conformance 2>/dev/null \
+	 || docker tag openweights-cas:latest openweights-cas:conformance
 	@echo "conformance-local: bringing up compose stack (base + CI overlay)..."
 	docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml --env-file .env up -d
 	@echo "conformance-local: waiting for stack healthy..."
@@ -274,8 +274,8 @@ conformance-local: conformance-fixtures
 # -----------------------------------------------------------------------------
 # : benchmarks report — 3-trial median harness.
 #. Writes console/public/benchmarks.json + docs/benchmarks.md.
-# STACK=both (default) | siahub | hf-native.
-# Requires SIAHUB_CAS_URL + SIAHUB_API_KEY in env for SiaHub cells; HF CLI
+# STACK=both (default) | openweights | hf-native.
+# Requires OPENWEIGHTS_CAS_URL + OPENWEIGHTS_API_KEY in env for OpenWeights cells; HF CLI
 # (`hf` or `huggingface-cli`) on PATH.
 # -----------------------------------------------------------------------------
 .PHONY: benchmark benchmark-report benchmark-dry-run
@@ -297,10 +297,10 @@ benchmark-dry-run:
 #. Mirrors.github/workflows/hf-roundtrip.yml locally so an
 # operator can validate the Caddy-fronted stack end-to-end before pushing
 # to main. Expects.env present (run `make bootstrap` first) AND a fresh
-# Postgres with `siahub` schema — the helper mints a test API key via
+# Postgres with `openweights` schema — the helper mints a test API key via
 # direct psql INSERT (scripts/issue-test-key.sh).
 #
-# STACK=siahub-ci (default) | custom - passed to docker compose as an
+# STACK=openweights-ci (default) | custom - passed to docker compose as an
 # ancillary label; no effect on
 # functionality today.
 # -----------------------------------------------------------------------------
@@ -319,9 +319,9 @@ integration-hf-roundtrip-dry-run:
 	bash -n scripts/issue-test-key.sh
 	@echo "integration-hf-roundtrip-dry-run: validating 3-way compose overlay merge..."
 	@POSTGRES_SUPERUSER_PASSWORD=dry \
-	 SIAHUB_POSTGRES_PASSWORD=dry \
+	 OPENWEIGHTS_POSTGRES_PASSWORD=dry \
 	 INDEXD_POSTGRES_PASSWORD=dry \
-	 SIAHUB_GW_POSTGRES_PASSWORD=dry \
+	 OPENWEIGHTS_GW_POSTGRES_PASSWORD=dry \
 	 REDIS_PASSWORD=dry \
 	 docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml -f ops/docker-compose.caddy.yml config >/dev/null \
 	 && echo "overlay merges clean"
@@ -336,15 +336,15 @@ integration-hf-roundtrip: integration-hf-roundtrip-dry-run
 	@KEY=$$(bash scripts/issue-test-key.sh --scope write); \
 	 if [ -z "$$KEY" ]; then echo "issue-test-key failed"; exit 1; fi; \
 	 . bench/bench.config.sh; \
-	 docker build -t siahub-hf-roundtrip:ci tests/hf-roundtrip; \
+	 docker build -t openweights-hf-roundtrip:ci tests/hf-roundtrip; \
 	 docker run --rm --network host \
 	 -e CAS_BASE_URL=http://localhost:8090/cas \
 	 -e GATEWAY_BASE_URL=http://localhost:8090/gateway \
-	 -e SIAHUB_API_KEY="$$KEY" \
+	 -e OPENWEIGHTS_API_KEY="$$KEY" \
 	 -e HF_FIXTURE_REPO \
 	 -e HF_FIXTURE_REVISION \
 	 -e HF_FIXTURE_KIND \
-	 siahub-hf-roundtrip:ci
+	 openweights-hf-roundtrip:ci
 	@echo "integration-hf-roundtrip: PASS — run 'make integration-hf-roundtrip-down' to tear down."
 
 integration-hf-roundtrip-down:
@@ -374,7 +374,7 @@ PROD_COMPOSE := docker compose \
 # - `git pull` brought the repo to the commit you want deployed.
 # - `.env` exists (chmod 0600) with every variable from both
 # `ops/.env.example` and `ops/.env.prod.example` populated.
-# - DNS A-records for siahub.app + cas.siahub.app point at this server.
+# - DNS A-records for openweights.app + cas.openweights.app point at this server.
 # - Ports 80 + 443 reachable from the public internet (Caddy ACME challenge).
 deploy:
 	@test -f .env || (echo "ERROR: .env missing. Copy from ops/.env.prod.example (plus ops/.env.example) and fill in every value." && exit 1)
@@ -382,7 +382,7 @@ deploy:
 	@test -f ops/docker-compose.prod.yml || (echo "ERROR: ops/docker-compose.prod.yml missing — did you git pull?" && exit 1)
 	@echo "deploy: pulling latest images..."
 	$(PROD_COMPOSE) pull
-	@echo "deploy: building siahub-* service images from repo HEAD..."
+	@echo "deploy: building openweights-* service images from repo HEAD..."
 	$(PROD_COMPOSE) build
 	@echo "deploy: bringing stack up (detached)..."
 	$(PROD_COMPOSE) up -d
@@ -393,7 +393,7 @@ deploy:
 # Objective post-deploy smoke test against the LIVE hosted demo.
 # Equivalent to the cut tester-recruitment criterion.
 deploy-smoke:
-	bash ops/smoke.sh $${SIAHUB_DOMAIN:-siahub.app}
+	bash ops/smoke.sh $${OPENWEIGHTS_DOMAIN:-openweights.app}
 
 # One-shot fixture preload. Run AFTER a write-scoped API key is
 # minted in the console. See ops/preload-fixture.sh for pre-conditions.

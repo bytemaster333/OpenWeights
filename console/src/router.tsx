@@ -79,7 +79,7 @@ const dashboardRoute = createRoute({
 
 // /keys — auth-gated. Merged page combining key CRUD (KEYS-01..04) AND
 // the former `/onboarding` flow (CONSOLE-02, KEYS-01/02). Single surface
-// for "here's how to use SiaHub with hf CLI".
+// for "here's how to use OpenWeights with hf CLI".
 const keysRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/keys",

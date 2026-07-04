@@ -1,4 +1,4 @@
-//! `siahub-conformance` — the Xet-protocol end-to-end conformance
+//! `openweights-conformance` — the Xet-protocol end-to-end conformance
 //! harness. Drives the CAS via `xet_client = "=1.5.1"` (dev-dep only; see
 //! `Cargo.toml` for the pin rationale + T-02- guard).
 //! This library crate intentionally stays minimal — it holds ONLY the
@@ -7,7 +7,7 @@
 //! under `tests/common/` so the dev-only deps never leak into the library
 //! dep graph (T-02-10-06).
 //! Integration tests (`tests/*.rs`) import:
-//! - `siahub_conformance::fixtures::*` from here (lib crate);
+//! - `openweights_conformance::fixtures::*` from here (lib crate);
 //! - `crate::common::{spawn, schema_check}` from the per-test binary
 //! (via `mod common;` in each `tests/*.rs`).
 //! Tests skip with `eprintln!` — never fail — when Docker / fixtures are
@@ -32,7 +32,7 @@ pub fn init_tracing_once() {
 
 /// The pinned reference xorb hash from `xet-team/xet-spec-reference-files`.
 /// Re-exported here as a `const &str` so tests don't need to import
-/// `siahub_cas_proto::merklehash` just to reference it.
+/// `openweights_cas_proto::merklehash` just to reference it.
 pub const REFERENCE_XORB_HASH_HEX: &str =
     "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632";
 

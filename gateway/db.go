@@ -6,8 +6,8 @@
 // `'uploading'` / `'pinning'` / `'orphaned'` states) MUST NOT leak
 // serving bytes from an incomplete Sia upload would corrupt downloads.
 // - `ErrXorbNotFound` is the sentinel the xorb handler maps to 404.
-// RECEIVED §B: the gateway connects as the dedicated `siahub_gw` role created
-// by cas/migrations/0005_siahub_gw_role.sql — not the `siahub` owner.
+// RECEIVED §B: the gateway connects as the dedicated `openweights_gw` role created
+// by cas/migrations/0005_openweights_gw_role.sql — not the `openweights` owner.
 // That role has `SELECT` on `xorbs` + `INSERT` on `usage_log` and nothing
 // else; the RO/RW split is at the Postgres role layer, not in this file.
 // CONTEXT §2 + : metering writes go directly to `usage_log` with
@@ -48,7 +48,7 @@ type DB struct {
 }
 
 // NewDB constructs a pooled connection to Postgres. The connStr is expected
-// to carry `application_name=siahub-gateway` (compose sets this) so the
+// to carry `application_name=openweights-gateway` (compose sets this) so the
 // CAS dashboards can distinguish gateway connections from CAS connections.
 // Pool sizing: MaxConns=20 is conservative. The gateway is overwhelmingly
 // IO-bound on Sia downloads, not on Postgres — a tiny lookup per request
@@ -74,7 +74,7 @@ func NewDB(ctx context.Context, connStr string) (*DB, error) {
 		cfg.ConnConfig.RuntimeParams = map[string]string{}
 	}
 	if _, ok := cfg.ConnConfig.RuntimeParams["application_name"]; !ok {
-		cfg.ConnConfig.RuntimeParams["application_name"] = "siahub-gateway"
+		cfg.ConnConfig.RuntimeParams["application_name"] = "openweights-gateway"
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)

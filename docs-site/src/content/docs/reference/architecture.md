@@ -3,7 +3,7 @@ title: Architecture
 description: What runs where
 ---
 
-A SiaHub deployment is five long-running services behind a reverse
+A OpenWeights deployment is five long-running services behind a reverse
 proxy, plus Postgres and Redis for state. All services live on the
 same Docker Compose network.
 
@@ -42,13 +42,13 @@ stats, storage provider map. Talks to `/admin/*` on the CAS.
 
 Optional. Sits in front of huggingface.co and rewrites the
 `X-Xet-Cas-Url` header so `hf upload` traffic against hf.co actually
-targets a SiaHub CAS. Useful when pointing the standard CLI at SiaHub
+targets a OpenWeights CAS. Useful when pointing the standard CLI at OpenWeights
 without changing `HF_ENDPOINT`.
 
 ## indexd (Sia Foundation)
 
 Follows the Sia chain, maintains the host pool, mediates storage
-contracts. SiaHub talks to its admin API for host geolocation
+contracts. OpenWeights talks to its admin API for host geolocation
 (`/admin/stats/map`) and to its SDK for byte upload/pin/fetch.
 
 ## Storage tables

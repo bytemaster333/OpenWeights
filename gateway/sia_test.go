@@ -90,8 +90,8 @@ func TestNewSiaAdapter_RejectsEmptyInputs(t *testing.T) {
 		{"empty indexer", &Config{AppID: hex64(), AppKey: hex32()}, "SiaIndexerURL is empty"},
 		{"empty app id", &Config{SiaIndexerURL: "http://x", AppKey: hex32()}, "AppID is empty"},
 		{"empty app key", &Config{SiaIndexerURL: "http://x", AppID: hex64()}, "AppKey is empty"},
-		{"bad app id hex", &Config{SiaIndexerURL: "http://x", AppID: "not-hex", AppKey: hex32()}, "parse SIAHUB_APP_ID"},
-		{"bad app key hex", &Config{SiaIndexerURL: "http://x", AppID: hex64(), AppKey: "zzz"}, "decode SIAHUB_APP_KEY"},
+		{"bad app id hex", &Config{SiaIndexerURL: "http://x", AppID: "not-hex", AppKey: hex32()}, "parse OPENWEIGHTS_APP_ID"},
+		{"bad app key hex", &Config{SiaIndexerURL: "http://x", AppID: hex64(), AppKey: "zzz"}, "decode OPENWEIGHTS_APP_KEY"},
 	}
 	for _, tc := range cases {
 		tc := tc

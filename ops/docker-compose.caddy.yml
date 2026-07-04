@@ -10,20 +10,20 @@
 # integrity through a reverse proxy) is exercised here on the exact code path
 # the production deploy will carry.
 # Prod (05-04) will ship a separate ops/Caddyfile + ops/docker-compose.yml
-# Caddy service block (dual-SAN auto Let's Encrypt on `siahub.app` +
-# `cas.siahub.app`); this overlay exists only for CI so PR reviewers + nightly
+# Caddy service block (dual-SAN auto Let's Encrypt on `openweights.app` +
+# `cas.openweights.app`); this overlay exists only for CI so PR reviewers + nightly
 # round-trip runs hit the same multi-range integrity guarantees.
 
 services:
   caddy:
     image: caddy:2.8
-    container_name: siahub-caddy-ci
+    container_name: openweights-caddy-ci
     depends_on:
-      siahub-cas:
+      openweights-cas:
         condition: service_healthy
-      siahub-gateway:
+      openweights-gateway:
         condition: service_healthy
-      siahub-console:
+      openweights-console:
         condition: service_healthy
     ports:
       - "127.0.0.1:8090:8090"

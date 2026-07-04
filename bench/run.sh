@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bench/run.sh — 3-trial median benchmark harness.
 # Measures 5 cells across 2 stacks:
-# siahub.cold-download siahub.warm-download siahub.upload
+# openweights.cold-download openweights.warm-download openweights.upload
 # hf-native.cold-download hf-native.warm-download
 # Each cell runs BENCH_TRIALS (default: 3) trials; the median is reported.
 # (There is no `hf-native.upload` because `huggingface-cli upload` talks to
@@ -14,10 +14,10 @@
 # --dry-run skip all HF network activity; emit placeholder artifacts
 # (every cell value becomes "null"); useful for CI layout
 # tests and for validating the output schema.
-# --stack <s> siahub | hf-native | both (default: both)
+# --stack <s> openweights | hf-native | both (default: both)
 # --trials <n> override BENCH_TRIALS (default: 3 per )
-# Env: SIAHUB_CAS_URL (required for SiaHub cells unless --dry-run)
-# SIAHUB_API_KEY (required for SiaHub upload cell unless --dry-run)
+# Env: OPENWEIGHTS_CAS_URL (required for OpenWeights cells unless --dry-run)
+# OPENWEIGHTS_API_KEY (required for OpenWeights upload cell unless --dry-run)
 # INDEXD_ADMIN_PASSWORD (used by the thesis fold-in to query usable-host count)
 
 set -euo pipefail
@@ -51,8 +51,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ "$STACK" != "siahub" && "$STACK" != "hf-native" && "$STACK" != "both" ]]; then
-  echo "--stack must be one of: siahub | hf-native | both (got: $STACK)" >&2
+if [[ "$STACK" != "openweights" && "$STACK" != "hf-native" && "$STACK" != "both" ]]; then
+  echo "--stack must be one of: openweights | hf-native | both (got: $STACK)" >&2
   exit 2
 fi
 
@@ -64,7 +64,7 @@ fi
 # -----------------------------------------------------------------------------
 # Working directory + cleanup
 # -----------------------------------------------------------------------------
-WORK="$(mktemp -d -t siahub-bench-XXXXXX)"
+WORK="$(mktemp -d -t openweights-bench-XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 # Cell -> median-seconds map. We use five scalar variables rather than an
@@ -110,9 +110,9 @@ fi
 # fall back to 'huggingface-cli' for older installs.
 HF_CMD=$(command -v hf 2>/dev/null || command -v huggingface-cli)
 
-if [[ "$STACK" == "siahub" || "$STACK" == "both" ]]; then
-  : "${SIAHUB_CAS_URL:?SIAHUB_CAS_URL must be set for SiaHub cells}"
-  : "${SIAHUB_API_KEY:?SIAHUB_API_KEY must be set for SiaHub upload cell}"
+if [[ "$STACK" == "openweights" || "$STACK" == "both" ]]; then
+  : "${OPENWEIGHTS_CAS_URL:?OPENWEIGHTS_CAS_URL must be set for OpenWeights cells}"
+  : "${OPENWEIGHTS_API_KEY:?OPENWEIGHTS_API_KEY must be set for OpenWeights upload cell}"
 fi
 
 # -----------------------------------------------------------------------------
@@ -122,25 +122,25 @@ fi
 # -----------------------------------------------------------------------------
 prep_clean_state() {
   local cell="$1"
-  local gw_flush_url="${SIAHUB_GATEWAY_ADMIN_URL:-http://localhost:9101}/admin/cache/flush"
+  local gw_flush_url="${OPENWEIGHTS_GATEWAY_ADMIN_URL:-http://localhost:9101}/admin/cache/flush"
   case "$cell" in
-    siahub.cold-download)
+    openweights.cold-download)
       # Gateway LRU flush (OPS admin endpoint; 10-line handler — see plan Task 3
       # Note. On exit the gateway endpoint is expected to exist; if not,
       # a 404 is swallowed so the benchmark still runs (cold-vs-warm delta is
       # still measurable via xet-core cache purge alone, just less clean).
-      curl -fsS -X POST -H "Authorization: Bearer ${SIAHUB_API_KEY:-}" \
+      curl -fsS -X POST -H "Authorization: Bearer ${OPENWEIGHTS_API_KEY:-}" \
         "$gw_flush_url" > /dev/null 2>&1 || true
-      rm -rf "${HOME}/.cache/huggingface/xet" "$WORK/siahub-cold" 2>/dev/null || true
-      mkdir -p "$WORK/siahub-cold"
+      rm -rf "${HOME}/.cache/huggingface/xet" "$WORK/openweights-cold" 2>/dev/null || true
+      mkdir -p "$WORK/openweights-cold"
       ;;
-    siahub.warm-download)
-      rm -rf "$WORK/siahub-warm"
-      mkdir -p "$WORK/siahub-warm"
+    openweights.warm-download)
+      rm -rf "$WORK/openweights-warm"
+      mkdir -p "$WORK/openweights-warm"
       ;;
-    siahub.upload)
-      rm -rf "$WORK/siahub-upload-src"
-      cp -R "$WORK/fixture-src" "$WORK/siahub-upload-src"
+    openweights.upload)
+      rm -rf "$WORK/openweights-upload-src"
+      cp -R "$WORK/fixture-src" "$WORK/openweights-upload-src"
       ;;
     hf-native.cold-download)
       rm -rf "${HOME}/.cache/huggingface/xet" "$WORK/hf-native-cold" 2>/dev/null || true
@@ -203,39 +203,39 @@ print(total)
 echo "[bench] fixture: $HF_FIXTURE_REPO @ $HF_FIXTURE_REVISION ($FIXTURE_BYTES bytes)"
 
 # -----------------------------------------------------------------------------
-# 1) SiaHub cells
+# 1) OpenWeights cells
 # -----------------------------------------------------------------------------
-if [[ "$STACK" == "siahub" || "$STACK" == "both" ]]; then
-  export HF_XET_DATA_DEFAULT_CAS_ENDPOINT="$SIAHUB_CAS_URL"
-  export HF_XET_DATA_CUSTOM_HEADERS="Authorization=Bearer ${SIAHUB_API_KEY}"
+if [[ "$STACK" == "openweights" || "$STACK" == "both" ]]; then
+  export HF_XET_DATA_DEFAULT_CAS_ENDPOINT="$OPENWEIGHTS_CAS_URL"
+  export HF_XET_DATA_CUSTOM_HEADERS="Authorization=Bearer ${OPENWEIGHTS_API_KEY}"
 
-  echo "[bench] === SiaHub: cold-cache download ==="
-  MED_SH_COLD=$(run_trial siahub.cold-download \
+  echo "[bench] === OpenWeights: cold-cache download ==="
+  MED_SH_COLD=$(run_trial openweights.cold-download \
     "$HF_CMD" download "$HF_FIXTURE_REPO" \
       --repo-type "$HF_FIXTURE_KIND" \
       --revision "$HF_FIXTURE_REVISION" \
-      --local-dir "$WORK/siahub-cold")
+      --local-dir "$WORK/openweights-cold")
 
-  echo "[bench] === SiaHub: warm-cache download ==="
+  echo "[bench] === OpenWeights: warm-cache download ==="
   # Prime xet-core cache once outside the timed trials so the first warm trial
   # measures a real cache hit (not the first download populating the cache).
   "$HF_CMD" download "$HF_FIXTURE_REPO" \
     --repo-type "$HF_FIXTURE_KIND" \
     --revision "$HF_FIXTURE_REVISION" \
-    --local-dir "$WORK/siahub-warm-prime" > /dev/null || true
+    --local-dir "$WORK/openweights-warm-prime" > /dev/null || true
 
-  MED_SH_WARM=$(run_trial siahub.warm-download \
+  MED_SH_WARM=$(run_trial openweights.warm-download \
     "$HF_CMD" download "$HF_FIXTURE_REPO" \
       --repo-type "$HF_FIXTURE_KIND" \
       --revision "$HF_FIXTURE_REVISION" \
-      --local-dir "$WORK/siahub-warm")
+      --local-dir "$WORK/openweights-warm")
 
-  echo "[bench] === SiaHub: upload ==="
+  echo "[bench] === OpenWeights: upload ==="
   # Upload goes to a disposable repo name so repeated trials don't collide.
   # We use the timestamp + trial index to keep names unique; the CAS will
   # just happily accept the re-uploaded xorbs (content-addressed, idempotent).
-  UPLOAD_REPO="siahub-bench/upload-$(date +%s)"
-  MED_SH_UP=$(run_trial siahub.upload \
+  UPLOAD_REPO="openweights-bench/upload-$(date +%s)"
+  MED_SH_UP=$(run_trial openweights.upload \
     "$HF_CMD" upload "$UPLOAD_REPO" "$WORK/fixture-src")
 fi
 
@@ -243,7 +243,7 @@ fi
 # 2) HF-native baseline cells — unset CAS endpoint, route through S3+CloudFront.
 # -----------------------------------------------------------------------------
 if [[ "$STACK" == "hf-native" || "$STACK" == "both" ]]; then
-  # Unset the SiaHub routing so xet-core falls back to HF's own CAS.
+  # Unset the OpenWeights routing so xet-core falls back to HF's own CAS.
   # shellcheck disable=SC2086
   for v in $HF_BASELINE_UNSET_VARS; do unset "$v"; done
 
@@ -308,7 +308,7 @@ EOF
 
 **Status: NOT RUN LIVE** — Sia Zen testnet had only ${USABLE_INT} usable hosts on $(date -u +%Y-%m-%d) (measured via \`indexd /api/hosts\`). \`indexd\` hardcodes \`minRecoveryProbability = 99.99%\` in \`go.sia.tech/indexd/slabs/slabs.go\`, which requires a usable-host count that Zen currently does not sustain (no 3-host redundancy scheme reaches 99.99% — 1-of-3 parity maxes out at ~98.43% recovery probability).
 
-This is a **Sia-network environmental blocker**, not a SiaHub code defect. The thesis measurement code itself ships and is unit-tested (\`bench/thesis/thesis_test.go\` + \`TestRangeDownloadSectorScoping\` integration test) — it is gated on Zen testnet stabilising at ≥6 usable hosts, at which point the existing \`WithRedundancy(1, 2)\` override clears.
+This is a **Sia-network environmental blocker**, not a OpenWeights code defect. The thesis measurement code itself ships and is unit-tested (\`bench/thesis/thesis_test.go\` + \`TestRangeDownloadSectorScoping\` integration test) — it is gated on Zen testnet stabilising at ≥6 usable hosts, at which point the existing \`WithRedundancy(1, 2)\` override clears.
 
 Functional coverage for the range-download code path is provided by the conformance suite (always green in CI) and the HF byte-identical multi-GB round-trip test (PROTO-11, plan 05-02). Those exercise every range-download code path; what they do NOT quantify is the sector-level byte count — that is what \`make thesis\` would measure on a healthier host pool.
 EOF

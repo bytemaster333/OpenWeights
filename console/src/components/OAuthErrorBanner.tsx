@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
  * P14 mitigation — self-host OAuth friction surfacing.
  *
  * The failure modes below are the ones CAS's `CallbackError::into_response`
- * (`cas/crates/siahub-cas-core/src/handlers/auth/github.rs`) emits as stable
+ * (`cas/crates/openweights-cas-core/src/handlers/auth/github.rs`) emits as stable
  * `code` strings, plus two additional operator-config codes reserved for
  * `/setup` (Phase 5 work) to surface when the `.env` GitHub OAuth app
  * registration is missing or misconfigured. See 04-CONTEXT §3 and §7.
@@ -53,7 +53,7 @@ const ERROR_COPY: Record<OAuthErrorCode, ErrorCopy> = {
   },
   oauth_client_not_configured: {
     title: "GitHub OAuth is not configured",
-    description: "This SiaHub deployment has no GitHub OAuth credentials in its environment.",
+    description: "This OpenWeights deployment has no GitHub OAuth credentials in its environment.",
     hint: "Operator: set GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, and GITHUB_OAUTH_CALLBACK_URL in .env, then restart the CAS service.",
   },
   oauth_callback_host_mismatch: {

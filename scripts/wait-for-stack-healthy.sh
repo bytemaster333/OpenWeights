@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Task 3 — wait for the 6-service Compose stack to become healthy.
 # Polls Docker Compose healthcheck state (NOT raw HTTP) so services whose
-# health probes are internal (pg_isready, redis-cli PING, siahub-readiness)
+# health probes are internal (pg_isready, redis-cli PING, openweights-readiness)
 # are respected exactly as docker-compose.yml specifies. Per-service timeout
 # budgets reflect expected boot cost:
 # postgres 30s (cold init runs indexd-postgres-init.sql)
 # redis 30s
 # indexd 600s (first-boot Zen consensus header sync)
-# siahub-cas 120s (sqlx migrations + Axum bind)
-# siahub-gateway 120s (cache-dir init + Postgres attach)
-# siahub-console 60s (static nginx — fast)
+# openweights-cas 120s (sqlx migrations + Axum bind)
+# openweights-gateway 120s (cache-dir init + Postgres attach)
+# openweights-console 60s (static nginx — fast)
 # Exit 0 when every service reports `healthy`; exit 1 on any timeout.
 
 set -euo pipefail
@@ -60,14 +60,14 @@ for line in sys.stdin:
   done
 }
 
-echo "Waiting for SiaHub compose stack to become healthy..."
+echo "Waiting for OpenWeights compose stack to become healthy..."
 
 # Order reflects compose dependency graph. Foundations first, then services.
 wait_healthy postgres         30
 wait_healthy redis            30
 wait_healthy indexd          600
-wait_healthy siahub-cas      120
-wait_healthy siahub-gateway  120
-wait_healthy siahub-console   60
+wait_healthy openweights-cas      120
+wait_healthy openweights-gateway  120
+wait_healthy openweights-console   60
 
 echo "[OK] all services healthy"

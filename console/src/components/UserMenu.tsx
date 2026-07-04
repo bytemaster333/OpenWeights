@@ -28,7 +28,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
       // path sees `null` before the navigation lands.
       qc.setQueryData(["me"], null)
       // Full navigation (not client-side) — we want the browser to drop
-      // the (now-cleared) `siahub_session` cookie from its jar and any
+      // the (now-cleared) `openweights_session` cookie from its jar and any
       // feature plans' cached query state to be nuked via full reload.
       window.location.href = "/"
     },

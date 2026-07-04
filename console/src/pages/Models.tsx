@@ -21,7 +21,7 @@ import { usePlatformStats } from "@/hooks/useStats"
 import { formatBytes, formatRelative } from "@/lib/format"
 
 /**
- * `/models` — public catalog of SiaHub-hosted models.
+ * `/models` — public catalog of OpenWeights-hosted models.
  *
  * Anonymous-readable surface (matches the backend `GET /api/models` which
  * hides `visibility != 'public'` rows). Clicking a row deep-links to
@@ -40,7 +40,7 @@ export function ModelsPage() {
             <h1 className="font-heading text-2xl font-semibold tracking-tight">Models</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Public models hosted on this SiaHub deployment — byte-stored on Sia.
+            Public models hosted on this OpenWeights deployment — byte-stored on Sia.
           </p>
         </div>
         {platform && platform.xorbs_total > 0 && (
@@ -84,7 +84,7 @@ export function ModelsPage() {
           <p className="mt-2 text-xs">
             Publish one with:{" "}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-              HF_ENDPOINT=https://hf.siahub.app hf upload &lt;owner&gt;/&lt;name&gt; ./files
+              HF_ENDPOINT=https://hf.openweights.app hf upload &lt;owner&gt;/&lt;name&gt; ./files
             </code>
           </p>
         </div>

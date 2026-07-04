@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members  = [
-    "crates/siahub-cas",
-    "crates/siahub-cas-core",
-    "crates/siahub-cas-storage",
-    "crates/siahub-cas-db",
-    "crates/siahub-cas-proto",
-    "crates/siahub-cas-register",
+    "crates/openweights-cas",
+    "crates/openweights-cas-core",
+    "crates/openweights-cas-storage",
+    "crates/openweights-cas-db",
+    "crates/openweights-cas-proto",
+    "crates/openweights-cas-register",
 ]
 
 [workspace.package]
@@ -16,7 +16,7 @@ publish      = false
 license      = "MIT"
 
 [workspace.dependencies]
-# Protocol types (.md §1 — NEVER fork; re-export only via siahub-cas-proto).
+# Protocol types (.md §1 — NEVER fork; re-export only via openweights-cas-proto).
 # crates.io publishes this crate with a hyphenated name; the Rust
 # import identifier is `xet_core_structures`. The README of the crate disclaims
 # public use, but /2 policy is to pin exact and live within the
@@ -68,7 +68,7 @@ lto           = "thin"
 codegen-units = 1
 strip         = "symbols"
 
-# SiaHub patch over upstream sia_storage 0.7.0:
+# OpenWeights patch over upstream sia_storage 0.7.0:
 # upstream UploadOptions::validate hard-codes RECOVERY_PROBABILITY=0.75 (a
 # conservative mainnet adversarial assumption). For our Zen testnet demo
 # the active host pool sustains ~95% uptime and we form ~6 contracts;

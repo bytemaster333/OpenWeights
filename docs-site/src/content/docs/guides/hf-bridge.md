@@ -5,8 +5,8 @@ description: Pointer-only announce so your model shows up in HF search
 
 ## Why
 
-SiaHub and huggingface.co aren't exclusive. You can publish bytes to
-SiaHub (where they live on Sia) and mirror a pointer to huggingface.co
+OpenWeights and huggingface.co aren't exclusive. You can publish bytes to
+OpenWeights (where they live on Sia) and mirror a pointer to huggingface.co
 for discovery — model card, tags, author profile, search ranking —
 without sending weights to HF.
 
@@ -19,7 +19,7 @@ your shell (bash / zsh / fish) and copy the command.
 The command:
 
 1. Writes a short pointer README to your cwd (YAML frontmatter with
-   tags, a "weights on SiaHub" body, and an `hf download` example)
+   tags, a "weights on OpenWeights" body, and an `hf download` example)
 2. Creates the repo on huggingface.co (idempotent — `--exist-ok`)
 3. Pushes **only** the README
 
@@ -30,5 +30,5 @@ already be done on your machine.
 
 - **On huggingface.co**: the repo renders its model card, shows up in
   author profile + search, with no download button. Visitors who follow
-  the README instructions hit SiaHub for the weights.
-- **On SiaHub**: unchanged — your upload stays authoritative.
+  the README instructions hit OpenWeights for the weights.
+- **On OpenWeights**: unchanged — your upload stays authoritative.

@@ -34,21 +34,21 @@ func buildProxy(t *testing.T, upstream *url.URL, casPublic string) http.Handler 
 }
 
 // Core guarantee: when HF emits X-Xet-Cas-Url, the proxy replaces it with
-// the configured SiaHub value. Anything else would leave bytes going to
+// the configured OpenWeights value. Anything else would leave bytes going to
 // HF's CAS, which is exactly the bug we're fixing.
 func TestRewritesXetCasUrl(t *testing.T) {
 	hf := fakeHF(t, "https://cas-server.xethub.hf.co", `{"commitOid":"abc"}`)
 	defer hf.Close()
 
 	up, _ := url.Parse(hf.URL)
-	proxy := buildProxy(t, up, "http://siahub-cas:28080")
+	proxy := buildProxy(t, up, "http://openweights-cas:28080")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/models/user/repo/xet-write-token/main", nil)
 	proxy.ServeHTTP(rec, req)
 
-	if got := rec.Header().Get("X-Xet-Cas-Url"); got != "http://siahub-cas:28080" {
-		t.Fatalf("X-Xet-Cas-Url = %q; want http://siahub-cas:28080", got)
+	if got := rec.Header().Get("X-Xet-Cas-Url"); got != "http://openweights-cas:28080" {
+		t.Fatalf("X-Xet-Cas-Url = %q; want http://openweights-cas:28080", got)
 	}
 }
 
@@ -63,7 +63,7 @@ func TestLeavesHeaderAloneWhenAbsent(t *testing.T) {
 	defer hf.Close()
 
 	up, _ := url.Parse(hf.URL)
-	proxy := buildProxy(t, up, "http://siahub-cas:28080")
+	proxy := buildProxy(t, up, "http://openweights-cas:28080")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami-v2", nil)
@@ -82,7 +82,7 @@ func TestForwardsBodyAndOtherHeaders(t *testing.T) {
 	defer hf.Close()
 
 	up, _ := url.Parse(hf.URL)
-	proxy := buildProxy(t, up, "http://siahub-cas:28080")
+	proxy := buildProxy(t, up, "http://openweights-cas:28080")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
@@ -105,7 +105,7 @@ func TestUpstreamDown502(t *testing.T) {
 	// Point to a port that definitely won't answer. :1 is reliably dead
 	// on a local machine.
 	up, _ := url.Parse("http://127.0.0.1:1")
-	proxy := buildProxy(t, up, "http://siahub-cas:28080")
+	proxy := buildProxy(t, up, "http://openweights-cas:28080")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)

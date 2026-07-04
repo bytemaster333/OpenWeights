@@ -1,0 +1,17 @@
+[package]
+name         = "openweights-cas-register"
+version      = "0.1.0"
+edition      = { workspace = true }
+rust-version = { workspace = true }
+publish      = { workspace = true }
+license      = { workspace = true }
+
+[[bin]]
+name = "openweights-cas-register"
+path = "src/main.rs"
+
+[dependencies]
+sia_storage = { workspace = true }
+tokio       = { workspace = true }
+anyhow      = { workspace = true }
+base64      = { workspace = true }

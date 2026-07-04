@@ -6,7 +6,7 @@ import { casFetch } from "@/lib/api"
  * `/setup` first-run status tiles.
  *
  * Data source: CAS `GET /admin/setup/status`, landed in (see
- * `cas/crates/siahub-cas-core/src/handlers/admin/setup.rs`). The endpoint
+ * `cas/crates/openweights-cas-core/src/handlers/admin/setup.rs`). The endpoint
  * aggregates subsystem health checks:
  *
  * - Postgres: `SELECT 1` round-trip latency.
@@ -16,7 +16,7 @@ import { casFetch } from "@/lib/api"
  * - GitHub OAuth: flags whether `GITHUB_OAUTH_CLIENT_ID|SECRET|CALLBACK_URL`
  * are all present in the CAS env — drives the "not configured" card
  * on `/setup`.
- * - V2 reconstruction: the operator-set `SIAHUB_V2_RECONSTRUCTION_ENABLED`
+ * - V2 reconstruction: the operator-set `OPENWEIGHTS_V2_RECONSTRUCTION_ENABLED`
  * flag. Read-only informational.
  *
  * Refetch every 30s so an operator fixing `.env` sees the tiles flip within

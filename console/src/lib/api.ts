@@ -2,7 +2,7 @@
  * Fetch wrappers for the CAS admin API and the gateway.
  *
  * Design notes:
- * - `credentials: "include"` on every call — the session cookie (`siahub_session`,
+ * - `credentials: "include"` on every call — the session cookie (`openweights_session`,
  * ) is `HttpOnly; SameSite=Lax; Secure` and set by CAS on OAuth callback.
  * - 403 vs 401 discipline (see / 04-CONTEXT §4.7):
  * - 401 — session expired; hooks should route the user to `/login`.
@@ -64,7 +64,7 @@ export function gatewayFetch<T>(path: string, init: RequestInit = {}): Promise<T
 
 /**
  * Log the current user out. Hits CAS `POST /auth/logout`, which marks the
- * session `revoked_at = NOW` and clears the `siahub_session` cookie via
+ * session `revoked_at = NOW` and clears the `openweights_session` cookie via
  * `Set-Cookie: Max-Age=0` ( 04-CONTEXT §4.6). Callers should clear
  * any cached user data after this resolves.*/
 export function logout(): Promise<void> {

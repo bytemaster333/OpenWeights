@@ -63,7 +63,7 @@ export function DashboardPage() {
   // already returns rows ORDER BY r.updated_at DESC; we just slice.
   const allModels = (models ?? []).slice(0, ALL_MODELS_LIMIT)
 
-  const uploadCmd = `HF_TOKEN=<your-siahub-key> HF_ENDPOINT=${CAS_URL} \\
+  const uploadCmd = `HF_TOKEN=<your-openweights-key> HF_ENDPOINT=${CAS_URL} \\
   hf upload ${user.login}/<repo-name> ./files`
 
   return (
@@ -76,7 +76,7 @@ export function DashboardPage() {
           </h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your SiaHub footprint at a glance.
+          Your OpenWeights footprint at a glance.
         </p>
       </header>
 
@@ -339,7 +339,7 @@ export function DashboardPage() {
           <h2 className="text-sm font-semibold">Quick upload</h2>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          Swap <code>&lt;your-siahub-key&gt;</code> for a plaintext key from{" "}
+          Swap <code>&lt;your-openweights-key&gt;</code> for a plaintext key from{" "}
           <Link to="/keys" className="underline hover:text-foreground">
             /keys
           </Link>

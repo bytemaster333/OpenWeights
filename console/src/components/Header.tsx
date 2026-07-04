@@ -10,7 +10,7 @@ import { useMe } from "@/hooks/useMe"
  *
  * Layout:
  *
- * [ SiaHub ] Models · Assets · Stats · Map · Keys · Status [ User ]
+ * [ OpenWeights ] Models · Assets · Stats · Map · Keys · Status [ User ]
  *
  * - `UserMenu` lives in the trailing right cluster. The conformance badge
  * was removed when the conformance-harness CI pipeline stopped emitting
@@ -35,7 +35,7 @@ export function Header() {
           className="font-heading text-lg font-semibold tracking-tight"
           data-testid="app-header-logo"
         >
-          SiaHub
+          OpenWeights
         </Link>
         <nav
           className="flex gap-4 text-sm text-muted-foreground"
@@ -69,7 +69,7 @@ export function Header() {
             Status
           </Link>
           <a
-            href="https://docs.siahub.app"
+            href="https://docs.openweights.app"
             target="_blank"
             rel="noreferrer"
             className="hover:text-foreground"

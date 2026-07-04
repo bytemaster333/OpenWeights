@@ -2,17 +2,17 @@ import { defineConfig } from "astro/config"
 import starlight from "@astrojs/starlight"
 
 export default defineConfig({
-  site: "https://docs.siahub.app",
+  site: "https://docs.openweights.app",
   integrations: [
     starlight({
-      title: "SiaHub Docs",
+      title: "OpenWeights Docs",
       description: "Xet-compatible model hub on Sia",
       favicon: "/favicon.svg",
       sidebar: [
         {
           label: "Start here",
           items: [
-            { label: "What is SiaHub", slug: "index" },
+            { label: "What is OpenWeights", slug: "index" },
             { label: "Quickstart", slug: "guides/quickstart" },
           ],
         },

@@ -2,7 +2,7 @@
 // +build !a3probe
 
 // Package main — `make bootstrap` wizard per RESEARCH §10.
-// From zero to a running SiaHub stack: generate BIP-39 if needed, derive App Key,
+// From zero to a running OpenWeights stack: generate BIP-39 if needed, derive App Key,
 // bring Compose up, wait for indexd ready, fund wallet (manual step), run smoke.
 package main
 
@@ -17,7 +17,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"go.sia.tech/siastorage"
 
-	"github.com/siahub/bench/appid"
+	"github.com/bytemaster333/openweights/bench/appid"
 )
 
 const (
@@ -40,26 +40,26 @@ func main() {
 	}
 
 	// 2. Set defaults + generate BIP-39 if phrase empty.
-	if kv["SIAHUB_RECOVERY_PHRASE"] == "" {
+	if kv["OPENWEIGHTS_RECOVERY_PHRASE"] == "" {
 		if !isTTY {
-			_ = requireEnv(kv, "SIAHUB_RECOVERY_PHRASE")
-			fmt.Fprintln(os.Stderr, "FATAL: non-TTY mode requires SIAHUB_RECOVERY_PHRASE in .env")
+			_ = requireEnv(kv, "OPENWEIGHTS_RECOVERY_PHRASE")
+			fmt.Fprintln(os.Stderr, "FATAL: non-TTY mode requires OPENWEIGHTS_RECOVERY_PHRASE in .env")
 			os.Exit(2)
 		}
-		kv["SIAHUB_RECOVERY_PHRASE"] = siastorage.NewSeedPhrase()
-		logger.Info("generated BIP-39 phrase", "phrase_sha_prefix", sha256Prefix8(kv["SIAHUB_RECOVERY_PHRASE"]))
+		kv["OPENWEIGHTS_RECOVERY_PHRASE"] = siastorage.NewSeedPhrase()
+		logger.Info("generated BIP-39 phrase", "phrase_sha_prefix", sha256Prefix8(kv["OPENWEIGHTS_RECOVERY_PHRASE"]))
 	}
-	if kv["SIAHUB_APP_ID"] == "" {
-		kv["SIAHUB_APP_ID"] = appid.SiaHubAppID
+	if kv["OPENWEIGHTS_APP_ID"] == "" {
+		kv["OPENWEIGHTS_APP_ID"] = appid.OpenWeightsAppID
 	}
-	if kv["SIAHUB_INDEXER_URL"] == "" {
-		kv["SIAHUB_INDEXER_URL"] = "http://indexd:9982"
+	if kv["OPENWEIGHTS_INDEXER_URL"] == "" {
+		kv["OPENWEIGHTS_INDEXER_URL"] = "http://indexd:9982"
 	}
 	if kv["SIA_NETWORK"] == "" {
 		kv["SIA_NETWORK"] = "zen"
 	}
-	if kv["SIAHUB_WALLET_THRESHOLD_HASTINGS"] == "" {
-		kv["SIAHUB_WALLET_THRESHOLD_HASTINGS"] = "1000000000000000000000000" // 1 zSC
+	if kv["OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS"] == "" {
+		kv["OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS"] = "1000000000000000000000000" // 1 zSC
 	}
 
 	// 3. Generate missing passwords.
@@ -74,7 +74,7 @@ func main() {
 
 	// 5. Render ops/indexd.yml.
 	if err := renderIndexdYML(indexdTmplPath, indexdOutPath, indexdYMLData{
-		RecoveryPhrase:   kv["SIAHUB_RECOVERY_PHRASE"],
+		RecoveryPhrase:   kv["OPENWEIGHTS_RECOVERY_PHRASE"],
 		AdminPassword:    kv["INDEXD_ADMIN_PASSWORD"],
 		PostgresPassword: kv["INDEXD_POSTGRES_PASSWORD"],
 		Network:          kv["SIA_NETWORK"],
@@ -101,21 +101,21 @@ func main() {
 
 	adminURL := "http://localhost:9980/api" // wizard runs on host; loopback port
 	adminPass := kv["INDEXD_ADMIN_PASSWORD"]
-	if err := pollWalletFunded(ctx, logger, adminURL, adminPass, kv["SIAHUB_WALLET_THRESHOLD_HASTINGS"]); err != nil {
+	if err := pollWalletFunded(ctx, logger, adminURL, adminPass, kv["OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS"]); err != nil {
 		logger.Error("pollWalletFunded", "err", err)
 		os.Exit(1)
 	}
 
 	// 8. Derive App Key (Option A or B per A3 verdict).
 	indexerURL := "http://localhost:9982" // wizard runs on host
-	appKeyHex, err := deriveAppKey(ctx, logger, indexerURL, adminURL, adminPass, kv["SIAHUB_RECOVERY_PHRASE"], kv["SIAHUB_APP_ID"])
+	appKeyHex, err := deriveAppKey(ctx, logger, indexerURL, adminURL, adminPass, kv["OPENWEIGHTS_RECOVERY_PHRASE"], kv["OPENWEIGHTS_APP_ID"])
 	if err != nil {
 		logger.Error("deriveAppKey", "err", err)
 		os.Exit(1)
 	}
 
-	// 9. Persist SIAHUB_APP_KEY into.env.
-	kv["SIAHUB_APP_KEY"] = appKeyHex
+	// 9. Persist OPENWEIGHTS_APP_KEY into.env.
+	kv["OPENWEIGHTS_APP_KEY"] = appKeyHex
 	if err := writeEnv(envPath, kv); err != nil {
 		logger.Error("writeEnv (app key)", "err", err)
 		os.Exit(1)
@@ -127,9 +127,9 @@ func main() {
 	smokeCmd := exec.Command("go", "run", "./smoke")
 	smokeCmd.Dir = "bench" // repo-root CWD; smoke package lives at bench/smoke
 	smokeCmd.Env = append(os.Environ(),
-		"SIAHUB_APP_ID="+kv["SIAHUB_APP_ID"],
-		"SIAHUB_APP_KEY="+appKeyHex,
-		"SIAHUB_INDEXER_URL="+indexerURL,
+		"OPENWEIGHTS_APP_ID="+kv["OPENWEIGHTS_APP_ID"],
+		"OPENWEIGHTS_APP_KEY="+appKeyHex,
+		"OPENWEIGHTS_INDEXER_URL="+indexerURL,
 	)
 	smokeCmd.Stdout = os.Stdout
 	smokeCmd.Stderr = os.Stderr

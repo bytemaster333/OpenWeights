@@ -48,8 +48,8 @@ func writeEnv(path string, kv map[string]string) error {
 	}
 	sort.Strings(keys)
 	var buf bytes.Buffer
-	fmt.Fprintln(&buf, "# SiaHub .env — written by `make bootstrap`.")
-	fmt.Fprintln(&buf, "# CRITICAL: loss of SIAHUB_RECOVERY_PHRASE = permanent data loss (STORE-04).")
+	fmt.Fprintln(&buf, "# OpenWeights .env — written by `make bootstrap`.")
+	fmt.Fprintln(&buf, "# CRITICAL: loss of OPENWEIGHTS_RECOVERY_PHRASE = permanent data loss (STORE-04).")
 	fmt.Fprintln(&buf, "# Per CONTEXT D-03, the phrase stays in this file permanently.")
 	fmt.Fprintln(&buf)
 	for _, k := range keys {
@@ -98,10 +98,10 @@ func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 	required := []string{
 		"POSTGRES_SUPERUSER_PASSWORD",
 		"INDEXD_POSTGRES_PASSWORD",
-		"SIAHUB_POSTGRES_PASSWORD",
-		// : dedicated minimal-privilege role for siahub-gateway.
-		// See cas/migrations/0005_siahub_gw_role.sql.
-		"SIAHUB_GW_POSTGRES_PASSWORD",
+		"OPENWEIGHTS_POSTGRES_PASSWORD",
+		// : dedicated minimal-privilege role for openweights-gateway.
+		// See cas/migrations/0005_openweights_gw_role.sql.
+		"OPENWEIGHTS_GW_POSTGRES_PASSWORD",
 		"INDEXD_ADMIN_PASSWORD",
 		"REDIS_PASSWORD",
 	}

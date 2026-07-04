@@ -1,9 +1,9 @@
 ---
 title: API
-description: Endpoints exposed by siahub-cas
+description: Endpoints exposed by openweights-cas
 ---
 
-SiaHub speaks the subset of the Hugging Face Hub API that the `hf`
+OpenWeights speaks the subset of the Hugging Face Hub API that the `hf`
 CLI + `hf_xet` actually hit. If you stick to those clients, you never
 need to touch the API directly.
 
@@ -12,8 +12,8 @@ need to touch the API directly.
 Every write endpoint accepts an `Authorization: Bearer <key>` header.
 Three valid shapes:
 
-- **SiaHub API key** (opaque string from `/keys` — SHA-256'd server-side)
-- **SiaHub-minted Xet JWT** (short-lived, HS256, `iss=hf.siahub.app`)
+- **OpenWeights API key** (opaque string from `/keys` — SHA-256'd server-side)
+- **OpenWeights-minted Xet JWT** (short-lived, HS256, `iss=hf.openweights.app`)
 - **Hugging Face Xet JWT**, when traffic arrives through the `hf-proxy`
   shim (`iss=huggingface.co`)
 

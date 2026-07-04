@@ -2140,6 +2140,113 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
+name = "openweights-cas"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64",
+ "envy",
+ "fred",
+ "openweights-cas-core",
+ "openweights-cas-db",
+ "openweights-cas-storage",
+ "reqwest 0.12.28",
+ "serde",
+ "sia_storage",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "openweights-cas-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64",
+ "bytes",
+ "chrono",
+ "fred",
+ "getrandom 0.2.17",
+ "hmac",
+ "http",
+ "http-body-util",
+ "hyper",
+ "insta",
+ "lru 0.12.5",
+ "openweights-cas-db",
+ "openweights-cas-proto",
+ "openweights-cas-storage",
+ "prometheus",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "subtle",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "openweights-cas-db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "openweights-cas-proto"
+version = "0.1.0"
+dependencies = [
+ "xet-core-structures",
+]
+
+[[package]]
+name = "openweights-cas-register"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "sia_storage",
+ "tokio",
+]
+
+[[package]]
+name = "openweights-cas-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "openweights-cas-proto",
+ "sha2",
+ "sia_storage",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3160,113 +3267,6 @@ dependencies = [
  "web-sys",
  "web-time",
  "zeroize",
-]
-
-[[package]]
-name = "siahub-cas"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "base64",
- "envy",
- "fred",
- "reqwest 0.12.28",
- "serde",
- "sia_storage",
- "siahub-cas-core",
- "siahub-cas-db",
- "siahub-cas-storage",
- "sqlx",
- "thiserror 1.0.69",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "siahub-cas-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "base64",
- "bytes",
- "chrono",
- "fred",
- "getrandom 0.2.17",
- "hmac",
- "http",
- "http-body-util",
- "hyper",
- "insta",
- "lru 0.12.5",
- "prometheus",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "siahub-cas-db",
- "siahub-cas-proto",
- "siahub-cas-storage",
- "sqlx",
- "subtle",
- "thiserror 1.0.69",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "siahub-cas-db"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "sqlx",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "siahub-cas-proto"
-version = "0.1.0"
-dependencies = [
- "xet-core-structures",
-]
-
-[[package]]
-name = "siahub-cas-register"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "sia_storage",
- "tokio",
-]
-
-[[package]]
-name = "siahub-cas-storage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "sha2",
- "sia_storage",
- "siahub-cas-proto",
- "sqlx",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
 ]
 
 [[package]]

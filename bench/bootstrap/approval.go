@@ -76,24 +76,42 @@ func deriveAppKey(ctx context.Context, logger *slog.Logger,
 func deriveViaOptionA(ctx context.Context, logger *slog.Logger,
 	adminURL, adminPass, indexerURL, phrase string, appID types.Hash256) (string, error) {
 
-	if err := postConnectKey(adminURL, adminPass, appID); err != nil {
-		return "", fmt.Errorf("connect-key pre-creation: %w", err)
+	// (1) Mint a connect key via the admin API. This key is the "app password"
+	// that approves the connection request below without a human clicking in the
+	// indexd admin UI.
+	connectKey, err := postConnectKey(adminURL, adminPass)
+	if err != nil {
+		return "", fmt.Errorf("connect-key creation: %w", err)
 	}
+
 	builder := siastorage.NewBuilder(indexerURL, siastorage.AppMetadata{
 		ID:          appID,
-		Name:        "siahub",
+		Name:        "openweights",
 		Description: "Xet-on-Sia CAS infrastructure",
 		ServiceURL:  "http://localhost:8080",
 	})
-	if _, err := builder.RequestConnection(ctx); err != nil {
+
+	// (2) Request the connection; keep the responseURL so we can approve it.
+	responseURL, err := builder.RequestConnection(ctx)
+	if err != nil {
 		return "", fmt.Errorf("RequestConnection: %w", err)
 	}
+
+	// (3) Approve the request programmatically: POST the responseURL with the
+	// connect key as the basic-auth password (empty username) and body
+	// {"approve": true}. This is what unblocks WaitForApproval — without it the
+	// wizard would hang forever waiting for a human click.
+	if err := approveConnection(ctx, responseURL, connectKey); err != nil {
+		return "", fmt.Errorf("approve connection: %w", err)
+	}
+
+	// (4) Now WaitForApproval returns immediately, and Register derives the key.
 	approved, err := builder.WaitForApproval(ctx)
 	if err != nil {
 		return "", fmt.Errorf("WaitForApproval: %w", err)
 	}
 	if !approved {
-		return "", fmt.Errorf("approved=false — A3 verdict may be stale; re-run `make a3-verify`")
+		return "", fmt.Errorf("approved=false after programmatic approval — check indexd admin API")
 	}
 	sdk, err := builder.Register(ctx, phrase)
 	if err != nil {
@@ -113,7 +131,7 @@ func deriveViaOptionB(ctx context.Context, logger *slog.Logger,
 
 	builder := siastorage.NewBuilder(indexerURL, siastorage.AppMetadata{
 		ID:          appID,
-		Name:        "siahub",
+		Name:        "openweights",
 		Description: "Xet-on-Sia CAS infrastructure",
 		ServiceURL:  "http://localhost:8080",
 	})
@@ -145,12 +163,50 @@ func deriveViaOptionB(ctx context.Context, logger *slog.Logger,
 	return keyHex, nil
 }
 
-// postConnectKey POSTs to /apps/connect/keys per RESEARCH §3 Option A.
-func postConnectKey(baseURL, pass string, appID types.Hash256) error {
-	body := map[string]any{"appID": appID.String(), "quota": "unlimited"}
+// postConnectKey mints an indexd connect key via the admin API and returns it.
+//
+// The request body MUST be {"description", "quota"} — indexd returns 404 for a
+// body of {"appID", "quota"} (the connect key is not bound to an appID at
+// creation; binding happens when the app uses the key to approve its request).
+// "default" is the standard quota key. Verified empirically against
+// ghcr.io/siafoundation/indexd (see A3 verification notes).
+func postConnectKey(baseURL, pass string) (string, error) {
+	body := map[string]any{"description": "openweights-bootstrap", "quota": "default"}
 	b, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", baseURL+"/apps/connect/keys", bytes.NewReader(b))
 	req.SetBasicAuth("", pass)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("POST /apps/connect/keys returned %d", resp.StatusCode)
+	}
+	var out struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("decode connect-key response: %w", err)
+	}
+	if out.Key == "" {
+		return "", fmt.Errorf("connect-key response had empty key")
+	}
+	return out.Key, nil
+}
+
+// approveConnection approves a pending app-connection request programmatically
+// by POSTing {"approve": true} to the request's responseURL, authenticating
+// with the connect key as the basic-auth password (empty username). Mirrors
+// indexd's own api/app test helper. Expects 204 No Content.
+func approveConnection(ctx context.Context, responseURL, connectKey string) error {
+	b, _ := json.Marshal(map[string]bool{"approve": true})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, responseURL, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.SetBasicAuth("", connectKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -158,7 +214,7 @@ func postConnectKey(baseURL, pass string, appID types.Hash256) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("POST /apps/connect/keys returned %d", resp.StatusCode)
+		return fmt.Errorf("approve POST %s returned %d", responseURL, resp.StatusCode)
 	}
 	return nil
 }

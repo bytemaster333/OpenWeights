@@ -1,5 +1,5 @@
 # ops/docker-compose.yml
-# Compose stack — indexd + postgres + redis (no siahub-cas / gateway / console yet).
+# Compose stack — indexd + postgres + redis (no openweights-cas / gateway / console yet).
 # See §9 for design notes.
 # the indexd healthcheck binary ships from PLAN 05; bind-mount path is contractual.
 
@@ -7,15 +7,15 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: siahub-postgres
+    container_name: openweights-postgres
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD must be set in .env}
       POSTGRES_DB: postgres
       # Passed through to init.sql via the psql-injected psql environment variables.
       INDEXD_PASSWORD: ${INDEXD_POSTGRES_PASSWORD:?INDEXD_POSTGRES_PASSWORD must be set in .env}
-      SIAHUB_PASSWORD: ${SIAHUB_POSTGRES_PASSWORD:?SIAHUB_POSTGRES_PASSWORD must be set in .env}
-      # : siahub_gw role is created at first-boot by indexd-postgres-init.sql.
-      SIAHUB_GW_PASSWORD: ${SIAHUB_GW_POSTGRES_PASSWORD:?SIAHUB_GW_POSTGRES_PASSWORD must be set in .env}
+      OPENWEIGHTS_PASSWORD: ${OPENWEIGHTS_POSTGRES_PASSWORD:?OPENWEIGHTS_POSTGRES_PASSWORD must be set in .env}
+      # : openweights_gw role is created at first-boot by indexd-postgres-init.sql.
+      OPENWEIGHTS_GW_PASSWORD: ${OPENWEIGHTS_GW_POSTGRES_PASSWORD:?OPENWEIGHTS_GW_POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./indexd-postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
@@ -31,7 +31,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: siahub-redis
+    container_name: openweights-redis
     command:
       - "redis-server"
       - "--requirepass"
@@ -55,14 +55,14 @@ services:
     # docker pull ghcr.io/siafoundation/indexd:latest
     # docker inspect --format='{{index.RepoDigests 0}}' ghcr.io/siafoundation/indexd:latest
     image: ${INDEXD_IMAGE:-ghcr.io/siafoundation/indexd:latest}
-    container_name: siahub-indexd
+    container_name: openweights-indexd
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - indexd-data:/data
       - ./indexd.yml:/data/indexd.yml:ro
-      - ../bench/compose-smoke/readiness/bin/readiness:/usr/local/bin/siahub-readiness:ro
+      - ../bench/compose-smoke/readiness/bin/readiness:/usr/local/bin/openweights-readiness:ro
     environment:
       INDEXD_DATA_DIR: /data
       INDEXD_CONFIG_FILE: /data/indexd.yml
@@ -71,9 +71,9 @@ services:
     ports:
       - "127.0.0.1:9980:9980"   # admin API (loopback only)
       - "9981:9981"              # p2p syncer (must be network-reachable)
-      - "127.0.0.1:9982:9982"   # app API (loopback only; siahub-cas talks via internal network)
+      - "127.0.0.1:9982:9982"   # app API (loopback only; openweights-cas talks via internal network)
     healthcheck:
-      test: ["CMD", "/usr/local/bin/siahub-readiness"]
+      test: ["CMD", "/usr/local/bin/openweights-readiness"]
       # 60 retries * 30s = 30 min max sync wait; start_period gives indexd headroom.
       interval: 30s
       timeout: 10s
@@ -81,19 +81,19 @@ services:
       start_period: 300s
     restart: unless-stopped
 
-  # siahub-gateway — Go gateway. Plans.. own this service.
+  # openweights-gateway — Go gateway. Plans.. own this service.
   # Wave 1 scaffold: serves `/health` + stub `/xorb/{hash}` (501). Real range
   # serving + cache land in plans 03-03/04/05. `/metrics` is loopback-only.
-  siahub-gateway:
+  openweights-gateway:
     build:
       context: ../gateway
       dockerfile: Dockerfile
-    container_name: siahub-gateway
+    container_name: openweights-gateway
     depends_on:
       postgres:    { condition: service_healthy }
       redis:       { condition: service_healthy }
       indexd:      { condition: service_healthy }
-      siahub-cas:  { condition: service_healthy }
+      openweights-cas:  { condition: service_healthy }
     environment:
       GATEWAY_ADDR: ":8081"
       GATEWAY_METRICS_ADDR: "127.0.0.1:9100"
@@ -101,35 +101,35 @@ services:
       GATEWAY_URL_SIGNING_KEY_PREV: ${GATEWAY_URL_SIGNING_KEY_PREV:-}
       GATEWAY_URL_TTL_SECS: ${GATEWAY_URL_TTL_SECS:-7200}
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://127.0.0.1:9090}
-      # Wired for : connect as the dedicated `siahub_gw` role created
-      # by cas/migrations/0005_siahub_gw_role.sql (SELECT on xorbs + INSERT
-      # on usage_log — nothing else). SIAHUB_GW_POSTGRES_PASSWORD is set
+      # Wired for : connect as the dedicated `openweights_gw` role created
+      # by cas/migrations/0005_openweights_gw_role.sql (SELECT on xorbs + INSERT
+      # on usage_log — nothing else). OPENWEIGHTS_GW_POSTGRES_PASSWORD is set
       # in.env by the migration runner/bootstrap and consumed at both
-      # migration time (via `SET siahub.gw_password`) and runtime (via this
-      # URL). If SIAHUB_GW_POSTGRES_PASSWORD is unset, the gateway fails
+      # migration time (via `SET openweights.gw_password`) and runtime (via this
+      # URL). If OPENWEIGHTS_GW_POSTGRES_PASSWORD is unset, the gateway fails
       # fast on boot instead of silently connecting as the wrong role.
-      POSTGRES_URL: ${GATEWAY_POSTGRES_URL:-postgres://siahub_gw:${SIAHUB_GW_POSTGRES_PASSWORD}@postgres:5432/siahub?application_name=siahub-gateway}
-      SIAHUB_INDEXER_URL: http://indexd:9982
-      SIAHUB_APP_ID: ${SIAHUB_APP_ID}
-      SIAHUB_APP_KEY: ${SIAHUB_APP_KEY}
+      POSTGRES_URL: ${GATEWAY_POSTGRES_URL:-postgres://openweights_gw:${OPENWEIGHTS_GW_POSTGRES_PASSWORD}@postgres:5432/openweights?application_name=openweights-gateway}
+      OPENWEIGHTS_INDEXER_URL: http://indexd:9982
+      OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
+      OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Back-compat aliases — accepted by config.go's firstNonEmpty resolver.
-      # Remove once the downstream consumers migrate to the SIAHUB_* names.
+      # Remove once the downstream consumers migrate to the OPENWEIGHTS_* names.
       SIA_INDEXER_URL: http://indexd:9982
-      APP_KEY: ${SIAHUB_APP_KEY}
+      APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Whole-xorb disk LRU ( / 03-06). 100 GiB default. GATEWAY_CACHE_*
       # are the canonical env var names; CACHE_DIR / CACHE_SIZE_BYTES remain
       # as legacy aliases for back-compat (config.go reads canonical first).
-      GATEWAY_CACHE_DIR: /var/cache/siahub
+      GATEWAY_CACHE_DIR: /var/cache/openweights
       GATEWAY_CACHE_SIZE_BYTES: ${GATEWAY_CACHE_SIZE_BYTES:-107374182400}
       # Legacy aliases — identical values; kept until every consumer migrates.
-      CACHE_DIR: /var/cache/siahub
+      CACHE_DIR: /var/cache/openweights
       CACHE_SIZE_BYTES: ${CACHE_SIZE_BYTES:-107374182400}
     ports:
-      # Public port. Caddy reverse-proxies `cas.siahub.app` here in.
+      # Public port. Caddy reverse-proxies `cas.openweights.app` here in.
       - "127.0.0.1:9090:8081"
       # Metrics deliberately NOT exposed —. Scrape via `docker compose exec`.
     volumes:
-      - gateway-cache:/var/cache/siahub
+      - gateway-cache:/var/cache/openweights
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8081/health >/dev/null || exit 1"]
       interval: 10s
@@ -137,22 +137,22 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  # siahub-cas — Rust CAS. Plans.. own this service.
-  siahub-cas:
+  # openweights-cas — Rust CAS. Plans.. own this service.
+  openweights-cas:
     build:
       context: ..
       dockerfile: cas/Dockerfile
-    container_name: siahub-cas
+    container_name: openweights-cas
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
       indexd:   { condition: service_healthy }
     environment:
-      DATABASE_URL: postgres://siahub:${SIAHUB_POSTGRES_PASSWORD}@postgres:5432/siahub
+      DATABASE_URL: postgres://openweights:${OPENWEIGHTS_POSTGRES_PASSWORD}@postgres:5432/openweights
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       INDEXD_URL: http://indexd:9982
-      SIAHUB_APP_ID: ${SIAHUB_APP_ID}
-      SIAHUB_APP_KEY: ${SIAHUB_APP_KEY}
+      OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
+      OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       GATEWAY_URL_SIGNING_KEY: ${GATEWAY_URL_SIGNING_KEY}
       GATEWAY_URL_SIGNING_KEY_PREV: ${GATEWAY_URL_SIGNING_KEY_PREV:-}
       GATEWAY_URL_TTL_SECS: ${GATEWAY_URL_TTL_SECS:-7200}
@@ -172,11 +172,11 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # siahub-console — React/TS console. Plans.. own this service.
+  # openweights-console — React/TS console. Plans.. own this service.
   # lands: shadcn preset b7C9wTXYe init + TanStack Router/Query + Biome + Vitest
   # + static /health + nginx static serve. Later plans add /login, /onboarding,
   # /keys, /assets, /stats, /stats/map, /setup + the conformance badge.
-  siahub-console:
+  openweights-console:
     build:
       context: ../console
       dockerfile: Dockerfile
@@ -185,9 +185,9 @@ services:
         VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:9090}
         VITE_HF_PROXY_URL: ${VITE_HF_PROXY_URL:-http://localhost:28090}
         VITE_CONFORMANCE_BADGE_URL: ${VITE_CONFORMANCE_BADGE_URL:-}
-    container_name: siahub-console
+    container_name: openweights-console
     depends_on:
-      siahub-cas: { condition: service_healthy }
+      openweights-cas: { condition: service_healthy }
     ports:
       - "127.0.0.1:5173:80"
     healthcheck:
@@ -198,22 +198,22 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # siahub-hf-proxy — amendment. Transparent reverse proxy in
+  # openweights-hf-proxy — amendment. Transparent reverse proxy in
   # front of the Hugging Face Hub API that rewrites the X-Xet-Cas-Url
-  # response header so hf_xet uploads land in siahub-cas instead of HF's
+  # response header so hf_xet uploads land in openweights-cas instead of HF's
   # own CAS. See hf-proxy/main.go for the one-header rewrite rationale.
-  siahub-hf-proxy:
+  openweights-hf-proxy:
     build:
       context: ..
       dockerfile: hf-proxy/Dockerfile
-    container_name: siahub-hf-proxy
+    container_name: openweights-hf-proxy
     environment:
       LISTEN_ADDR: ":28090"
       HF_UPSTREAM_URL: ${HF_UPSTREAM_URL:-https://huggingface.co}
       # CLIENT-reachable CAS URL. Not indexd:9982, not cas:8080 — whatever
       # the hf_xet process connects to from the host. Local dev:
-      # http://localhost:28080. Prod: https://cas.siahub.app.
-      SIAHUB_CAS_PUBLIC_URL: ${SIAHUB_CAS_PUBLIC_URL:?SIAHUB_CAS_PUBLIC_URL must be set in .env}
+      # http://localhost:28080. Prod: https://cas.openweights.app.
+      OPENWEIGHTS_CAS_PUBLIC_URL: ${OPENWEIGHTS_CAS_PUBLIC_URL:?OPENWEIGHTS_CAS_PUBLIC_URL must be set in .env}
     ports:
       - "127.0.0.1:28090:28090"
     healthcheck:
@@ -225,8 +225,8 @@ services:
 
 volumes:
   postgres-data:
-    name: siahub-postgres-data
+    name: openweights-postgres-data
   indexd-data:
-    name: siahub-indexd-data
+    name: openweights-indexd-data
   gateway-cache:
-    name: siahub-gateway-cache
+    name: openweights-gateway-cache

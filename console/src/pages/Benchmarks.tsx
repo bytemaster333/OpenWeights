@@ -17,15 +17,15 @@ import { useBenchmarks } from "@/hooks/useStats"
 /**
  * `/stats/benchmarks` (CONSOLE-08).
  *
- * Renders SiaHub vs HF-native (S3 + CloudFront) throughput numbers across
+ * Renders OpenWeights vs HF-native (S3 + CloudFront) throughput numbers across
  * three scenarios: `cold-cache`, `warm-cache`, `upload`. The data source is
  * the static `public/benchmarks.json` file (see `useBenchmarks` rationale).
  *
  * UX notes:
- * - We render three KPI tiles for "SiaHub (MB/s)" at a glance AND a full
- * table with both siahub + baseline columns. The tiles are for the
+ * - We render three KPI tiles for "OpenWeights (MB/s)" at a glance AND a full
+ * table with both openweights + baseline columns. The tiles are for the
  * "reviewer skim" scenario; the table is the exhaustive view.
- * - When a row has `siahub_mbps === null` the tile shows "—" (placeholder
+ * - When a row has `openweights_mbps === null` the tile shows "—" (placeholder
  * state pre-Phase 5 — the JSON ships with all-null values so the UI
  * doesn't 404 before CI populates it).
  * - Footer links to `docs/benchmarks.md` (the authoritative report) so
@@ -60,11 +60,11 @@ export function BenchmarksPage() {
         <div>
           <h1 className="font-heading text-2xl font-medium tracking-tight">Benchmarks</h1>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            SiaHub throughput vs HF-native (S3 + CloudFront) baseline across three representative
+            OpenWeights throughput vs HF-native (S3 + CloudFront) baseline across three representative
             scenarios. Numbers are produced by Phase 5 CI and written to{" "}
             <code className="font-mono">public/benchmarks.json</code>. See{" "}
             <a
-              href="https://github.com/siahub/siahub/blob/main/docs/benchmarks.md"
+              href="https://github.com/bytemaster333/openweights/blob/main/docs/benchmarks.md"
               className="underline underline-offset-4 hover:text-foreground"
             >
               docs/benchmarks.md
@@ -88,7 +88,7 @@ export function BenchmarksPage() {
               key={s}
               label={SCENARIO_LABEL[s]}
               loading={isPending}
-              value={row?.siahub_mbps != null ? `${row.siahub_mbps.toFixed(1)} MB/s` : "—"}
+              value={row?.openweights_mbps != null ? `${row.openweights_mbps.toFixed(1)} MB/s` : "—"}
               subtext={SCENARIO_SUBTEXT[s]}
             />
           )
@@ -104,7 +104,7 @@ export function BenchmarksPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Scenario</TableHead>
-                <TableHead className="text-right">SiaHub (MB/s)</TableHead>
+                <TableHead className="text-right">OpenWeights (MB/s)</TableHead>
                 <TableHead className="text-right">HF baseline (MB/s)</TableHead>
                 <TableHead className="text-right">Ratio</TableHead>
               </TableRow>
@@ -119,8 +119,8 @@ export function BenchmarksPage() {
               )}
               {data?.rows.map((r) => {
                 const ratio =
-                  r.siahub_mbps != null && r.hf_baseline_mbps != null && r.hf_baseline_mbps > 0
-                    ? r.siahub_mbps / r.hf_baseline_mbps
+                  r.openweights_mbps != null && r.hf_baseline_mbps != null && r.hf_baseline_mbps > 0
+                    ? r.openweights_mbps / r.hf_baseline_mbps
                     : null
                 return (
                   <TableRow key={r.scenario}>
@@ -128,7 +128,7 @@ export function BenchmarksPage() {
                       {r.scenario.replace("-", " ")}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {r.siahub_mbps != null ? r.siahub_mbps.toFixed(1) : "—"}
+                      {r.openweights_mbps != null ? r.openweights_mbps.toFixed(1) : "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {r.hf_baseline_mbps != null ? r.hf_baseline_mbps.toFixed(1) : "—"}

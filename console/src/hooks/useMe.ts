@@ -4,7 +4,7 @@ import { ApiError, casFetch } from "@/lib/api"
 
 /**
  * Canonical session user shape. Mirrors `MeResponse.user` from CAS (see
- * `cas/crates/siahub-cas-core/src/handlers/admin/me.rs`) and enforces three
+ * `cas/crates/openweights-cas-core/src/handlers/admin/me.rs`) and enforces three
  * load-bearing invariants at the type level:
  *
  * - ****: `id` is the GitHub numeric id (`i64`). It is the primary

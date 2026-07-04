@@ -1,4 +1,4 @@
-//! Structural compatibility checks between JSON responses from `siahub-cas`
+//! Structural compatibility checks between JSON responses from `openweights-cas`
 //! and the wire types exposed by `xet-client = "=1.5.1"` (via
 //! `xet_client::cas_types`).
 //! Every helper round-trips the raw JSON through the client-side type via

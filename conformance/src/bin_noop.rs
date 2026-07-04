@@ -3,5 +3,5 @@
 //! remain cleanly addressable without a missing-target warning. Prints
 //! nothing useful and exits 0.
 fn main() {
-    println!("siahub-conformance: run `cargo test -p siahub-conformance`");
+    println!("openweights-conformance: run `cargo test -p openweights-conformance`");
 }

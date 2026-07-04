@@ -1,5 +1,5 @@
-// siahub-hf-proxy — transparent reverse proxy in front of the Hugging Face
-// Hub API that rewrites Xet CAS routing so bytes flow to SiaHub instead of
+// openweights-hf-proxy — transparent reverse proxy in front of the Hugging Face
+// Hub API that rewrites Xet CAS routing so bytes flow to OpenWeights instead of
 // HF's own CAS.
 // Why this exists
 // ---------------
@@ -8,17 +8,17 @@
 // (`X-Xet-Cas-Url`). The client-side env var `HF_XET_DATA_DEFAULT_CAS_ENDPOINT`
 // is ONLY a fallback for when that header is missing — which never happens
 // in an HF-integrated upload. So the story env-var trick does not, by
-// itself, route bytes to SiaHub.
+// itself, route bytes to OpenWeights.
 // Fix: interpose this HTTP reverse proxy between the client and HF. The
 // client sets `HF_ENDPOINT=<proxy URL>`. The proxy forwards every request
 // to https://huggingface.co unchanged, streams the response body through,
 // and ONLY rewrites the `X-Xet-Cas-Url` response header whenever HF emits
-// one. The value is replaced with the operator-configured SiaHub CAS URL
-// (`SIAHUB_CAS_PUBLIC_URL`).
-// Auth for the SiaHub CAS itself is still handled client-side via
+// one. The value is replaced with the operator-configured OpenWeights CAS URL
+// (`OPENWEIGHTS_CAS_PUBLIC_URL`).
+// Auth for the OpenWeights CAS itself is still handled client-side via
 // `HF_XET_DATA_CUSTOM_HEADERS='{"Authorization":"Bearer <key>"}'` — hf_xet
 // attaches that header to every CAS request it makes. This proxy does NOT
-// need to know about the SiaHub API key; URL rewriting is its entire job.
+// need to know about the OpenWeights API key; URL rewriting is its entire job.
 // What this proxy does NOT do
 // * TLS termination — Caddy fronts this proxy in production.
 // * Token refresh route rewriting — our CAS authenticates via the
@@ -51,7 +51,7 @@ type config struct {
 	// Value to substitute into `X-Xet-Cas-Url` response headers.
 	// Must be the CAS URL reachable from the CLIENT side, not from inside
 	// the Compose network. Local dev: `http://localhost:28080`. Prod:
-	// `https://cas.siahub.app`.
+	// `https://cas.openweights.app`.
 	casPublicURL string
 }
 
@@ -67,12 +67,12 @@ func loadConfig() (*config, error) {
 		return nil, fmt.Errorf("HF_UPSTREAM_URL must be an absolute URL, got %q", upstreamRaw)
 	}
 
-	cas := os.Getenv("SIAHUB_CAS_PUBLIC_URL")
+	cas := os.Getenv("OPENWEIGHTS_CAS_PUBLIC_URL")
 	if cas == "" {
-		return nil, errors.New("SIAHUB_CAS_PUBLIC_URL is required (the CAS URL the CLIENT reaches)")
+		return nil, errors.New("OPENWEIGHTS_CAS_PUBLIC_URL is required (the CAS URL the CLIENT reaches)")
 	}
 	if _, err := url.Parse(cas); err != nil {
-		return nil, fmt.Errorf("SIAHUB_CAS_PUBLIC_URL parse: %w", err)
+		return nil, fmt.Errorf("OPENWEIGHTS_CAS_PUBLIC_URL parse: %w", err)
 	}
 	cas = strings.TrimRight(cas, "/")
 
@@ -201,7 +201,7 @@ func main() {
 	defer stop()
 
 	go func() {
-		slog.Info("siahub-hf-proxy listening",
+		slog.Info("openweights-hf-proxy listening",
 			"addr", cfg.listenAddr,
 			"upstream", cfg.upstreamURL.String(),
 			"cas_public_url", cfg.casPublicURL,

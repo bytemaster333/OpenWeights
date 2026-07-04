@@ -395,7 +395,7 @@ impl UploadOptions {
     pub fn validate(&self) -> Result<(), UploadError> {
         const MIN_REDUNDANCY: f64 = 1.5;
         const MAX_REDUNDANCY: f64 = 4.0;
-        // SiaHub patch: upstream pins this at 0.75 to match an adversarial
+        // OpenWeights patch: upstream pins this at 0.75 to match an adversarial
         // mainnet host availability assumption. On the Zen testnet our
         // monitored host pool sustains ~95% uptime and the demo only has
         // ~6 contracts to work with — strict 0.75 would force ≥12 hosts to

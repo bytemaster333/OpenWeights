@@ -1,6 +1,6 @@
 ---
 title: Download a model
-description: Pull files from a SiaHub deployment
+description: Pull files from a OpenWeights deployment
 ---
 
 ## With the `hf` CLI
@@ -8,7 +8,7 @@ description: Pull files from a SiaHub deployment
 Public repos don't need a token:
 
 ```bash
-HF_ENDPOINT=https://siahub.app hf download <owner>/<repo>
+HF_ENDPOINT=https://openweights.app hf download <owner>/<repo>
 ```
 
 By default files land in the standard `hf` cache
@@ -16,13 +16,13 @@ By default files land in the standard `hf` cache
 directory:
 
 ```bash
-HF_ENDPOINT=https://siahub.app hf download <owner>/<repo> --local-dir .
+HF_ENDPOINT=https://openweights.app hf download <owner>/<repo> --local-dir .
 ```
 
 ## Single file
 
 ```bash
-HF_ENDPOINT=https://siahub.app \
+HF_ENDPOINT=https://openweights.app \
   hf download <owner>/<repo> model.safetensors --local-dir ./m
 ```
 
@@ -30,7 +30,7 @@ HF_ENDPOINT=https://siahub.app \
 
 ```python
 import os
-os.environ["HF_ENDPOINT"] = "https://siahub.app"
+os.environ["HF_ENDPOINT"] = "https://openweights.app"
 
 from huggingface_hub import snapshot_download
 path = snapshot_download("<owner>/<repo>")

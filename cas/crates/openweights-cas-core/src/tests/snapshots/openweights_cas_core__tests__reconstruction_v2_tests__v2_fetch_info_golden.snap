@@ -1,0 +1,85 @@
+---
+source: crates/openweights-cas-core/src/tests/reconstruction_v2_tests.rs
+expression: "&snapshot"
+---
+{
+  "offset_into_first_range": 0,
+  "terms": [
+    {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "unpacked_length": 3072,
+      "range": {
+        "start": 0,
+        "end": 8
+      }
+    },
+    {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "unpacked_length": 5120,
+      "range": {
+        "start": 6,
+        "end": 16
+      }
+    },
+    {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "unpacked_length": 4096,
+      "range": {
+        "start": 24,
+        "end": 32
+      }
+    },
+    {
+      "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "unpacked_length": 65536,
+      "range": {
+        "start": 0,
+        "end": 128
+      }
+    }
+  ],
+  "fetch_info": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+      "url_path": "/xorb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url_r_param": "1024-8191,12288-16383",
+      "ranges": [
+        {
+          "chunk_range": {
+            "start": 0,
+            "end": 16
+          },
+          "url_range": {
+            "start": 1024,
+            "end": 8191
+          }
+        },
+        {
+          "chunk_range": {
+            "start": 24,
+            "end": 32
+          },
+          "url_range": {
+            "start": 12288,
+            "end": 16383
+          }
+        }
+      ]
+    },
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+      "url_path": "/xorb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url_r_param": "0-65535",
+      "ranges": [
+        {
+          "chunk_range": {
+            "start": 0,
+            "end": 128
+          },
+          "url_range": {
+            "start": 0,
+            "end": 65535
+          }
+        }
+      ]
+    }
+  }
+}

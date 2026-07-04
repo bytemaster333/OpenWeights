@@ -10,19 +10,19 @@
 # 2 pre-condition missing (env vars / CLI / bench config)
 # Pre-conditions:
 # - `make deploy` completed; stack healthy; Caddy has Let's Encrypt cert.
-# - A write-scoped API key minted via the /keys page of https://siahub.app.
+# - A write-scoped API key minted via the /keys page of https://openweights.app.
 # - `hf` (>= 0.27) or `huggingface-cli` on PATH.
 # - bench/bench.config.sh source-of-truth checked in.
 # Invocation:
-# SIAHUB_CAS_URL=https://cas.siahub.app \
-# SIAHUB_WRITE_KEY=hf_sia_... \
+# OPENWEIGHTS_CAS_URL=https://cas.openweights.app \
+# OPENWEIGHTS_WRITE_KEY=hf_sia_... \
 # bash ops/preload-fixture.sh
 
 set -euo pipefail
 
 # ─── Pre-conditions ────────────────────────────────────────────────────────────
-: "${SIAHUB_CAS_URL:?must be set, e.g. https://cas.siahub.app}"
-: "${SIAHUB_WRITE_KEY:?write-scoped API key minted via the console}"
+: "${OPENWEIGHTS_CAS_URL:?must be set, e.g. https://cas.openweights.app}"
+: "${OPENWEIGHTS_WRITE_KEY:?write-scoped API key minted via the console}"
 
 if [[ ! -f bench/bench.config.sh ]]; then
   echo "pre-condition missing: bench/bench.config.sh" >&2
@@ -41,37 +41,37 @@ fi
 # shellcheck disable=SC1091
 source bench/bench.config.sh
 
-# ─── Route xet-core uploads through the hosted SiaHub CAS ──────────────────────
-export HF_XET_DATA_DEFAULT_CAS_ENDPOINT="${SIAHUB_CAS_URL}"
-export HF_XET_DATA_CUSTOM_HEADERS="Authorization=Bearer ${SIAHUB_WRITE_KEY}"
+# ─── Route xet-core uploads through the hosted OpenWeights CAS ──────────────────────
+export HF_XET_DATA_DEFAULT_CAS_ENDPOINT="${OPENWEIGHTS_CAS_URL}"
+export HF_XET_DATA_CUSTOM_HEADERS="Authorization=Bearer ${OPENWEIGHTS_WRITE_KEY}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "=== Preload fixture to hosted demo ==="
-echo "  CAS:      ${SIAHUB_CAS_URL}"
+echo "  CAS:      ${OPENWEIGHTS_CAS_URL}"
 echo "  fixture:  ${HF_FIXTURE_REPO} @ ${HF_FIXTURE_REVISION}"
 echo "  kind:     ${HF_FIXTURE_KIND}"
 echo
 
-# ─── [1/3] Fetch fixture from HF (xet-native download; bypasses SiaHub) ───────
+# ─── [1/3] Fetch fixture from HF (xet-native download; bypasses OpenWeights) ───────
 echo "[1/3] Fetching fixture from Hugging Face..."
 DL_ARGS=(--revision "$HF_FIXTURE_REVISION" --local-dir "$TMP")
 if [[ "$HF_FIXTURE_KIND" == "dataset" ]]; then
   DL_ARGS+=(--repo-type dataset)
 fi
-# Temporarily unset SiaHub routing so the initial fetch comes straight from HF.
+# Temporarily unset OpenWeights routing so the initial fetch comes straight from HF.
 (
   unset HF_XET_DATA_DEFAULT_CAS_ENDPOINT HF_XET_DATA_CUSTOM_HEADERS
   "$HF_BIN" download "$HF_FIXTURE_REPO" "${DL_ARGS[@]}"
 ) >/dev/null
 
-# ─── [2/3] Upload via hosted SiaHub CAS ────────────────────────────────────────
-echo "[2/3] Uploading fixture through ${SIAHUB_CAS_URL}..."
+# ─── [2/3] Upload via hosted OpenWeights CAS ────────────────────────────────────────
+echo "[2/3] Uploading fixture through ${OPENWEIGHTS_CAS_URL}..."
 # The demo namespace. Owner pre-creates this HF repo once OR points at their
 # own scratch namespace; we keep the same basename as the source fixture for
 # reviewer-recognizability.
-DEMO_REPO="${SIAHUB_DEMO_REPO:-siahub-demo/$(basename "$HF_FIXTURE_REPO")}"
+DEMO_REPO="${OPENWEIGHTS_DEMO_REPO:-openweights-demo/$(basename "$HF_FIXTURE_REPO")}"
 UP_ARGS=("$DEMO_REPO" "$TMP")
 if [[ "$HF_FIXTURE_KIND" == "dataset" ]]; then
   UP_ARGS+=(--repo-type dataset)
@@ -84,8 +84,8 @@ echo "[3/3] Preload complete."
 echo
 echo "Next steps for the operator:"
 echo "  1. Copy the 'file_id' printed above (hf upload receipt)."
-echo "  2. Edit .env: set SIAHUB_FIXTURE_FILE_ID=<file_id>."
+echo "  2. Edit .env: set OPENWEIGHTS_FIXTURE_FILE_ID=<file_id>."
 echo "  3. Re-source .env and run 'make smoke' — all 5 checks should pass."
 echo
 echo "Fixture URL:"
-echo "  ${SIAHUB_CAS_URL}/v1/reconstructions/<file_id>"
+echo "  ${OPENWEIGHTS_CAS_URL}/v1/reconstructions/<file_id>"

@@ -9,18 +9,13 @@ COPY cas/crates ./cas/crates
 # [patch.crates-io]).
 COPY cas/vendored ./cas/vendored
 
-# migrations/ must be present at build time so sqlx::migrate!("./migrations") can
-# compile-time-embed the SQL files into the binary. populates these.
-# For the directory may not yet exist; create an empty one so the
-# COPY succeeds.
-RUN mkdir -p ./cas/migrations ./cas/.sqlx
-
-# Attempt to copy real migrations + sqlx offline cache if they exist; the
-# wildcard trick keeps the COPY from failing when hasn't landed.
-# At runtime `sqlx::migrate!` resolves the path at compile time.
-# because Dockerfile COPY does not support optional sources, 's
-# migrations/ and.sqlx/ are written unconditionally and this stanza becomes
-# purely load-bearing once runs.
+# migrations/ MUST be present at build time so sqlx::migrate!("../../migrations")
+# can compile-time-embed the SQL files into the binary. Without this COPY the
+# macro embeds an empty dir → 0 migrations → the runtime binary creates an empty
+# _sqlx_migrations table and no schema ("migrations up to date" but no tables).
+COPY cas/migrations ./cas/migrations
+# .sqlx offline cache dir — empty is harmless (no sqlx::query! macros in use).
+RUN mkdir -p ./cas/.sqlx
 
 # SQLX offline — requires.sqlx/ to be populated by `cargo sqlx prepare`.
 # Empty.sqlx/ is harmless for because no `sqlx::query!` macro
@@ -28,14 +23,14 @@ RUN mkdir -p ./cas/migrations ./cas/.sqlx
 ENV SQLX_OFFLINE=true
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/cas/target \
-    cd cas && cargo build --release --bin siahub-cas && \
-    cp target/release/siahub-cas /siahub-cas
+    cd cas && cargo build --release --bin openweights-cas && \
+    cp target/release/openweights-cas /openweights-cas
 
 FROM debian:bookworm-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates wget && \
     rm -rf /var/lib/apt/lists/*
-COPY --from=builder /siahub-cas /usr/local/bin/siahub-cas
+COPY --from=builder /openweights-cas /usr/local/bin/openweights-cas
 USER 65532:65532
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/siahub-cas"]
+ENTRYPOINT ["/usr/local/bin/openweights-cas"]

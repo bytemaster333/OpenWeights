@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # hf_xet extra pulls in the xet-core Rust core via the python binding — the
 # very client Hugging Face ships to HF users. HF_XET_DATA_DEFAULT_CAS_ENDPOINT
-# routes its xorb/shard traffic to the SiaHub CAS under test.
+# routes its xorb/shard traffic to the OpenWeights CAS under test.
 RUN pip install --no-cache-dir "huggingface_hub[cli,hf_xet]>=0.25,<1.0"
 
 COPY run.sh /usr/local/bin/run.sh

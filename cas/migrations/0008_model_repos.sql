@@ -1,7 +1,7 @@
--- 0008_model_repos.sql — SiaHub as a standalone model hub.
--- V1 extension that lets SiaHub be the HF-compatible hub itself, not just a
+-- 0008_model_repos.sql — OpenWeights as a standalone model hub.
+-- V1 extension that lets OpenWeights be the HF-compatible hub itself, not just a
 -- Xet-protocol CAS. Adds the smallest schema that makes `hf upload` /
--- `hf download` work against `hf.siahub.app` without any huggingface.co
+-- `hf download` work against `hf.openweights.app` without any huggingface.co
 -- round-trip:
 -- repos — (owner_user_id, name) namespace a la HF's {user}/{repo}
 -- repo_refs — branch/tag pointers (main → commit_id)

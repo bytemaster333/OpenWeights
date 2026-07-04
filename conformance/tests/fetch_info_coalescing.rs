@@ -5,7 +5,7 @@
 //! This is the END-TO-END analogue of 's unit-level snapshot
 //! higher coverage because it exercises the full handler + DB path + response
 //! serialization.
-//! Skips if Docker / siahub-cas image unavailable.
+//! Skips if Docker / openweights-cas image unavailable.
 
 use sha2::Digest;
 
@@ -14,7 +14,7 @@ use common::{schema_check, spawn};
 
 #[tokio::test]
 async fn overlapping_terms_produce_single_coalesced_fetch_info() -> anyhow::Result<()> {
-    siahub_conformance::init_tracing_once();
+    openweights_conformance::init_tracing_once();
 
     let harness = match spawn::spawn_cas().await? {
         Some(h) => h,
@@ -142,7 +142,7 @@ async fn overlapping_terms_produce_single_coalesced_fetch_info() -> anyhow::Resu
     // If the handler can't find the file_id via MerkleHash-decoded bytes
     // (because our test-hex differs from MerkleHash codec output) this will
     // be 404. In that case, skip with a diagnostic — the unit test in
-    // cas/crates/siahub-cas-core already exercises the coalescing golden.
+    // cas/crates/openweights-cas-core already exercises the coalescing golden.
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         eprintln!(
             "SKIP fetch_info_coalescing: file_id hex codec drift — \

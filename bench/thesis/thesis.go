@@ -87,29 +87,29 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx := context.Background()
 
-	indexerURL := os.Getenv("SIAHUB_INDEXER_URL")
-	appIDHex := os.Getenv("SIAHUB_APP_ID")
-	appKeyHex := os.Getenv("SIAHUB_APP_KEY")
+	indexerURL := os.Getenv("OPENWEIGHTS_INDEXER_URL")
+	appIDHex := os.Getenv("OPENWEIGHTS_APP_ID")
+	appKeyHex := os.Getenv("OPENWEIGHTS_APP_KEY")
 	if indexerURL == "" || appIDHex == "" || appKeyHex == "" {
-		logger.Error("missing env: need SIAHUB_INDEXER_URL, SIAHUB_APP_ID, SIAHUB_APP_KEY")
+		logger.Error("missing env: need OPENWEIGHTS_INDEXER_URL, OPENWEIGHTS_APP_ID, OPENWEIGHTS_APP_KEY")
 		os.Exit(2)
 	}
 
 	var appID types.Hash256
 	if err := appID.UnmarshalText([]byte(appIDHex)); err != nil {
-		logger.Error("invalid SIAHUB_APP_ID", "err", err)
+		logger.Error("invalid OPENWEIGHTS_APP_ID", "err", err)
 		os.Exit(2)
 	}
 	appKeyBytes, err := hex.DecodeString(appKeyHex)
 	if err != nil {
-		logger.Error("invalid SIAHUB_APP_KEY hex", "err", err)
+		logger.Error("invalid OPENWEIGHTS_APP_KEY hex", "err", err)
 		os.Exit(2)
 	}
 	appKey := types.PrivateKey(appKeyBytes)
 
 	builder := siastorage.NewBuilder(indexerURL, siastorage.AppMetadata{
 		ID:          appID,
-		Name:        "siahub-thesis",
+		Name:        "openweights-thesis",
 		Description: "Phase 1 thesis measurement",
 	})
 	client, err := builder.SDK(appKey)

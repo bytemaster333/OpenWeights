@@ -93,7 +93,7 @@ export function OneTimeKeyModal({ open, plaintext, onAck }: OneTimeKeyModalProps
         <DialogHeader>
           <DialogTitle>Your API key (shown once)</DialogTitle>
           <DialogDescription>
-            SiaHub will never display this key again. Store it in a password manager or in your
+            OpenWeights will never display this key again. Store it in a password manager or in your
             project&apos;s <code>.env</code> file before closing this dialog.
           </DialogDescription>
         </DialogHeader>

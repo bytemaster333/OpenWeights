@@ -13,17 +13,17 @@
 # mode diagnosis has enough signal.
 
 services:
-  siahub-cas:
+  openweights-cas:
     environment:
       V2_RECONSTRUCTION_ENABLED: "true"
       RUST_LOG: info
 
-  siahub-gateway:
+  openweights-gateway:
     environment:
       # gateway reads GATEWAY_LOG_LEVEL via config.go firstNonEmpty.
       GATEWAY_LOG_LEVEL: info
 
-  siahub-console:
+  openweights-console:
     environment:
       VITE_V2_RECONSTRUCTION_ENABLED: "true"
 

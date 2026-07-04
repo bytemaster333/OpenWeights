@@ -1,13 +1,13 @@
 ---
 title: CLI env vars
-description: hf CLI env vars that matter for SiaHub
+description: hf CLI env vars that matter for OpenWeights
 ---
 
 ## The two you actually need
 
 ```bash
-HF_ENDPOINT=https://siahub.app       # route the CLI to SiaHub
-HF_TOKEN=<your-siahub-key>           # auth for writes + private reads
+HF_ENDPOINT=https://openweights.app       # route the CLI to OpenWeights
+HF_TOKEN=<your-openweights-key>           # auth for writes + private reads
 ```
 
 Prefix them per-command to avoid polluting your shell config:
@@ -16,17 +16,17 @@ Prefix them per-command to avoid polluting your shell config:
 HF_TOKEN=... HF_ENDPOINT=... hf upload <owner>/<repo> ./files
 ```
 
-## Running both SiaHub + huggingface.co
+## Running both OpenWeights + huggingface.co
 
 The per-command prefix is already this pattern — `hf auth login` for
-huggingface.co stays put, and SiaHub commands override with `HF_TOKEN`.
+huggingface.co stays put, and OpenWeights commands override with `HF_TOKEN`.
 If you want a shorter form:
 
 ```fish
 function hfsia
-  env HF_ENDPOINT=https://siahub.app HF_HOME=$HOME/.cache/huggingface-siahub hf $argv
+  env HF_ENDPOINT=https://openweights.app HF_HOME=$HOME/.cache/huggingface-openweights hf $argv
 end
-hfsia auth login --token <your-siahub-key>   # once
+hfsia auth login --token <your-openweights-key>   # once
 hfsia upload / download ...                  # thereafter
 ```
 

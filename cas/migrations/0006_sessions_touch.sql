@@ -1,5 +1,5 @@
 -- 0006_sessions_touch.sql — admin-routes amendment.
--- Plan: 04-01-phase-2.1-cas-admin-routes-PLAN.md · Phase: 04-siahub-console · Wave: W1
+-- Plan: 04-01-phase-2.1-cas-admin-routes-PLAN.md · Phase: 04-openweights-console · Wave: W1
 -- Purpose: add three small columns that 's console consumes but which
 -- were out-of-scope for the schema freeze. All additive; no rename /
 -- drop / destructive DDL (PITFALL forward-only migrations).

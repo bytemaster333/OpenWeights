@@ -1,4 +1,4 @@
-// Package main — siahub-gateway entry point.
+// Package main — openweights-gateway entry point.
 // config.go owns environment-variable loading. Wave 1 only populates the
 // fields the scaffold actually reads; later plans ( Postgres + Sia adapter,
 // cache) parse additional fields and dial their dependencies.
@@ -41,11 +41,11 @@ type Config struct {
 	PostgresURL   string
 	SiaIndexerURL string
 	// AppID is the 32-byte Sia app identifier, hex-encoded (64 chars).
-	// Sourced from `SIAHUB_APP_ID` (shared with `siahub-cas`); required when
+	// Sourced from `OPENWEIGHTS_APP_ID` (shared with `openweights-cas`); required when
 	// dialing Sia via `NewSiaAdapter`. Empty values skip the Sia adapter so
 	// Wave 1's non-Sia tests still pass.
 	AppID string
-	// AppKey is the Sia app private key as raw hex. `SIAHUB_APP_KEY` / `APP_KEY`.
+	// AppKey is the Sia app private key as raw hex. `OPENWEIGHTS_APP_KEY` / `APP_KEY`.
 	// GOTCHA ( §32): `siastorage.Client.PinObject` is by value. Download
 	// is ctx-driven; no value/pointer confusion at our call site.
 	AppKey string
@@ -72,17 +72,17 @@ func LoadConfig() (*Config, error) {
 		URLSigningKeyPrev: os.Getenv("GATEWAY_URL_SIGNING_KEY_PREV"),
 		GatewayBaseURL:    os.Getenv("GATEWAY_BASE_URL"),
 		PostgresURL:       os.Getenv("POSTGRES_URL"),
-		// SIAHUB_INDEXER_URL is the canonical ops env var (ops/.env.example);
+		// OPENWEIGHTS_INDEXER_URL is the canonical ops env var (ops/.env.example);
 		// SIA_INDEXER_URL is the compose-wired alias. Accept either — whichever
 		// is first non-empty wins.
-		SiaIndexerURL: firstNonEmpty(os.Getenv("SIAHUB_INDEXER_URL"), os.Getenv("SIA_INDEXER_URL")),
-		AppID:         os.Getenv("SIAHUB_APP_ID"),
-		// APP_KEY is the compose-wired alias of SIAHUB_APP_KEY; keep both to
+		SiaIndexerURL: firstNonEmpty(os.Getenv("OPENWEIGHTS_INDEXER_URL"), os.Getenv("SIA_INDEXER_URL")),
+		AppID:         os.Getenv("OPENWEIGHTS_APP_ID"),
+		// APP_KEY is the compose-wired alias of OPENWEIGHTS_APP_KEY; keep both to
 		// match ops/.env.example naming without forcing a compose rewrite.
-		AppKey: firstNonEmpty(os.Getenv("SIAHUB_APP_KEY"), os.Getenv("APP_KEY")),
+		AppKey: firstNonEmpty(os.Getenv("OPENWEIGHTS_APP_KEY"), os.Getenv("APP_KEY")),
 		// GATEWAY_CACHE_DIR is the canonical env var (03-06); CACHE_DIR is the
 		// legacy alias. Either works; canonical wins when both set.
-		CacheDir: firstNonEmpty(os.Getenv("GATEWAY_CACHE_DIR"), getenvDefault("CACHE_DIR", "/var/cache/siahub")),
+		CacheDir: firstNonEmpty(os.Getenv("GATEWAY_CACHE_DIR"), getenvDefault("CACHE_DIR", "/var/cache/openweights")),
 	}
 
 	ttl, err := parseInt64("GATEWAY_URL_TTL_SECS", 7200)
@@ -118,7 +118,7 @@ func getenvDefault(key, fallback string) string {
 }
 
 // firstNonEmpty returns the first argument that is non-empty. Used to accept
-// both canonical (SIAHUB_*) and compose-alias (APP_KEY, SIA_INDEXER_URL) env
+// both canonical (OPENWEIGHTS_*) and compose-alias (APP_KEY, SIA_INDEXER_URL) env
 // var names without forcing any caller to pick one.
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {

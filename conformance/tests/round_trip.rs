@@ -2,7 +2,7 @@
 //! at the pinned `=1.5.1` version.
 //! Preconditions (test skips gracefully if any is missing):
 //! - Docker daemon reachable.
-//! - `siahub-cas` image present in the local daemon (built via `make cas-image`).
+//! - `openweights-cas` image present in the local daemon (built via `make cas-image`).
 //! - Reference fixtures cloned to `conformance/fixtures/` (via `make conformance-fixtures`
 //! or the `git lfs clone` in `conformance/fixtures/README.md`).
 //! What this test exercises at conformance-grade:
@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use siahub_conformance::fixtures;
+use openweights_conformance::fixtures;
 
 use xet_client::cas_client::auth::{AuthConfig, NoOpTokenRefresher};
 use xet_client::cas_client::{Client, RemoteClient};
@@ -35,7 +35,7 @@ use common::{schema_check, spawn};
 /// xet-client → query reconstruction via xet-client.
 #[tokio::test]
 async fn round_trip_reference_xorb_shard_file() -> anyhow::Result<()> {
-    siahub_conformance::init_tracing_once();
+    openweights_conformance::init_tracing_once();
 
     // ----------------------------------------------------------------
     // Fixture precondition — skip if LFS blobs are missing.
@@ -77,7 +77,7 @@ async fn round_trip_reference_xorb_shard_file() -> anyhow::Result<()> {
     let client: Arc<RemoteClient> = RemoteClient::new(
         &harness.base_url,
         &auth,
-        "siahub-conformance",
+        "openweights-conformance",
         false,
         None,
     );

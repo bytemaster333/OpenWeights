@@ -1,5 +1,5 @@
 [package]
-name         = "siahub-conformance"
+name         = "openweights-conformance"
 version      = "0.1.0"
 edition      = "2024"
 rust-version = "1.85"
@@ -55,16 +55,16 @@ url       = "2"
 insta = { version = "1", features = ["json"] }
 
 # Path-deps into the CAS workspace (read-only consumers; conformance never
-# modifies cas/ crates). siahub-cas-storage pulls in `sia-mock` so tests can
+# modifies cas/ crates). openweights-cas-storage pulls in `sia-mock` so tests can
 # assert counters on MockSiaAdapter.
-siahub-cas-core    = { path = "../cas/crates/siahub-cas-core" }
-siahub-cas-db      = { path = "../cas/crates/siahub-cas-db" }
-siahub-cas-storage = { path = "../cas/crates/siahub-cas-storage", features = ["sia-mock"] }
-siahub-cas-proto   = { path = "../cas/crates/siahub-cas-proto" }
+openweights-cas-core    = { path = "../cas/crates/openweights-cas-core" }
+openweights-cas-db      = { path = "../cas/crates/openweights-cas-db" }
+openweights-cas-storage = { path = "../cas/crates/openweights-cas-storage", features = ["sia-mock"] }
+openweights-cas-proto   = { path = "../cas/crates/openweights-cas-proto" }
 
 # sqlx for seeding API keys + direct inserts in fetch_info_coalescing.
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "chrono"] }
 
-# Cross-language test vector verification dupes these from siahub-cas-core's
+# Cross-language test vector verification dupes these from openweights-cas-core's
 # signed_url module — we intentionally re-implement the HMAC path here to
 # prove the fixture is cross-language verifiable (not just Rust-self-consistent).

@@ -1,10 +1,10 @@
 //! Cross-language signed-URL vectors — verifies the Rust minter
-//! (`siahub_cas_core::signed_url::UrlSigner`) and an INDEPENDENT Rust HMAC
+//! (`openweights_cas_core::signed_url::UrlSigner`) and an INDEPENDENT Rust HMAC
 //! re-implementation produce byte-identical `canonical_string` +
 //! `expected_sig_b64url_nopad` for every vector in
 //! `conformance/fixtures/signed_url_vectors.json`.
 //! Why re-implement the HMAC here? The Go gateway will hash in Go; if
-//! the only Rust signature consumer were `siahub_cas_core::signed_url`
+//! the only Rust signature consumer were `openweights_cas_core::signed_url`
 //! itself, a bug shared with the minter would never surface. This test
 //! re-derives the signature with the `hmac` + `sha2` crates directly — a
 //! fresh execution path — and confirms the two Rust paths agree.
@@ -15,8 +15,8 @@ use base64::Engine;
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
-use siahub_cas_core::signed_url::UrlSigner;
-use siahub_cas_proto::merklehash::MerkleHash;
+use openweights_cas_core::signed_url::UrlSigner;
+use openweights_cas_proto::merklehash::MerkleHash;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -41,7 +41,7 @@ struct RangeVec {
 }
 
 fn load_vectors() -> Vec<Vector> {
-    let v = siahub_conformance::fixtures::load_signed_url_vectors()
+    let v = openweights_conformance::fixtures::load_signed_url_vectors()
         .expect("signed_url_vectors fixture is committed to git");
     serde_json::from_value(v).expect("vector JSON shape matches")
 }
@@ -52,7 +52,7 @@ fn every_vector_verifies_via_independent_hmac() {
     assert!(!vectors.is_empty(), "at least one vector shipped");
 
     for v in &vectors {
-        // 1. Independent HMAC — avoid siahub_cas_core::signed_url's path.
+        // 1. Independent HMAC — avoid openweights_cas_core::signed_url's path.
         let key_bytes = base64::engine::general_purpose::STANDARD
             .decode(&v.signing_key_b64)
             .expect("signing key decodes");
@@ -69,7 +69,7 @@ fn every_vector_verifies_via_independent_hmac() {
 }
 
 #[test]
-fn canonical_string_agrees_with_siahub_cas_core_builder() {
+fn canonical_string_agrees_with_openweights_cas_core_builder() {
     // UrlSigner::canonical_string is the authoritative Rust implementation.
     // Assert every vector's `canonical_string` matches what our minter would
     // produce for the same inputs — proves the fixture is not a self-loop and
@@ -179,7 +179,7 @@ fn fixture_is_tracked_at_pinned_revision() {
     for v in &vectors {
         assert_eq!(
             v.xorb_hash_hex,
-            siahub_conformance::REFERENCE_XORB_HASH_HEX,
+            openweights_conformance::REFERENCE_XORB_HASH_HEX,
             "vector {} hash drifted from pinned fixture",
             v.name
         );

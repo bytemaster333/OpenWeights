@@ -13,7 +13,7 @@
 //! gateway binary running alongside the CAS container, which this
 //! crate's harness does not yet spawn (spawn.rs is CAS-only by design;
 //! a full gateway+CAS harness is future work).
-//! Skips if Docker / siahub-cas image unavailable.
+//! Skips if Docker / openweights-cas image unavailable.
 
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ use common::spawn;
 
 #[tokio::test]
 async fn v2_returns_501_when_flag_is_false() -> anyhow::Result<()> {
-    siahub_conformance::init_tracing_once();
+    openweights_conformance::init_tracing_once();
 
     let harness = match spawn::spawn_cas().await? {
         Some(h) => h,
@@ -61,7 +61,7 @@ async fn xet_client_falls_back_from_v2_501_to_v1() -> anyhow::Result<()> {
     // unavailable, fall back to V1". This is implemented in
     // xet_client::cas_client::RemoteClient::get_reconstruction_with_version_override
     // (a pub(crate) impl, surfaced publicly via `Client::get_reconstruction`).
-    siahub_conformance::init_tracing_once();
+    openweights_conformance::init_tracing_once();
 
     let harness = match spawn::spawn_cas().await? {
         Some(h) => h,
@@ -150,7 +150,7 @@ async fn xet_client_falls_back_from_v2_501_to_v1() -> anyhow::Result<()> {
     let client: Arc<RemoteClient> = RemoteClient::new(
         &harness.base_url,
         &auth,
-        "siahub-conformance-v2-flag",
+        "openweights-conformance-v2-flag",
         false,
         None,
     );
@@ -199,7 +199,7 @@ async fn xet_client_falls_back_from_v2_501_to_v1() -> anyhow::Result<()> {
 /// harness extends when it lands.
 #[tokio::test]
 async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
-    siahub_conformance::init_tracing_once();
+    openweights_conformance::init_tracing_once();
 
     let harness = match spawn::spawn_cas_v2_enabled().await? {
         Some(h) => h,
@@ -208,7 +208,7 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
 
     // Seed a file that coalesces into TWO non-contiguous segments within
     // ONE xorb (shape matches `flag_on_build_v2_response_produces_per_xorb_single_url`
-    // in cas/crates/siahub-cas-core/src/tests/reconstruction_v2_tests.rs).
+    // in cas/crates/openweights-cas-core/src/tests/reconstruction_v2_tests.rs).
     // Terms:
     // term0: xorb_a bytes [1024, 4096) chunks [0, 8)
     // term1: xorb_a bytes [3072, 8192) chunks [6, 16) → merges with term0 → [1024, 8192)
@@ -377,7 +377,7 @@ async fn v2_multi_range_round_trip() -> anyhow::Result<()> {
     let _client: Arc<RemoteClient> = RemoteClient::new(
         &harness.base_url,
         &auth,
-        "siahub-conformance-v2-multirange",
+        "openweights-conformance-v2-multirange",
         false,
         None,
     );

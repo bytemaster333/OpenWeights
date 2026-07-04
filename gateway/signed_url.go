@@ -1,5 +1,5 @@
 // Package main — signed_url.go.
-// Go port of `cas/crates/siahub-cas-core/src/signed_url.rs::UrlSigner::verify`.
+// Go port of `cas/crates/openweights-cas-core/src/signed_url.rs::UrlSigner::verify`.
 // MUST remain byte-identical to the Rust side. Drift is a story-breaking
 // silent-corruption bug; enforcement lives in `signed_url_test.go` which loads
 // `conformance/fixtures/signed_url_vectors.json` and asserts every vector.

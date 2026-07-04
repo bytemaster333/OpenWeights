@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# siahub-console — multi-stage build: Node 22 (pnpm via corepack) → nginx:alpine static serve.
+# openweights-console — multi-stage build: Node 22 (pnpm via corepack) → nginx:alpine static serve.
 # : Node 22 LTS + pnpm 9.x. : /health is a static file in public/ served as-is.
 
 FROM node:22-alpine AS build

@@ -21,7 +21,7 @@ func TestLoadWriteEnvRoundtrip(t *testing.T) {
 	path := filepath.Join(dir, ".env")
 	kv := map[string]string{
 		"FOO":                    "bar",
-		"SIAHUB_RECOVERY_PHRASE": "word1 word2 word3",
+		"OPENWEIGHTS_RECOVERY_PHRASE": "word1 word2 word3",
 		"INDEXD_ADMIN_PASSWORD":  "abc123",
 	}
 	if err := writeEnv(path, kv); err != nil {

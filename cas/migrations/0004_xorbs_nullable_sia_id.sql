@@ -1,5 +1,5 @@
 -- 0004_xorbs_nullable_sia_id.sql — forward-only relax of xorbs.sia_object_id.
--- Plan: 02-04-xorb-upload-handler-PLAN.md · Phase: 02-siahub-cas-core · Wave: 3
+-- Plan: 02-04-xorb-upload-handler-PLAN.md · Phase: 02-openweights-cas-core · Wave: 3
 -- Background: landed `xorbs.sia_object_id BYTEA NOT NULL` (matching
 -- ARCHITECTURE.md's sketch). 's handler flow needs to INSERT the
 -- xorb row BEFORE the Sia upload completes so the ON CONFLICT DO NOTHING

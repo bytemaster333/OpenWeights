@@ -13,10 +13,23 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/siastorage"
 )
+
+// envU8 reads an unsigned 8-bit env var, falling back to def when unset/invalid.
+// Lets smoke share OPENWEIGHTS_DATA_SHARDS / OPENWEIGHTS_PARITY_SHARDS with the
+// CAS Sia write path (main.rs build_sia_adapter) instead of a hardcoded value.
+func envU8(key string, def uint8) uint8 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 8); err == nil {
+			return uint8(n)
+		}
+	}
+	return def
+}
 
 const fixtureSize = 1024 * 1024 // 1 MiB
 
@@ -24,11 +37,11 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx := context.Background()
 
-	indexerURL := os.Getenv("SIAHUB_INDEXER_URL")
-	appIDHex := os.Getenv("SIAHUB_APP_ID")
-	appKeyHex := os.Getenv("SIAHUB_APP_KEY")
+	indexerURL := os.Getenv("OPENWEIGHTS_INDEXER_URL")
+	appIDHex := os.Getenv("OPENWEIGHTS_APP_ID")
+	appKeyHex := os.Getenv("OPENWEIGHTS_APP_KEY")
 	if indexerURL == "" || appIDHex == "" || appKeyHex == "" {
-		logger.Error("missing env: SIAHUB_INDEXER_URL, SIAHUB_APP_ID, SIAHUB_APP_KEY")
+		logger.Error("missing env: OPENWEIGHTS_INDEXER_URL, OPENWEIGHTS_APP_ID, OPENWEIGHTS_APP_KEY")
 		os.Exit(2)
 	}
 
@@ -44,7 +57,7 @@ func main() {
 	}
 	appKey := types.PrivateKey(appKeyBytes)
 
-	client, err := siastorage.NewBuilder(indexerURL, siastorage.AppMetadata{ID: appID, Name: "siahub-smoke"}).SDK(appKey)
+	client, err := siastorage.NewBuilder(indexerURL, siastorage.AppMetadata{ID: appID, Name: "openweights-smoke"}).SDK(appKey)
 	if err != nil {
 		logger.Error("SDK init", "err", err)
 		os.Exit(1)
@@ -64,7 +77,10 @@ func main() {
 	// Zen testnet has ~3 usable hosts; default erasure coding wants 30. Use
 	// 2-data-1-parity redundancy so smoke + thesis can run while
 	// testnet host count recovers. /6 mainnet drops this override.
-	if err := client.Upload(ctx, &obj, bytes.NewReader(fixture), siastorage.WithRedundancy(1, 2)); err != nil {
+	dataShards := envU8("OPENWEIGHTS_DATA_SHARDS", 1)
+	parityShards := envU8("OPENWEIGHTS_PARITY_SHARDS", 2)
+	logger.Info("upload redundancy", "data", dataShards, "parity", parityShards, "total", int(dataShards)+int(parityShards))
+	if err := client.Upload(ctx, &obj, bytes.NewReader(fixture), siastorage.WithRedundancy(dataShards, parityShards)); err != nil {
 		logger.Error("upload", "err", err)
 		os.Exit(1)
 	}

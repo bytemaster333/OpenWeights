@@ -1,7 +1,7 @@
-# siahub
+# openweights
 
 xet-compatible model hub backed by sia storage. the standard `hf` CLI
-works unmodified — set `HF_ENDPOINT` at a siahub deployment and upload
+works unmodified — set `HF_ENDPOINT` at a openweights deployment and upload
 or download as usual. bytes land on the decentralized sia network
 instead of s3.
 
@@ -16,15 +16,15 @@ services:
 
 | component | purpose |
 |---|---|
-| `siahub-cas` | xet protocol + hf-api-compat endpoints (rust, axum) |
-| `siahub-gateway` | signed-url byte serving + sia range fetch (go) |
-| `siahub-console` | web ui for keys, models, assets, stats (react) |
+| `openweights-cas` | xet protocol + hf-api-compat endpoints (rust, axum) |
+| `openweights-gateway` | signed-url byte serving + sia range fetch (go) |
+| `openweights-console` | web ui for keys, models, assets, stats (react) |
 | `indexd` | sia chain indexer (siafoundation/indexd) |
 | `postgres` / `redis` | metadata + rate limits |
 
 console: `http://localhost:5173`
 api: `http://localhost:8080`
-docs: [docs.siahub.app](https://docs.siahub.app)
+docs: [docs.openweights.app](https://docs.openweights.app)
 
 ## upload / download
 

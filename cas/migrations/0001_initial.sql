@@ -1,6 +1,6 @@
 -- 0001_initial.sql — CAS base schema.
 -- Authored per RESEARCH §6.1 + ARCHITECTURE.md §"Postgres schema sketch".
--- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-siahub-cas-core · Wave: 2
+-- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-openweights-cas-core · Wave: 2
 -- Idempotency invariant (T-02- / PITFALL ): every CREATE in this file
 -- must be safe to re-run. sqlx's _sqlx_migrations table already tracks the
 -- checksum, but testcontainers / CI scratch volumes re-execute so we belt +

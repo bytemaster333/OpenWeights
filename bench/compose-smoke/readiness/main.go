@@ -1,5 +1,5 @@
-// Package main — static readiness probe for the SiaHub indexd container.
-// Bind-mounted as /usr/local/bin/siahub-readiness; Docker invokes it as the healthcheck.
+// Package main — static readiness probe for the OpenWeights indexd container.
+// Bind-mounted as /usr/local/bin/openweights-readiness; Docker invokes it as the healthcheck.
 // Exits 0 iff both:
 // 1. indexd's consensus is synced (/api/state.synced == true)
 // 2. indexd's wallet confirmed balance >= threshold hastings (/api/wallet.confirmed)
@@ -124,7 +124,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "readiness: INDEXD_ADMIN_PASSWORD not set")
 		os.Exit(2)
 	}
-	threshold := envOr("SIAHUB_WALLET_THRESHOLD_HASTINGS", defaultThreshold)
+	threshold := envOr("OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS", defaultThreshold)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*perRequestTimeout+time.Second)
 	defer cancel()

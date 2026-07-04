@@ -24,11 +24,11 @@ export function LandingPage() {
       {errorCode ? <OAuthErrorBanner code={errorCode} /> : null}
 
       <section className="space-y-4">
-        <h1 className="font-heading text-4xl font-medium tracking-tight">siahub</h1>
+        <h1 className="font-heading text-4xl font-medium tracking-tight">openweights</h1>
         <p className="max-w-2xl text-base/relaxed text-muted-foreground">
           a model hub with bytes on sia. point{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">HF_ENDPOINT</code> at
-          a siahub deployment and use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli as usual.
+          a openweights deployment and use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli as usual.
         </p>
       </section>
 
@@ -57,7 +57,7 @@ export function LandingPage() {
           <CardContent className="space-y-2 text-xs text-muted-foreground">
             <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
               {`HF_TOKEN=<your-key> \\
-HF_ENDPOINT=https://siahub.app \\
+HF_ENDPOINT=https://openweights.app \\
 hf upload <user>/<repo> ./model.safetensors`}
             </pre>
           </CardContent>
@@ -70,7 +70,7 @@ hf upload <user>/<repo> ./model.safetensors`}
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
             <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
-              {`HF_ENDPOINT=https://siahub.app \\
+              {`HF_ENDPOINT=https://openweights.app \\
 hf download <user>/<repo>`}
             </pre>
           </CardContent>
@@ -86,7 +86,7 @@ hf download <user>/<repo>`}
             </a>
           </Button>
           <Button asChild variant="outline">
-            <a href="https://docs.siahub.app" target="_blank" rel="noreferrer">
+            <a href="https://docs.openweights.app" target="_blank" rel="noreferrer">
               docs
               <ArrowRight data-icon="inline-end" weight="regular" />
             </a>

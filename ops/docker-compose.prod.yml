@@ -7,10 +7,10 @@
 # 2. Drops the base file's `127.0.0.1:<x>:<y>` port mappings to `expose:` so
 # CAS/gateway/console/Postgres/Redis/indexd(app)/indexd(admin) are reachable
 # only on the Compose network — Caddy proxies CAS + gateway + console, and
-# Postgres/Redis/indexd are internal dependencies of the siahub-* services.
+# Postgres/Redis/indexd are internal dependencies of the openweights-* services.
 # 3. Pins `V2_RECONSTRUCTION_ENABLED=true` ( default anyway; belt-and-
 # suspenders for in production).
-# 4. Sets `GATEWAY_BASE_URL=https://cas.siahub.app/gateway` so signed URLs
+# 4. Sets `GATEWAY_BASE_URL=https://cas.openweights.app/gateway` so signed URLs
 # minted by CAS reach the gateway via Caddy.
 # 5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in.env for a
 # testnet demo.
@@ -24,13 +24,13 @@ services:
 
   caddy:
     image: caddy:2.8
-    container_name: siahub-caddy
+    container_name: openweights-caddy
     # Caddy cannot start until the upstreams are ready to accept proxied
     # traffic — otherwise the first ACME challenge races.
     depends_on:
-      siahub-cas:      { condition: service_healthy }
-      siahub-gateway:  { condition: service_healthy }
-      siahub-console:  { condition: service_healthy }
+      openweights-cas:      { condition: service_healthy }
+      openweights-gateway:  { condition: service_healthy }
+      openweights-console:  { condition: service_healthy }
     ports:
       - "80:80"
       - "443:443"
@@ -42,34 +42,34 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     environment:
-      SIAHUB_ACME_EMAIL: ${SIAHUB_ACME_EMAIL:?must be set in .env for Let's Encrypt}
+      OPENWEIGHTS_ACME_EMAIL: ${OPENWEIGHTS_ACME_EMAIL:?must be set in .env for Let's Encrypt}
     restart: unless-stopped
 
-  # ─── siahub-cas: drop 127.0.0.1 publish; only internally exposed ────────────
-  siahub-cas:
+  # ─── openweights-cas: drop 127.0.0.1 publish; only internally exposed ────────────
+  openweights-cas:
     ports: !reset []
     expose:
       - "8080"
     environment:
       # V2 flip explicit in prod (CAS emits multipart-aware signed URLs).
       V2_RECONSTRUCTION_ENABLED: "true"
-      # Signed URLs minted here land at https://cas.siahub.app/gateway/<path>
+      # Signed URLs minted here land at https://cas.openweights.app/gateway/<path>
       # after Caddy's handle_path strip.
-      GATEWAY_BASE_URL: https://cas.siahub.app/gateway
+      GATEWAY_BASE_URL: https://cas.openweights.app/gateway
     restart: unless-stopped
 
-  # ─── siahub-gateway: drop 127.0.0.1 publish; only internally exposed ────────
-  siahub-gateway:
+  # ─── openweights-gateway: drop 127.0.0.1 publish; only internally exposed ────────
+  openweights-gateway:
     ports: !reset []
     expose:
       - "8081"
     environment:
       # Gateway verifies URLs minted with this base; must match CAS.
-      GATEWAY_BASE_URL: https://cas.siahub.app/gateway
+      GATEWAY_BASE_URL: https://cas.openweights.app/gateway
     restart: unless-stopped
 
-  # ─── siahub-console: drop 127.0.0.1 publish; only internally exposed ────────
-  siahub-console:
+  # ─── openweights-console: drop 127.0.0.1 publish; only internally exposed ────────
+  openweights-console:
     ports: !reset []
     expose:
       - "80"
@@ -101,12 +101,12 @@ services:
       - "9982"
     environment:
       # Default to mainnet in prod. Owner overrides to `zen` in.env for a
-      # testnet-funded demo. Keep in sync with SIAHUB_WALLET_THRESHOLD_HASTINGS.
+      # testnet-funded demo. Keep in sync with OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS.
       INDEXD_NETWORK: ${SIA_NETWORK:-mainnet}
     restart: unless-stopped
 
 volumes:
   caddy-data:
-    name: siahub-caddy-data
+    name: openweights-caddy-data
   caddy-config:
-    name: siahub-caddy-config
+    name: openweights-caddy-config

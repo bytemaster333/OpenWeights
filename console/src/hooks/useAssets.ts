@@ -4,7 +4,7 @@ import { type ApiError, casFetch } from "@/lib/api"
 
 /**
  * A single row in the `GET /admin/xorbs` response, as returned by
- * `cas/crates/siahub-cas-core/src/handlers/admin/xorbs.rs` (XorbRow).
+ * `cas/crates/openweights-cas-core/src/handlers/admin/xorbs.rs` (XorbRow).
  *
  * Field-by-field notes:
  * - `hash` — lowercase hex of `xorbs.xorb_merkle_hash` (full 64 chars). The

@@ -1,4 +1,4 @@
--- amendment — siahub-hf-proxy integration.
+-- amendment — openweights-hf-proxy integration.
 -- Adds an alternate identity column so that CAS can upsert a user row
 -- keyed on Hugging Face's internal user ID (as found in HF's Xet JWT
 -- payload), independent of the GitHub-OAuth-keyed identity used by the
@@ -15,7 +15,7 @@
 -- `(SHA-256(hf_user_id)[0..8] as i64) & 0x7FFF_FFFF_FFFF_FFFF`.
 -- * Collision risk at our scale (v1 demo, <1e5 users) is ~2^-32
 -- acceptable. A collision would cause two distinct HF users to share
--- the same SiaHub user_id row; a follow-up v1.1 migration can split
+-- the same OpenWeights user_id row; a follow-up v1.1 migration can split
 -- if it ever happens.
 
 ALTER TABLE users

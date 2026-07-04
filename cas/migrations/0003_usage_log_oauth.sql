@@ -1,5 +1,5 @@
 -- 0003_usage_log_oauth.sql — metering + session + OAuth state tables.
--- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-siahub-cas-core · Wave: 2
+-- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-openweights-cas-core · Wave: 2
 -- item 1: 'reconstruction' added to usage_event (..08
 -- reconstruction counters depend on it).
 -- item 2: usage_log_event_cache_idx partial index ( cache-hit

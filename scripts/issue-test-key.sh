@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #CI-only test-key issuance helper.
-# Mints a fresh SiaHub API key by INSERTing directly into the `api_keys`
-# table via `docker exec siahub-postgres psql`. Avoids modifying the frozen
+# Mints a fresh OpenWeights API key by INSERTing directly into the `api_keys`
+# table via `docker exec openweights-postgres psql`. Avoids modifying the frozen
 # CAS Rust binary ( convention: amendments only via `N.X-*-PLAN.md`).
 # SECURITY: This script is CI/dev-only. It bypasses the OAuth flow required
 # by `POST /admin/keys`. NEVER run it against a production Postgres — the
@@ -19,7 +19,7 @@
 # bash scripts/issue-test-key.sh --scope write
 # → prints the 43-char plaintext key to stdout (exit 0)
 # Env:
-# SIAHUB_POSTGRES_PASSWORD required; matches ops/.env seed
+# OPENWEIGHTS_POSTGRES_PASSWORD required; matches ops/.env seed
 # COMPOSE_PG_SERVICE optional; default 'postgres' (container name
 # resolved by `docker compose ps`). Override if
 # running against a non-Compose Postgres.
@@ -45,8 +45,8 @@ case "$SCOPE" in
   *) echo "invalid --scope '$SCOPE' (expected read|write|admin)" >&2; exit 2 ;;
 esac
 
-: "${SIAHUB_POSTGRES_PASSWORD:?SIAHUB_POSTGRES_PASSWORD must be exported (matches .env)}"
-PG_SERVICE="${COMPOSE_PG_SERVICE:-siahub-postgres}"
+: "${OPENWEIGHTS_POSTGRES_PASSWORD:?OPENWEIGHTS_POSTGRES_PASSWORD must be exported (matches .env)}"
+PG_SERVICE="${COMPOSE_PG_SERVICE:-openweights-postgres}"
 
 # Generate 32 random bytes → base64url-NO-pad. Uses `openssl rand` for
 # cross-platform deterministic output. python3 fallback for minimal images.
@@ -78,13 +78,13 @@ fi
 # real account that would share this Postgres). Idempotent upsert so repeat
 # CI runs reuse the same row.
 CI_USER_ID=999999999
-CI_USER_LOGIN="siahub-ci-test"
+CI_USER_LOGIN="openweights-ci-test"
 
 # psql exec shim. COMPOSE Postgres container runs as user `postgres`; the
-# `siahub` database was created by indexd-postgres-init.sql at first boot.
+# `openweights` database was created by indexd-postgres-init.sql at first boot.
 psql_exec() {
-  docker exec -e PGPASSWORD="$SIAHUB_POSTGRES_PASSWORD" "$PG_SERVICE" \
-    psql -v ON_ERROR_STOP=1 -U siahub -d siahub -tAc "$1"
+  docker exec -e PGPASSWORD="$OPENWEIGHTS_POSTGRES_PASSWORD" "$PG_SERVICE" \
+    psql -v ON_ERROR_STOP=1 -U openweights -d openweights -tAc "$1"
 }
 
 # Upsert the CI test user (ON CONFLICT DO NOTHING — second call is a no-op).

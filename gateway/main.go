@@ -1,4 +1,4 @@
-// Package main — siahub-gateway entry point.
+// Package main — openweights-gateway entry point.
 // Wave 1 responsibilities:
 // - Load config (env; fatal on missing `GATEWAY_URL_SIGNING_KEY`).
 // - Build chi router + request-id middleware.

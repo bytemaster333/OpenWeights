@@ -66,7 +66,7 @@ export function SetupPage() {
           </h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Live health of SiaHub subsystems.
+          Live health of OpenWeights subsystems.
         </p>
       </header>
 
@@ -83,7 +83,7 @@ export function SetupPage() {
           className="rounded border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
           data-testid="setup-error"
         >
-          Could not reach SiaHub right now. The control plane is unavailable.
+          Could not reach OpenWeights right now. The control plane is unavailable.
           <button
             type="button"
             className="ml-2 underline"

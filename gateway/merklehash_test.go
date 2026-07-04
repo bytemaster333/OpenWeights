@@ -16,7 +16,7 @@ import (
 )
 
 // REF_HEX is the pinned reference hash from `xet-team/xet-spec-reference-files`,
-// re-exported by `siahub_conformance::REFERENCE_XORB_HASH_HEX`. Any drift in
+// re-exported by `openweights_conformance::REFERENCE_XORB_HASH_HEX`. Any drift in
 // this constant requires a planning step per CONFORMANCE-AUDIT.md — do NOT
 // change it casually.
 const REF_HEX = "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632"

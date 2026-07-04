@@ -54,7 +54,7 @@ import {
  * 2. **List** (`GET /admin/keys`) — masked prefixes only (
  * invariant 4). Empty state prompts to create the first key.
  * 3. **Usage snippets** — permanent copy-paste blocks for
- * `hf upload` / `hf download` against this SiaHub deployment,
+ * `hf upload` / `hf download` against this OpenWeights deployment,
  * with placeholder `<your-key>` replaced by the freshly minted
  * plaintext when a key was just created this session.
  * 4. **Revoke** (`DELETE /admin/keys/{id}`) — row-level, behind an
@@ -117,12 +117,12 @@ export function KeysPage() {
 
   const keys = list.data ?? []
 
-  // The usage snippets always show a `<your-siahub-key>` placeholder.
+  // The usage snippets always show a `<your-openweights-key>` placeholder.
   // Plaintext keys are shown ONCE in the CreatedKeyModal at mint time
   // (line 293) and are never reflected back into the keys list — copy
   // the plaintext from the modal and paste it into your shell. The list
   // endpoint only ever returns the masked prefix.
-  const keyPlaceholder = "<your-siahub-key>"
+  const keyPlaceholder = "<your-openweights-key>"
   const uploadSnippet = `HF_TOKEN=${keyPlaceholder} HF_ENDPOINT=${CAS_URL} \\
   hf upload <your-username>/<repo-name> ./your-files`
   const downloadSnippet = `HF_ENDPOINT=${CAS_URL} hf download <your-username>/<repo-name>`
@@ -203,13 +203,13 @@ export function KeysPage() {
             </p>
           </div>
           <CopyPasteCard
-            title="Upload to SiaHub"
+            title="Upload to OpenWeights"
             body={uploadSnippet}
             hint={`Replace ${keyPlaceholder} with your plaintext key.`}
             testId="keys-upload-snippet"
           />
           <CopyPasteCard
-            title="Download from SiaHub"
+            title="Download from OpenWeights"
             body={downloadSnippet}
             hint="No HF_TOKEN needed for public repos."
             testId="keys-download-snippet"

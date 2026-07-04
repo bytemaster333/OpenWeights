@@ -1,9 +1,9 @@
 {
   "generated_at": null,
   "rows": [
-    { "scenario": "cold-cache", "siahub_mbps": null, "hf_baseline_mbps": null },
-    { "scenario": "warm-cache", "siahub_mbps": null, "hf_baseline_mbps": null },
-    { "scenario": "upload",     "siahub_mbps": null,   "hf_baseline_mbps": null }
+    { "scenario": "cold-cache", "openweights_mbps": null, "hf_baseline_mbps": null },
+    { "scenario": "warm-cache", "openweights_mbps": null, "hf_baseline_mbps": null },
+    { "scenario": "upload",     "openweights_mbps": null,   "hf_baseline_mbps": null }
   ],
   "fixture": {
     "repo": "xet-team/xet-spec-reference-files",
@@ -17,9 +17,9 @@
     "notes": "3 trials per cell, median only. See docs/benchmarks.md \u00a7Methodology for limits. Not a rigorous statistical study; no P10/P90/stddev."
   },
   "raw": {
-    "siahub_cold_seconds": null,
-    "siahub_warm_seconds": null,
-    "siahub_upload_seconds": null,
+    "openweights_cold_seconds": null,
+    "openweights_warm_seconds": null,
+    "openweights_upload_seconds": null,
     "hf_native_cold_seconds": null,
     "hf_native_warm_seconds": null
   }

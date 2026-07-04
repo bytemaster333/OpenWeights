@@ -1,7 +1,7 @@
 -- 0002_xorbs_shards.sql — core CAS data model.
 -- ARCHITECTURE.md §"Postgres schema sketch" + RESEARCH deltas
 -- (hash_prefix_8 generated col + pin_state tracking on both xorbs and shards).
--- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-siahub-cas-core · Wave: 2
+-- Plan: 02-02-schema-migrations-PLAN.md · Phase: 02-openweights-cas-core · Wave: 2
 -- Hashes are BYTEA (PITFALL ). xet-core's merkle-hash encoding is
 -- byte-reversed-per-8-byte-group hex — if anyone ever needs a text view,
 -- decode via `xet_core_structures::merklehash::MerkleHash`, NEVER a plain

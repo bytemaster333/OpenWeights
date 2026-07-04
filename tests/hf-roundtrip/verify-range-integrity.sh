@@ -13,7 +13,7 @@
 # Invocation from CI:
 # GATEWAY_VIA_CADDY_URL=http://localhost:8090/gateway \
 # CAS_VIA_CADDY_URL=http://localhost:8090/cas \
-# SIAHUB_API_KEY=<fresh key> \
+# OPENWEIGHTS_API_KEY=<fresh key> \
 # bash tests/hf-roundtrip/verify-range-integrity.sh
 # The script mints its own signed URL via CAS /v1/reconstructions given an
 # uploaded xorb hash (harness pre-populates one via a small fixture upload).
@@ -29,18 +29,18 @@ GATEWAY="${GATEWAY_VIA_CADDY_URL:?must point at Caddy path-prefix route, e.g. ht
 
 # Two modes:
 # (a) direct: caller passes SIGNED_URL_PATH (everything after the gateway base).
-# (b) mint: caller passes CAS_VIA_CADDY_URL + SIAHUB_API_KEY + XORB_HASH, we
+# (b) mint: caller passes CAS_VIA_CADDY_URL + OPENWEIGHTS_API_KEY + XORB_HASH, we
 # fetch a signed URL from /v1/reconstructions/<hash> and peel the gateway
 # path out of the returned URL.
 URL=""
 if [[ -n "${SIGNED_URL_PATH:-}" ]]; then
   URL="${GATEWAY}/${SIGNED_URL_PATH#/}"
-elif [[ -n "${XORB_HASH:-}" && -n "${CAS_VIA_CADDY_URL:-}" && -n "${SIAHUB_API_KEY:-}" ]]; then
+elif [[ -n "${XORB_HASH:-}" && -n "${CAS_VIA_CADDY_URL:-}" && -n "${OPENWEIGHTS_API_KEY:-}" ]]; then
   echo "[prep] minting signed URL via CAS reconstruction for xorb $XORB_HASH"
   # v1 reconstruction query returns a list of segment URLs; pick the first
   # part's URL and rewrite its origin to the Caddy path-prefix so we exercise
   # the reverse proxy.
-  RESP=$(curl -fsS -H "Authorization: Bearer ${SIAHUB_API_KEY}" \
+  RESP=$(curl -fsS -H "Authorization: Bearer ${OPENWEIGHTS_API_KEY}" \
     "${CAS_VIA_CADDY_URL}/v1/reconstructions/${XORB_HASH}")
   # Extract the first.terms[].url field. Fallback: jq if present, else grep.
   if command -v jq >/dev/null 2>&1; then
@@ -54,7 +54,7 @@ elif [[ -n "${XORB_HASH:-}" && -n "${CAS_VIA_CADDY_URL:-}" && -n "${SIAHUB_API_K
     exit 2
   fi
 else
-  echo "pre-condition missing: either SIGNED_URL_PATH or (XORB_HASH + CAS_VIA_CADDY_URL + SIAHUB_API_KEY)" >&2
+  echo "pre-condition missing: either SIGNED_URL_PATH or (XORB_HASH + CAS_VIA_CADDY_URL + OPENWEIGHTS_API_KEY)" >&2
   exit 2
 fi
 

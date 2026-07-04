@@ -19,7 +19,7 @@ applicationAPI:
   # Phase 1: bootstrap wizard runs on the host, so advertiseURL must match what
   # it can reach (localhost:9982) — the SDK uses this URL for request signing
   # and indexd validates the signed Host header against advertiseURL.
-  # Phase 2 planner flips this to "http://indexd:9982" when siahub-cas joins
+  # Phase 2 planner flips this to "http://indexd:9982" when openweights-cas joins
   # the Compose network and the wizard no longer signs requests from the host.
   advertiseURL: "http://localhost:9982"
 

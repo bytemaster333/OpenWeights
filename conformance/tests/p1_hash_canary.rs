@@ -11,7 +11,7 @@
 //! `xet_core_structures` crate broke its hex codec (the README explicitly
 //! warns against public use — any bump requires re-running the canary).
 
-use siahub_cas_proto::merklehash::MerkleHash;
+use openweights_cas_proto::merklehash::MerkleHash;
 
 #[test]
 fn p1_reference_xorb_hash_roundtrip() {
@@ -21,7 +21,7 @@ fn p1_reference_xorb_hash_roundtrip() {
     // don't drift out of sync.
     assert_eq!(
         REF_HEX,
-        siahub_conformance::REFERENCE_XORB_HASH_HEX,
+        openweights_conformance::REFERENCE_XORB_HASH_HEX,
         "conformance crate must agree with fixture hash constant",
     );
 

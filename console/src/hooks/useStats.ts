@@ -4,7 +4,7 @@ import { type ApiError, casFetch } from "@/lib/api"
 
 /**
  * CONSOLE-07 — live stats. `GET /admin/stats` shape mirrors
- * `cas/crates/siahub-cas-core/src/handlers/admin/stats.rs` (landed in 04-01).
+ * `cas/crates/openweights-cas-core/src/handlers/admin/stats.rs` (landed in 04-01).
  *
  * Load-bearing contract notes:
  * - `cache_hit_rate` is `[0, 1]` (CAS casts the `AVG(...)` to `double
@@ -131,7 +131,7 @@ export function useStats() {
  */
 export type BenchmarkRow = {
   scenario: string
-  siahub_mbps: number | null
+  openweights_mbps: number | null
   hf_baseline_mbps: number | null
 }
 

@@ -8,8 +8,8 @@
 // rather than parsing the program's exit code.
 // Execution requirements (enforced at runtime; test skips otherwise):
 // - TESTNET_LIVE=1 (opt-in flag; CI defaults off)
-// - SIAHUB_APP_KEY, SIAHUB_APP_ID (from PLAN 07 bootstrap wizard)
-// - SIAHUB_INDEXER_URL (live indexd, typically http://localhost:9982)
+// - OPENWEIGHTS_APP_KEY, OPENWEIGHTS_APP_ID (from PLAN 07 bootstrap wizard)
+// - OPENWEIGHTS_INDEXER_URL (live indexd, typically http://localhost:9982)
 // - indexd is synced + wallet is funded (PLAN 05 readiness probe path; operator responsibility)
 // Invocation (authoritative per VALIDATION.md):
 // cd bench && go test -tags=integration./thesis/... -run TestRangeDownloadSectorScoping -timeout 30m
@@ -43,26 +43,26 @@ func TestRangeDownloadSectorScoping(t *testing.T) {
 	if os.Getenv("TESTNET_LIVE") != "1" {
 		t.Skip("TESTNET_LIVE!=1 — integration test requires opt-in flag (live testnet access)")
 	}
-	indexerURL := os.Getenv("SIAHUB_INDEXER_URL")
-	appIDHex := os.Getenv("SIAHUB_APP_ID")
-	appKeyHex := os.Getenv("SIAHUB_APP_KEY")
+	indexerURL := os.Getenv("OPENWEIGHTS_INDEXER_URL")
+	appIDHex := os.Getenv("OPENWEIGHTS_APP_ID")
+	appKeyHex := os.Getenv("OPENWEIGHTS_APP_KEY")
 	if indexerURL == "" || appIDHex == "" || appKeyHex == "" {
-		t.Skip("SIAHUB_INDEXER_URL / SIAHUB_APP_ID / SIAHUB_APP_KEY must all be set (run `make bootstrap` first)")
+		t.Skip("OPENWEIGHTS_INDEXER_URL / OPENWEIGHTS_APP_ID / OPENWEIGHTS_APP_KEY must all be set (run `make bootstrap` first)")
 	}
 
 	var appID types.Hash256
 	if err := appID.UnmarshalText([]byte(appIDHex)); err != nil {
-		t.Fatalf("invalid SIAHUB_APP_ID: %v", err)
+		t.Fatalf("invalid OPENWEIGHTS_APP_ID: %v", err)
 	}
 	appKeyBytes, err := hex.DecodeString(appKeyHex)
 	if err != nil {
-		t.Fatalf("invalid SIAHUB_APP_KEY hex: %v", err)
+		t.Fatalf("invalid OPENWEIGHTS_APP_KEY hex: %v", err)
 	}
 	appKey := types.PrivateKey(appKeyBytes)
 
 	builder := siastorage.NewBuilder(indexerURL, siastorage.AppMetadata{
 		ID:          appID,
-		Name:        "siahub-thesis-integration",
+		Name:        "openweights-thesis-integration",
 		Description: "VALIDATION.md contract test for thesis measurement",
 	})
 	client, err := builder.SDK(appKey)

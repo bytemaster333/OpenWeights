@@ -71,22 +71,22 @@ func NewSiaAdapter(cfg *Config, reg prometheus.Registerer) (*SiaAdapter, error) 
 		return nil, errors.New("NewSiaAdapter: nil Config")
 	}
 	if cfg.SiaIndexerURL == "" {
-		return nil, errors.New("NewSiaAdapter: SiaIndexerURL is empty (set SIAHUB_INDEXER_URL / SIA_INDEXER_URL)")
+		return nil, errors.New("NewSiaAdapter: SiaIndexerURL is empty (set OPENWEIGHTS_INDEXER_URL / SIA_INDEXER_URL)")
 	}
 	if cfg.AppID == "" {
-		return nil, errors.New("NewSiaAdapter: AppID is empty (set SIAHUB_APP_ID)")
+		return nil, errors.New("NewSiaAdapter: AppID is empty (set OPENWEIGHTS_APP_ID)")
 	}
 	if cfg.AppKey == "" {
-		return nil, errors.New("NewSiaAdapter: AppKey is empty (set SIAHUB_APP_KEY / APP_KEY)")
+		return nil, errors.New("NewSiaAdapter: AppKey is empty (set OPENWEIGHTS_APP_KEY / APP_KEY)")
 	}
 
 	var appID types.Hash256
 	if err := appID.UnmarshalText([]byte(cfg.AppID)); err != nil {
-		return nil, fmt.Errorf("parse SIAHUB_APP_ID as 32-byte hex: %w", err)
+		return nil, fmt.Errorf("parse OPENWEIGHTS_APP_ID as 32-byte hex: %w", err)
 	}
 	keyBytes, err := hex.DecodeString(cfg.AppKey)
 	if err != nil {
-		return nil, fmt.Errorf("decode SIAHUB_APP_KEY hex: %w", err)
+		return nil, fmt.Errorf("decode OPENWEIGHTS_APP_KEY hex: %w", err)
 	}
 	appKey := types.PrivateKey(keyBytes)
 
@@ -95,8 +95,8 @@ func NewSiaAdapter(cfg *Config, reg prometheus.Registerer) (*SiaAdapter, error) 
 	// changing them does not invalidate keys (the AppID does that).
 	builder := siastorage.NewBuilder(cfg.SiaIndexerURL, siastorage.AppMetadata{
 		ID:          appID,
-		Name:        "siahub-gateway",
-		Description: "SiaHub Xet-compatible gateway (Phase 3)",
+		Name:        "openweights-gateway",
+		Description: "OpenWeights Xet-compatible gateway (Phase 3)",
 	})
 	sdk, err := builder.SDK(appKey)
 	if err != nil {
