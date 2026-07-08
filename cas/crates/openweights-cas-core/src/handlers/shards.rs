@@ -35,7 +35,6 @@ use axum::{
     body::Body,
     extract::State,
 };
-use http_body_util::BodyExt;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -105,16 +104,12 @@ pub async fn upload_shard<S>(
 where
     S: ShardUploadState,
 {
-    // (2) Bounded body read. Matches the xorb handler's idiom — collect then
-    // cap-check so we get a clean 400 rather than axum's internal error.
-    let collected = body
-        .collect()
+    // (2) Bounded body read. Cap is enforced DURING the read (axum::body::to_bytes
+    // stops once the body exceeds MAX_SHARD_BYTES) so an oversized/malicious body
+    // can't be buffered into memory before the length check. Matches xorbs.rs.
+    let collected = axum::body::to_bytes(body, MAX_SHARD_BYTES)
         .await
-        .map_err(|_| AppError::BadRequest("invalid_body"))?
-        .to_bytes();
-    if collected.len() > MAX_SHARD_BYTES {
-        return Err(AppError::BadRequest("shard_too_large"));
-    }
+        .map_err(|_| AppError::BadRequest("shard_too_large"))?;
 
     // (3) Shard hash = SHA-256 of body. Distinct from xorb merkle hash codec:
     // xet-core does NOT publish a canonical "shard content hash" function

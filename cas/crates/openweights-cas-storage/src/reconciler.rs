@@ -46,8 +46,25 @@ pub const RECONCILER_TICK: Duration = Duration::from_secs(60);
 /// nothing is lost.
 pub const RECONCILER_BATCH: i64 = 20;
 
-/// Per-row attempt cap before a row is transitioned to `'orphaned'`.
+/// Per-row attempt cap before a row is transitioned to `'orphaned'`. NOTE:
+/// only PERMANENT failures count toward this cap. Transient Sia unavailability
+/// (`SiaAdapterError::Unavailable`, e.g. "not enough hosts") is recoverable —
+/// the bytes are durable in `xorb_bodies` — so it is retried indefinitely and
+/// never orphans the row (see `bump_xorb_attempt` / `bump_shard_attempt`).
 pub const MAX_PIN_ATTEMPTS: i32 = 5;
+
+/// Per-row Sia op timeout. Without it, a single hung upload/pin to a misbehaving
+/// host would freeze the reconciler indefinitely (every tick re-awaits the same
+/// future). 600 s = 10 min is the slowest 64 MiB xorb we observe on Zen testnet
+/// across 6 erasure shards. Shared by the xorb and shard reconcile paths.
+const SIA_OP_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// Whether a Sia failure is transient (recoverable on a later sweep) rather than
+/// permanent. Transient errors must NOT count toward the orphan cap, otherwise a
+/// temporary host shortage permanently strands durable data.
+fn is_transient(err: &SiaAdapterError) -> bool {
+    matches!(err, SiaAdapterError::Unavailable(_))
+}
 
 /// Rows are only re-attempted if `last_pin_attempt_at < NOW - this` (or NULL).
 /// Prevents a tight loop when a Sia partition lasts minutes.
@@ -229,14 +246,8 @@ where
     //     them and re-run `upload_and_pin` from the reconciler so the row
     //     can finally reach Sia. This is the recovery path for "the demo
     //     ran without a funded wallet, then the wallet got funded".
-    // Per-row Sia op timeout. Without this, a single hung upload to a
-    // misbehaving host would freeze the reconciler indefinitely (every
-    // tick re-awaits the same future). 600 s = 10 min is what we observe
-    // on Zen testnet for the slowest 64 MiB xorbs across 6 erasure shards
-    // (slab allocation + per-host QUIC RPC latency dominates). Times out
-    // → bump attempts, move on, retry next sweep.
-    const SIA_OP_TIMEOUT: Duration = Duration::from_secs(600);
-
+    // Per-row Sia op timeout is the module-level SIA_OP_TIMEOUT (shared with the
+    // shard path). Times out → bump attempts, move on, retry next sweep.
     match row.sia_object_id.as_deref() {
         Some(oid) => {
             match tokio::time::timeout(SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
@@ -312,12 +323,22 @@ where
         return Ok(true);
     }
     match row.sia_object_id.as_deref() {
-        Some(oid) => match sia.pin_only(oid).await {
-            Ok(()) => {
+        Some(oid) => match tokio::time::timeout(SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
+            Ok(Ok(())) => {
                 set_pinned_shard(pool, &row.hash, oid).await?;
                 Ok(true)
             }
-            Err(e) => bump_shard_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await,
+            Ok(Err(e)) => {
+                bump_shard_attempt(pool, &row.hash, row.pin_attempts, metrics, &e).await
+            }
+            Err(_) => {
+                // Hung host — treat as transient (do not freeze the loop, do not
+                // orphan). Retried next sweep.
+                let to = SiaAdapterError::Unavailable(
+                    format!("sia pin_only exceeded {SIA_OP_TIMEOUT:?} budget").into(),
+                );
+                bump_shard_attempt(pool, &row.hash, row.pin_attempts, metrics, &to).await
+            }
         },
         None => {
             let noent = anyhow::anyhow!("pin_state='pinning' but sia_object_id is NULL");
@@ -368,11 +389,27 @@ async fn bump_xorb_attempt<M>(
 where
     M: ReconcilerMetrics,
 {
+    // Transient Sia unavailability (e.g. "not enough hosts") is recoverable: the
+    // bytes are durable in xorb_bodies and will pin once Sia recovers. Record the
+    // attempt time so the sweep's staleness filter paces retries, but do NOT
+    // increment pin_attempts — otherwise a temporary host shortage would orphan
+    // durable data after MAX_PIN_ATTEMPTS sweeps.
+    if is_transient(err) {
+        sqlx::query(
+            "UPDATE xorbs SET last_pin_attempt_at = NOW() WHERE xorb_merkle_hash = $1",
+        )
+        .bind(&hash[..])
+        .execute(pool)
+        .await?;
+        tracing::warn!(err = %err, hash = %hex(hash), "xorb pin: transient sia unavailability; will retry (not counted toward orphan cap)");
+        return Ok(true);
+    }
+
     let new_attempts = prior_attempts + 1;
     if new_attempts >= MAX_PIN_ATTEMPTS {
         orphan_xorb(pool, hash).await?;
         metrics.inc_orphaned_xorb();
-        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "xorb orphaned after failed pin attempts");
+        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "xorb orphaned after permanent pin failures");
     } else {
         sqlx::query(
             "UPDATE xorbs \
@@ -383,7 +420,7 @@ where
         .bind(&hash[..])
         .execute(pool)
         .await?;
-        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "xorb pin retry failed; will sweep again");
+        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "xorb pin retry failed (permanent); will sweep again");
     }
     Ok(true)
 }
@@ -398,11 +435,24 @@ async fn bump_shard_attempt<M>(
 where
     M: ReconcilerMetrics,
 {
+    // Transient Sia unavailability is recoverable — do not count it toward the
+    // orphan cap (mirrors bump_xorb_attempt).
+    if is_transient(err) {
+        sqlx::query(
+            "UPDATE shards SET last_pin_attempt_at = NOW() WHERE shard_hash = $1",
+        )
+        .bind(&hash[..])
+        .execute(pool)
+        .await?;
+        tracing::warn!(err = %err, hash = %hex(hash), "shard pin: transient sia unavailability; will retry (not counted toward orphan cap)");
+        return Ok(true);
+    }
+
     let new_attempts = prior_attempts + 1;
     if new_attempts >= MAX_PIN_ATTEMPTS {
         orphan_shard(pool, hash).await?;
         metrics.inc_orphaned_shard();
-        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "shard orphaned after failed pin attempts");
+        tracing::warn!(err = %err, hash = %hex(hash), attempts = new_attempts, "shard orphaned after permanent pin failures");
     } else {
         sqlx::query(
             "UPDATE shards \
@@ -413,7 +463,7 @@ where
         .bind(&hash[..])
         .execute(pool)
         .await?;
-        tracing::debug!(err = %err, hash = %hex(hash), attempts = new_attempts, "shard pin retry failed; will sweep again");
+        tracing::debug!(err = %err, hash = %hex(hash), attempts = new_attempts, "shard pin retry failed (permanent); will sweep again");
     }
     Ok(true)
 }
@@ -455,4 +505,29 @@ fn hex(h: &[u8; 32]) -> String {
         let _ = write!(s, "{b:02x}");
     }
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The orphan-cap fix hinges on classifying transient vs permanent Sia
+    /// failures. A transient `Unavailable` (e.g. "not enough hosts") must NOT
+    /// count toward the orphan cap — otherwise a temporary host shortage
+    /// permanently strands durable data (the M1-xorb-orphaning regression).
+    #[test]
+    fn transient_classification_gates_orphaning() {
+        let unavail =
+            SiaAdapterError::Unavailable("queue error: not enough initial hosts".into());
+        assert!(
+            is_transient(&unavail),
+            "Unavailable must be transient (retried, never orphaned)"
+        );
+
+        let permanent = SiaAdapterError::Other(anyhow::anyhow!("malformed xorb body"));
+        assert!(
+            !is_transient(&permanent),
+            "Other must be permanent (counts toward the orphan cap)"
+        );
+    }
 }

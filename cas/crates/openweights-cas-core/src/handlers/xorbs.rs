@@ -24,7 +24,6 @@ use axum::{
     body::Body,
     extract::{Path, State},
 };
-use http_body_util::BodyExt;
 use serde::Serialize;
 
 use openweights_cas_db::queries::xorbs as xorb_q;
@@ -97,29 +96,27 @@ where
         .or_else(|_| MerkleHash::from_hex(&format!("{prefix}{hash_suffix}")))
         .map_err(|_| AppError::BadRequest("invalid_xorb_hash"))?;
 
-    // (2) Bounded body read — / DoS cap. The body limiter below returns the
-    // buffered bytes OR an error if the body exceeded MAX_XORB_BYTES. We
-    // deliberately do NOT stream-parse; the xet-core `XorbObject::deserialize`
-    // is `Read + Seek` and the buffer is bounded.
-    let collected = body
-        .collect()
+    // (2) Bounded body read — DoS cap enforced DURING the read, not after.
+    // `axum::body::to_bytes` stops and errors once the body exceeds the limit,
+    // so a malicious client cannot make us buffer an arbitrarily large body
+    // into memory before the length check. `XorbObject::deserialize` needs the
+    // whole (now-bounded) buffer, so we still fully buffer up to the cap.
+    let collected = axum::body::to_bytes(body, MAX_XORB_BYTES)
         .await
-        .map_err(|_| AppError::BadRequest("invalid_body"))?
-        .to_bytes();
-    if collected.len() > MAX_XORB_BYTES {
-        return Err(AppError::BadRequest("xorb_too_large"));
-    }
+        .map_err(|_| AppError::BadRequest("xorb_too_large"))?;
 
-    // (3) Try footer-based merkle recompute for P1/ discipline. When the
-    // client omits the footer (hf_xet 1.4.x ships without it — the
-    // client-side `serialize_footer: bool` defaults to false on upload),
-    // we fall back to trusting the path hash. A SHA-256 of the received
-    // bytes is logged as a transport-corruption canary so operators can
-    // still catch silent wire mangling.
+    // (3) Merkle verification (gotcha #1 hash-encoding discipline). When the
+    // client ships the XorbObject footer (chunk hashes + boundaries), recompute
+    // the xorb merkle hash from it and fast-reject a mismatch — no Sia call, no
+    // DB write. hf_xet 1.4.x+ OMITS the footer on upload (client-side
+    // `serialize_footer` defaults to false), so we usually cannot recompute the
+    // hash server-side and fall back to trusting the path hash. That is safe for
+    // round-trip integrity: xet-core re-hashes every chunk against its hash on
+    // DOWNLOAD, so a corrupted-upload-under-a-valid-hash fails reconstruction
+    // rather than serving wrong bytes to the client.
     match compute_xorb_hash_from_footer(&collected) {
         Ok(actual) => {
             if actual != expected {
-                // branch — fast reject, no Sia call, no DB write.
                 return Err(AppError::HashMismatch { expected, actual });
             }
         }
@@ -127,7 +124,7 @@ where
             tracing::warn!(
                 xorb_hash = %expected.hex(),
                 bytes = collected.len(),
-                "xorb footer parse failed — accepting under URL-hash trust (client omitted XorbObject footer)"
+                "xorb footer absent — accepting under URL-hash trust; integrity re-verified by xet-core on download"
             );
         }
     }
