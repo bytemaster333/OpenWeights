@@ -20,4 +20,3 @@ anyhow           = { workspace = true }
 async-trait      = "0.1"
 sha2             = { workspace = true }
 sqlx             = { workspace = true }
-openweights-cas-proto = { path = "../openweights-cas-proto" }

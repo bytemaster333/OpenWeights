@@ -14,5 +14,3 @@ pub use sia::{SiaAdapter, SiaAdapterError};
 
 #[cfg(any(test, feature = "sia-mock"))]
 pub mod mock;
-
-pub const OPENWEIGHTS_CAS_STORAGE_VERSION: &str = env!("CARGO_PKG_VERSION");

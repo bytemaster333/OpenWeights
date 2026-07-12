@@ -2155,9 +2155,7 @@ dependencies = [
  "serde",
  "sia_storage",
  "sqlx",
- "thiserror 1.0.69",
  "tokio",
- "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -2205,11 +2203,7 @@ dependencies = [
 name = "openweights-cas-db"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "sqlx",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
  "uuid",
 ]
 
@@ -2237,7 +2231,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
- "openweights-cas-proto",
  "sha2",
  "sia_storage",
  "sqlx",

@@ -22,7 +22,6 @@
 //!   the demo debug session). Extra HF-only fields (security scan
 //!   results, billing hints) are omitted — hf_hub tolerates missing keys.
 
-use std::sync::Arc;
 
 use axum::{
     Json,
@@ -1178,12 +1177,6 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
     base64::engine::general_purpose::STANDARD.decode(s).ok()
 }
 
-// Small unused-import suppressor for the Arc import that's only used on
-// feature-gated code paths.
-#[allow(dead_code)]
-fn _keep_arc_used() -> Option<Arc<()>> {
-    None
-}
 
 // ---------------------------------------------------------------------------
 // Download-side endpoints (task #46).

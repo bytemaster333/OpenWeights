@@ -39,7 +39,6 @@
 //! the gateway's multi-range serving is online.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use axum::{
     Json,
@@ -312,31 +311,6 @@ pub(crate) fn build_v2_response(
     }
 }
 
-/// Compute the BOUNDING (start, end_inclusive) covering every segment.
-/// Returns `None` if there are no segments (no URL needs minting).
-/// flip: no longer called by `build_v2_response` (superseded by
-/// `mint_v1_multi_range`). Retained as `#[allow(dead_code)]` so the prior
-/// inline unit tests (which pinned the approximation) keep passing
-///deleting them would shrink the baseline test count for no
-/// safety gain.
-#[allow(dead_code)]
-fn bounding_range(segments: &[(u64, u64)]) -> Option<(u64, u64)> {
-    if segments.is_empty() {
-        return None;
-    }
-    let mut min_start = u64::MAX;
-    let mut max_end = 0u64;
-    for &(s, e) in segments {
-        if s < min_start {
-            min_start = s;
-        }
-        if e > max_end {
-            max_end = e;
-        }
-    }
-    Some((min_start, max_end))
-}
-
 /// Per-term xorb span bundle — mirrors V1's `TermSpan` for V2's chunk-range
 /// reconstruction. Keeping it local (not `pub(crate)` on V1's type) so the
 /// two handlers stay decoupled for future evolution.
@@ -379,12 +353,6 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
-// Keep `Arc<dyn UrlMinter>` import alive for rustdoc + future seams. The
-// handler reaches through the `ReconstructionState` trait, but marker-level
-// usage here documents the signer dependency.
-#[allow(dead_code)]
-fn _doc_marker(_m: Arc<dyn UrlMinter>) {}
-
 #[cfg(test)]
 mod inline_tests {
     use super::*;
@@ -403,19 +371,6 @@ mod inline_tests {
         assert_eq!(resp.status(), StatusCode::NOT_IMPLEMENTED);
     }
 
-    #[test]
-    fn bounding_range_empty_is_none() {
-        assert!(bounding_range(&[]).is_none());
-    }
 
-    #[test]
-    fn bounding_range_covers_all_segments() {
-        let segs = [(10, 99), (200, 299), (5, 50)];
-        assert_eq!(bounding_range(&segs), Some((5, 299)));
-    }
 
-    #[test]
-    fn bounding_range_single_segment_identity() {
-        assert_eq!(bounding_range(&[(42, 99)]), Some((42, 99)));
-    }
 }

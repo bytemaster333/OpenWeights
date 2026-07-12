@@ -19,7 +19,6 @@ sia-mock = ["openweights-cas-storage/sia-mock"]
 [dependencies]
 axum               = { workspace = true }
 tokio              = { workspace = true }
-tower              = { workspace = true }
 tower-http         = { workspace = true }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -27,7 +26,6 @@ serde              = { workspace = true }
 anyhow             = { workspace = true }
 base64             = { workspace = true }
 envy               = { workspace = true }
-thiserror          = { workspace = true }
 sqlx               = { workspace = true }
 fred               = { workspace = true }
 sia_storage        = { workspace = true }
