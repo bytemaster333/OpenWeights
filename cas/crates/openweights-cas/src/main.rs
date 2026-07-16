@@ -142,6 +142,18 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Read a u8 erasure-coding shard-count env var. Unset -> `default`; set but
+/// unparseable -> hard error at startup (never a silent fallback to `default`).
+fn parse_shard_env(key: &str, default: u8) -> anyhow::Result<u8> {
+    match std::env::var(key) {
+        Err(_) => Ok(default),
+        Ok(s) => s
+            .trim()
+            .parse::<u8>()
+            .map_err(|_| anyhow!("{key}={s:?} is not a valid u8 shard count (0-255)")),
+    }
+}
+
 /// Build the Sia adapter for this process.
 /// Priority order:
 /// 1. `OPENWEIGHTS_SIA_MOCK=true` (dev only) → in-memory `MockSiaAdapter`. Only
@@ -196,14 +208,14 @@ async fn build_sia_adapter(
     // Redundancy from env. Demo deployments with few hosts must dial this
     // below the SDK default of 10+20=30 (e.g. 2+4 for a 6-host demo). Both
     // values must fit in u8 and total ≤ formed contracts.
-    let data_shards: u8 = std::env::var("OPENWEIGHTS_DATA_SHARDS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(10);
-    let parity_shards: u8 = std::env::var("OPENWEIGHTS_PARITY_SHARDS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(20);
+    // Distinguish "unset -> default" from "set but invalid -> fail fast". A
+    // silent fallback to the 30-host default on a typo'd value would surface far
+    // downstream as an opaque "not enough hosts" upload failure.
+    let data_shards = parse_shard_env("OPENWEIGHTS_DATA_SHARDS", 10)?;
+    let parity_shards = parse_shard_env("OPENWEIGHTS_PARITY_SHARDS", 20)?;
+    if data_shards == 0 {
+        anyhow::bail!("OPENWEIGHTS_DATA_SHARDS must be >= 1 (got 0)");
+    }
     tracing::info!(
         data_shards,
         parity_shards,
