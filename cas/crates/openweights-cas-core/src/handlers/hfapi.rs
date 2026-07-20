@@ -30,7 +30,6 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
@@ -50,9 +49,16 @@ type RepoCountsRow = (Option<i64>, Option<i64>, Option<i64>, Option<i64>);
 /// `(size, xet_hash, lfs_oid)` — a single resolved file row.
 type ResolveFileRow = (i64, Option<Vec<u8>>, Option<Vec<u8>>);
 
-/// Maximum inline LFS body size. Anything larger must go through the Xet
-/// path. Matches the 5 MiB CHECK on the `lfs_objects` table.
+/// Maximum inline LFS body size (500 MiB). Anything larger must go through the
+/// Xet path. Matches the CHECK on the `lfs_objects` table (migration 0011).
+/// Oversize bodies are rejected with 400 `lfs_object_too_large`.
 const MAX_LFS_INLINE_BYTES: usize = 500 * 1024 * 1024;
+
+/// Maximum commit ndjson body size. A commit may inline up to one
+/// MAX_LFS_INLINE_BYTES file as base64 (~1.33x on the wire) plus small
+/// metadata; cap at 1.5x + slack so a single max-inline commit still fits while
+/// an arbitrarily large body cannot be buffered into memory (DoS).
+const MAX_COMMIT_BYTES: usize = MAX_LFS_INLINE_BYTES + MAX_LFS_INLINE_BYTES / 2 + 65536;
 
 /// 15-minute TTL for write tokens. hf_xet uses the token across xorb+shard
 /// uploads for a single `hf upload` invocation; 15 min covers even slow
@@ -575,14 +581,11 @@ pub async fn lfs_upload<S: HfApiState>(
     Path(oid_hex): Path<String>,
     body: Body,
 ) -> Result<StatusCode, AppError> {
-    let bytes = body
-        .collect()
+    // Bound the read (DoS): stop once the body exceeds the inline cap instead
+    // of buffering an unbounded body into memory before the length check.
+    let bytes = axum::body::to_bytes(body, MAX_LFS_INLINE_BYTES)
         .await
-        .map_err(|_| AppError::BadRequest("invalid_body"))?
-        .to_bytes();
-    if bytes.len() > MAX_LFS_INLINE_BYTES {
-        return Err(AppError::BadRequest("lfs_object_too_large"));
-    }
+        .map_err(|_| AppError::BadRequest("lfs_object_too_large"))?;
 
     let expected = hex_decode(&oid_hex).ok_or(AppError::BadRequest("bad_oid"))?;
     let actual: [u8; 32] = Sha256::digest(&bytes).into();
@@ -803,13 +806,15 @@ pub async fn commit<S: HfApiState>(
     let repo_id = find_repo_id(st.pool(), &owner, &repo).await?;
     require_ownership(st.pool(), repo_id, ctx.user_id).await?;
 
-    let raw = body
-        .collect()
+    // Bound the read (DoS) — see MAX_COMMIT_BYTES.
+    let raw = axum::body::to_bytes(body, MAX_COMMIT_BYTES)
         .await
-        .map_err(|_| AppError::BadRequest("invalid_body"))?
-        .to_bytes();
+        .map_err(|_| AppError::BadRequest("commit_too_large"))?;
 
-    tracing::info!(ndjson = %String::from_utf8_lossy(&raw), "commit ndjson payload");
+    // Do NOT log the raw payload: it contains base64-inlined file bytes (data
+    // exposure + log bloat). Log only the size; parsed file paths are logged
+    // after the parse loop.
+    tracing::debug!(bytes = raw.len(), "commit ndjson received");
     let mut header = CommitHeader::default();
     let mut files: Vec<CommitFile> = Vec::new();
     for line in raw.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
