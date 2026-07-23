@@ -29,7 +29,7 @@ import {
  * subsequent `onOpenChange(false)` events propagate normally.
  *
  * Do NOT add "reveal" / "hide" toggles, "regenerate" buttons, or any
- * persistence knob. The anti-features list (notes.md + CONSOLE spec) is
+ * persistence knob. The anti-features list (console spec) is
  * explicit: this is a one-shot display.
  */
 export type OneTimeKeyModalProps = {

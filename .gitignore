@@ -4,16 +4,9 @@
 !.env.example
 ops/indexd.yml
 
-# planning / scratch
+# planning / scratch (the *.md docs are covered by the **/*.md rule below)
 .planning/
 custom-test/
-PROJECT.md
-REQUIREMENTS.md
-ROADMAP.md
-STATE.md
-notes.md
-devs-sia-storage.md
-project.md
 
 # all markdown docs except root readme
 **/*.md
@@ -59,3 +52,16 @@ docs-site/.astro/
 ops/data/
 .cache/
 settings.local.json
+
+# scratch / working files
+scratch/
+scratchpad/
+*.bak
+*.orig
+*.rej
+*.local
+
+# progress reports & research notes (keep out of the public repo)
+/m1_progress_report.md
+/research/
+/notes/
