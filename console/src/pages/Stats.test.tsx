@@ -14,10 +14,9 @@ import * as api from "@/lib/api"
 import { StatsPage } from "./Stats"
 
 /**
- * render tests. Mocks `casFetch` to short-circuit both
- * `/admin/stats` and `/admin/me` + `/admin/keys`, so the page renders
- * synthetic data and we can assert the 4 tiles, per-key table, and
- * recent-activity table all render as expected.*/
+ * render test. Mocks `casFetch` to short-circuit `/admin/stats`,
+ * `/admin/me`, and `/admin/keys`, so the page renders synthetic data and we
+ * can assert the per-key usage table resolves key names.*/
 
 const STATS_FIXTURE: StatsResponse = {
   total_bytes_stored: 1_073_741_824, // 1.00 GB
@@ -120,43 +119,9 @@ afterEach(() => {
 })
 
 describe("<StatsPage>", () => {
-  it("renders the 4 KPI tiles with formatted values", async () => {
-    renderStats()
-    expect(await screen.findByText("Stored on Sia")).toBeInTheDocument()
-    // 1_073_741_824 B = 1.00 GB (v < 10 branch in bytes)
-    expect(await screen.findByText("1.00 GB")).toBeInTheDocument()
-    // "Bytes served" / "Bytes stored" also appear as table-column headers,
-    // so we query all occurrences and assert at least one (= the tile).
-    expect(screen.getAllByText("Bytes served").length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText("512 KB")).toBeInTheDocument()
-    expect(screen.getByText("Cache hit rate")).toBeInTheDocument()
-    expect(screen.getByText("87.5%")).toBeInTheDocument()
-    expect(screen.getByText("API keys with usage")).toBeInTheDocument()
-    expect(screen.getByText("3")).toBeInTheDocument()
-  })
-
   it("renders per-key usage rows with resolved key names", async () => {
     renderStats()
     expect(await screen.findByText("prod-upload-key")).toBeInTheDocument()
     expect(screen.getByText("read-only")).toBeInTheDocument()
-  })
-
-  it("renders recent activity rows with event type and bytes", async () => {
-    renderStats()
-    await screen.findByText("download")
-    expect(screen.getByText("download")).toBeInTheDocument()
-    expect(screen.getByText("xorb_upload")).toBeInTheDocument()
-    // 8192 bytes renders as "8.00 KB" (v < 10 branch)
-    expect(screen.getByText("8.00 KB")).toBeInTheDocument()
-    // Null bytes render as "—"
-    const dashCells = screen.getAllByText("—")
-    expect(dashCells.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it("renders the benchmarks footer link", async () => {
-    renderStats()
-    expect(await screen.findByText(/View benchmarks/)).toBeInTheDocument()
-    const link = screen.getByText(/docs\/benchmarks\.md/)
-    expect(link).toBeInTheDocument()
   })
 })

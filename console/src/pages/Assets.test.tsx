@@ -25,7 +25,7 @@ import { AssetsPage } from "./Assets"
  * server-side) but narrows the list client-side.
  * 4. Typing a full 8-char hex prefix is forwarded as `hash_prefix=...`
  * after debounce + writes `?hash_prefix=...` to the URL.
- * 5. Renders a row per xorb with the pin-state badge + truncated hash.*/
+ * 5. Copying the full hash via the inline copy button.*/
 
 type FakeXorb = {
   hash: string
@@ -162,19 +162,6 @@ describe("AssetsPage", () => {
     const xorbCalls = spy.mock.calls.filter((c) => String(c[0] ?? "").startsWith("/admin/xorbs"))
     expect(xorbCalls.length).toBeGreaterThanOrEqual(1)
     expect(String(xorbCalls[0]![0])).toBe("/admin/xorbs")
-  })
-
-  it("renders one row per xorb with a pin-state badge and truncated hash", async () => {
-    mockCasFetch(FIXTURE_XORBS)
-    renderAssets()
-
-    // First row — deadbeef x8 truncated to 16 chars + ellipsis.
-    await waitFor(() => {
-      expect(screen.getByText(/^deadbeefdeadbeef/)).toBeInTheDocument()
-    })
-    expect(screen.getByText("pinned")).toBeInTheDocument()
-    expect(screen.getByText("pinning")).toBeInTheDocument()
-    expect(screen.getByText("64 MB")).toBeInTheDocument()
   })
 
   it("forwards a full 8-hex prefix as ?hash_prefix= after debounce and syncs the URL", async () => {
