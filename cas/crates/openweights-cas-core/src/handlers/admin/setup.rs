@@ -232,7 +232,7 @@ pub async fn platform_sia<S: SetupState>(
         .send()
         .await
         .ok()
-        .and_then(|r| if r.status().is_success() { Some(r) } else { None });
+        .filter(|r| r.status().is_success());
     let wallet_json: Option<serde_json::Value> = match wallet {
         Some(r) => r.json().await.ok(),
         None => None,
@@ -245,7 +245,7 @@ pub async fn platform_sia<S: SetupState>(
         .send()
         .await
         .ok()
-        .and_then(|r| if r.status().is_success() { Some(r) } else { None });
+        .filter(|r| r.status().is_success());
     let contracts_json: Vec<serde_json::Value> = match contracts {
         Some(r) => r.json().await.unwrap_or_default(),
         None => Vec::new(),
