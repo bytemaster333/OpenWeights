@@ -27,6 +27,7 @@ pub struct MockSiaAdapter {
     pin_calls: AtomicUsize,
     download_calls: AtomicUsize,
     inject_fail: AtomicBool,
+    inject_perm: AtomicBool,
 }
 
 impl MockSiaAdapter {
@@ -37,6 +38,7 @@ impl MockSiaAdapter {
             pin_calls: AtomicUsize::new(0),
             download_calls: AtomicUsize::new(0),
             inject_fail: AtomicBool::new(false),
+            inject_perm: AtomicBool::new(false),
         }
     }
 
@@ -44,6 +46,14 @@ impl MockSiaAdapter {
     /// `sia_unavailable → 503` test.
     pub fn inject_unavailable(&self, on: bool) {
         self.inject_fail.store(on, Ordering::SeqCst);
+    }
+
+    /// flip the "every call returns a permanent (non-transient) error" switch.
+    /// unlike `inject_unavailable`, a permanent `Other` DOES count toward the
+    /// reconciler's orphan cap. the sweep tests use this to drive the orphan
+    /// path without a live sia backend.
+    pub fn inject_permanent(&self, on: bool) {
+        self.inject_perm.store(on, Ordering::SeqCst);
     }
 
     pub fn upload_call_count(&self) -> usize {
@@ -59,6 +69,13 @@ impl MockSiaAdapter {
     }
 
     fn fail_if_injected(&self) -> Result<(), SiaAdapterError> {
+        // permanent is checked first: it maps to `Other`, which the reconciler
+        // counts toward the orphan cap. transient `Unavailable` never does.
+        if self.inject_perm.load(Ordering::SeqCst) {
+            return Err(SiaAdapterError::Other(anyhow::anyhow!(
+                "mock: injected permanent failure"
+            )));
+        }
         if self.inject_fail.load(Ordering::SeqCst) {
             return Err(SiaAdapterError::Unavailable(Box::new(MockUnavailable)));
         }
