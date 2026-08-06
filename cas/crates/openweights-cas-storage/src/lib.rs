@@ -14,3 +14,7 @@ pub use sia::{SiaAdapter, SiaAdapterError};
 
 #[cfg(any(test, feature = "sia-mock"))]
 pub mod mock;
+
+// db-backed reconciler sweep tests (testcontainers postgres + MockSiaAdapter).
+#[cfg(test)]
+mod reconciler_db_tests;

@@ -1,17 +1,13 @@
-//! Task 5 — reconciler boundary tests (Postgres-free).
-//! The full DB-backed reconciler sweep tests (reconcile_once against seeded
-//! xorbs/shards rows) live in 's conformance crate where
-//! testcontainers Postgres is already wired. This file asserts the
-//! boundary-layer invariants that do NOT need a live database:
-//! * The `ReconcilerMetrics` trait contract is honored by the real
+//! reconciler boundary tests (postgres-free).
+//! the full db-backed sweep tests (reconcile_once against seeded xorbs/shards
+//! rows) now live in openweights-cas-storage/src/reconciler_db_tests.rs, which
+//! wires a throwaway testcontainers postgres. this file keeps the boundary-layer
+//! invariants that do NOT need a live database:
+//! * the `ReconcilerMetrics` trait contract is honored by the real
 //!   `Metrics` struct (each method bumps the expected series exactly once).
-//! * The `NoopMetrics` helper in the storage crate is a true no-op.
-//! * The `MAX_PIN_ATTEMPTS` / `RECONCILER_TICK` / `STUCK_THRESHOLD`
-//!   constants match the policy (so a silent change would trip a
-//!   review).
-//!   When lands, it adds the five DB-backed tests from the plan
-//!   (pinning→pinned, orphaned-after-5, skip-recent, idempotent double-run,
-//!   shard mirror).
+//! * the `NoopMetrics` helper in the storage crate is a true no-op.
+//! * the `MAX_PIN_ATTEMPTS` / `RECONCILER_TICK` / `STUCK_THRESHOLD`
+//!   constants match policy (so a silent change trips a review).
 
 use std::sync::Arc;
 
