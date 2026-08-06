@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# note: a console (ts) job is intentionally omitted for now. the console
+# currently has pre-existing biome + vitest failures unrelated to this workflow;
+# add the job once those are fixed.
+jobs:
+  cas:
+    name: openweights-cas (rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cas
+    steps:
+      - uses: actions/checkout@v4
+      # pinned to the toolchain the workspace was verified against so clippy is
+      # deterministic across runs.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cas
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        # the reconciler sweep tests bring up a throwaway postgres via
+        # testcontainers; docker is preinstalled on ubuntu runners.
+        run: cargo test --workspace
+
+  gateway:
+    name: openweights-gateway (go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: gateway/go.sum
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./...
