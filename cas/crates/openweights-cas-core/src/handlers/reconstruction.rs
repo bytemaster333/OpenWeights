@@ -147,9 +147,14 @@ pub async fn query_reconstruction_v1<S>(
 where
     S: ReconstructionState,
 {
-    // (1) Parse hex → MerkleHash — (NEVER hand-roll hex).
-    let file_id = MerkleHash::from_hex(&file_id_hex)
-        .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
+    // (1) Decode the file_id. The per-file xet hash is stored (by the shard
+    // parser) and requested (by hf_xet, and by /xet/files) as a STRAIGHT hex
+    // string — its raw bytes are what the client sends, NOT the byte-reversed
+    // MerkleHash codec used for xorb hashes on the gateway URL path. Decoding
+    // it via MerkleHash::from_hex here silently reversed the bytes and never
+    // matched the stored reconstruction_files.file_id (404 on every download).
+    let file_id_bytes = decode_file_id_hex(&file_id_hex)
+        .ok_or(AppError::BadRequest("invalid_file_id"))?;
 
     // (2) Rate-limit (download class).
     crate::rate_limit::check(
@@ -163,7 +168,6 @@ where
     // (3) DB fetch — zero Sia I/O. Pinned-only JOIN filter excludes
     // non-pinned xorbs; if every term's xorb is non-pinned, this returns
     // None → 404.
-    let file_id_bytes: [u8; 32] = file_id.into();
     let row = recon_q::get_reconstruction(st.pool(), &file_id_bytes)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -198,11 +202,13 @@ where
     let mut file_ids: Vec<[u8; 32]> = Vec::with_capacity(params.file_id.len());
     let mut hex_for_id: BTreeMap<[u8; 32], String> = BTreeMap::new();
     for fid_hex in &params.file_id {
-        let h = MerkleHash::from_hex(fid_hex)
-            .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
-        let bytes: [u8; 32] = h.into();
+        // Straight hex decode — see query_reconstruction_v1 for why file_id is
+        // NOT the byte-reversed MerkleHash codec. The response is keyed by the
+        // exact hex the client sent.
+        let bytes = decode_file_id_hex(fid_hex)
+            .ok_or(AppError::BadRequest("invalid_file_id"))?;
         file_ids.push(bytes);
-        hex_for_id.insert(bytes, h.hex());
+        hex_for_id.insert(bytes, fid_hex.clone());
     }
 
     // (2) Rate-limit (once per batch request, not per file_id — aligns with
@@ -389,9 +395,55 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
+/// Straight lowercase-hex decode of a 64-char per-file xet hash into its 32
+/// raw bytes. This is intentionally NOT `MerkleHash::from_hex`: the xet file_id
+/// is stored + transmitted as a plain hex string (the shard parser's raw bytes,
+/// and what hf_xet / `/xet/files` use), whereas `MerkleHash`'s codec reverses
+/// each 8-byte group — that codec is only for the xorb hashes that appear on
+/// the gateway URL path. Returns None on wrong length or a non-hex character.
+pub(crate) fn decode_file_id_hex(s: &str) -> Option<[u8; 32]> {
+    if s.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, pair) in s.as_bytes().chunks_exact(2).enumerate() {
+        let hi = (pair[0] as char).to_digit(16)?;
+        let lo = (pair[1] as char).to_digit(16)?;
+        out[i] = (hi * 16 + lo) as u8;
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod inline_tests {
     use super::*;
+
+    #[test]
+    fn decode_file_id_hex_is_straight_not_reversed() {
+        // The per-file xet hash is a plain hex string: straight decode, byte i
+        // is the i-th hex pair. Explicitly NOT the byte-reversed MerkleHash
+        // codec (which caused every /v1/reconstructions to 404).
+        let hex = "a031f461cfcb19630bdb71fc2a29f7d4922caac7c02bb608d307bb6231065508";
+        let bytes = decode_file_id_hex(hex).expect("valid 64-hex");
+        assert_eq!(bytes[0], 0xa0);
+        assert_eq!(bytes[1], 0x31);
+        assert_eq!(bytes[31], 0x08);
+        // Straight round-trip: re-encoding the raw bytes reproduces the input.
+        let round: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(round, hex);
+        // And it diverges from the reversed MerkleHash codec (proving the two
+        // are genuinely different and the bug was real).
+        let reversed: [u8; 32] = MerkleHash::from_hex(hex).unwrap().into();
+        assert_ne!(bytes, reversed, "file_id decode must not reverse bytes");
+    }
+
+    #[test]
+    fn decode_file_id_hex_rejects_bad_input() {
+        assert!(decode_file_id_hex("").is_none());
+        assert!(decode_file_id_hex("ab").is_none()); // too short
+        assert!(decode_file_id_hex(&"a".repeat(63)).is_none()); // odd/short
+        assert!(decode_file_id_hex(&"z".repeat(64)).is_none()); // non-hex
+    }
 
     #[test]
     fn wire_types_round_trip_serde_json() {

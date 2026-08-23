@@ -57,7 +57,7 @@ use crate::auth::AuthScoped;
 use crate::coalesce;
 use crate::errors::AppError;
 use crate::handlers::reconstruction::{
-    ChunkRange, ReconstructionState, ReconstructionTerm, UrlRange,
+    ChunkRange, ReconstructionState, ReconstructionTerm, UrlRange, decode_file_id_hex,
 };
 use crate::rate_limit::RateLimitClass;
 use crate::scopes::SCOPE_DOWNLOAD;
@@ -160,15 +160,15 @@ where
         return Ok(v2_flag_off_response());
     }
 
-    // (3) Parse hex → MerkleHash ( — NEVER hand-roll hex). A malformed hex
-    // on this path now returns 400 (already past auth + rate-limit); the
-    // 501 flag-off branch above never reaches this parse.
-    let file_id = MerkleHash::from_hex(&file_id_hex)
-        .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
+    // (3) Decode the file_id via straight hex (see query_reconstruction_v1:
+    // the file_id is a plain hex string, not the byte-reversed MerkleHash codec
+    // used for xorb hashes). A malformed hex here returns 400 (already past
+    // auth + rate-limit); the 501 flag-off branch above never reaches this.
+    let file_id_bytes = decode_file_id_hex(&file_id_hex)
+        .ok_or(AppError::BadRequest("invalid_file_id"))?;
 
     // (4) DB fetch — zero Sia I/O. Pinned-only JOIN filter excludes
     // non-pinned xorbs → 404 on any non-pinned reference.
-    let file_id_bytes: [u8; 32] = file_id.into();
     let row = recon_q::get_reconstruction(st.pool(), &file_id_bytes)
         .await?
         .ok_or(AppError::NotFound)?;

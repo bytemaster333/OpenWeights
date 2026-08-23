@@ -1856,7 +1856,39 @@ pub async fn resolve_head<S: HfApiState>(
         info.commit_sha.parse().unwrap(),
     );
     h.insert("x-linked-etag", oid_header.parse().unwrap());
+    // Xet files: advertise the reconstruction path so hf_xet downloads via
+    // /v1/reconstructions -> gateway -> Sia (not the /xet/files Postgres
+    // fallback). Non-Xet (LFS) files carry no Xet headers and take the 302.
+    if let ResolvedBackend::Xet(_) = &info.backend {
+        insert_xet_resolve_headers(&mut h, &st, &owner, &repo, &revision, &info.oid_hex);
+    }
     Ok((StatusCode::OK, h).into_response())
+}
+
+/// Add the two headers hf_xet's `parse_xet_file_data_from_response` looks for:
+/// `X-Xet-Hash` (the per-file Xet hash = reconstruction `file_id`) and
+/// `X-Xet-Refresh-Route` (the URL hf_xet GETs for connection info — our
+/// existing `xet-read-token` endpoint, which returns `X-Xet-Cas-Url` +
+/// `X-Xet-Access-Token` + `X-Xet-Token-Expiration`). With these present hf_xet
+/// takes the reconstruction download path; absent, it falls back to a plain
+/// resolve GET.
+fn insert_xet_resolve_headers<S: HfApiState>(
+    h: &mut HeaderMap,
+    st: &S,
+    owner: &str,
+    repo: &str,
+    revision: &str,
+    xet_hash_hex: &str,
+) {
+    if let Ok(v) = xet_hash_hex.parse() {
+        h.insert("X-Xet-Hash", v);
+    }
+    let base = st.cas_public_url();
+    let base = base.trim_end_matches('/');
+    let route = format!("{base}/api/models/{owner}/{repo}/xet-read-token/{revision}");
+    if let Ok(v) = route.parse() {
+        h.insert("X-Xet-Refresh-Route", v);
+    }
 }
 
 pub async fn resolve_get<S: HfApiState>(
@@ -1884,6 +1916,12 @@ pub async fn resolve_get<S: HfApiState>(
         "x-linked-etag",
         format!("sha256:{}", info.oid_hex).parse().unwrap(),
     );
+    // Xet files: advertise reconstruction here too, so a client that reads
+    // headers off the GET (rather than the HEAD) still takes the Xet path.
+    // The 302 Location stays as the /xet/files fallback for non-Xet clients.
+    if let ResolvedBackend::Xet(_) = &info.backend {
+        insert_xet_resolve_headers(&mut h, &st, &owner, &repo, &revision, &info.oid_hex);
+    }
     Ok((StatusCode::FOUND, h).into_response())
 }
 
