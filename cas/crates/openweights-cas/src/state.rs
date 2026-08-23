@@ -182,6 +182,9 @@ impl HfApiState for AppState {
     fn cas_public_url(&self) -> &str {
         &self.cfg.cas_public_url
     }
+    fn sia(&self) -> Arc<dyn SiaAdapter> {
+        self.sia.clone()
+    }
 }
 
 impl GithubOAuthState for AppState {

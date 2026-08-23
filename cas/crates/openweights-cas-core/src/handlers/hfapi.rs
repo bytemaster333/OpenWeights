@@ -34,6 +34,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 
+use std::sync::Arc;
+
+use openweights_cas_storage::SiaAdapter;
+
 use crate::auth::{AuthContext, AuthScoped, AuthStateRef};
 use crate::errors::AppError;
 use crate::scopes::{SCOPE_DOWNLOAD, SCOPE_UPLOAD};
@@ -78,6 +82,13 @@ pub trait HfApiState: AuthStateRef {
     /// Client-reachable CAS URL stamped into xet-write-token / read-token
     /// responses. Matches `cas_public_url` in `Config`.
     fn cas_public_url(&self) -> &str;
+
+    /// The Sia adapter, so the download path (`/xet/files`) can reconstruct a
+    /// file by reading its xorbs back FROM SIA (the Rust SDK decrypts objects it
+    /// wrote). This is the read path that actually exercises Sia; the Go gateway
+    /// cannot decrypt Rust-written objects (SDK version skew), so on real Sia the
+    /// CAS serves reads itself.
+    fn sia(&self) -> Arc<dyn SiaAdapter>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1859,10 +1870,24 @@ pub async fn resolve_head<S: HfApiState>(
     // Xet files: advertise the reconstruction path so hf_xet downloads via
     // /v1/reconstructions -> gateway -> Sia (not the /xet/files Postgres
     // fallback). Non-Xet (LFS) files carry no Xet headers and take the 302.
-    if let ResolvedBackend::Xet(_) = &info.backend {
-        insert_xet_resolve_headers(&mut h, &st, &owner, &repo, &revision, &info.oid_hex);
+    if gateway_reads_enabled() {
+        if let ResolvedBackend::Xet(_) = &info.backend {
+            insert_xet_resolve_headers(&mut h, &st, &owner, &repo, &revision, &info.oid_hex);
+        }
     }
     Ok((StatusCode::OK, h).into_response())
+}
+
+/// Whether to advertise the Xet reconstruction path on `resolve` responses so
+/// hf_xet downloads via `/v1/reconstructions` -> the Go gateway (option A).
+/// Default OFF: the gateway's `siastorage v0.0.3` cannot decrypt objects the
+/// Rust CAS (`sia_storage 0.7.0`) wrote (SDK version skew), so downloads instead
+/// take the `resolve` -> `/xet/files` path where the CAS reconstructs from Sia
+/// with the Rust SDK. Set `OPENWEIGHTS_GATEWAY_READS=true` to re-enable the
+/// gateway read path once the Go and Rust Sia SDKs reach object-encryption
+/// parity.
+fn gateway_reads_enabled() -> bool {
+    std::env::var("OPENWEIGHTS_GATEWAY_READS").as_deref() == Ok("true")
 }
 
 /// Add the two headers hf_xet's `parse_xet_file_data_from_response` looks for:
@@ -1919,8 +1944,10 @@ pub async fn resolve_get<S: HfApiState>(
     // Xet files: advertise reconstruction here too, so a client that reads
     // headers off the GET (rather than the HEAD) still takes the Xet path.
     // The 302 Location stays as the /xet/files fallback for non-Xet clients.
-    if let ResolvedBackend::Xet(_) = &info.backend {
-        insert_xet_resolve_headers(&mut h, &st, &owner, &repo, &revision, &info.oid_hex);
+    if gateway_reads_enabled() {
+        if let ResolvedBackend::Xet(_) = &info.backend {
+            insert_xet_resolve_headers(&mut h, &st, &owner, &repo, &revision, &info.oid_hex);
+        }
     }
     Ok((StatusCode::FOUND, h).into_response())
 }
@@ -2096,13 +2123,26 @@ pub async fn xet_file_serve<S: HfApiState>(
     let mut out: Vec<u8> = Vec::with_capacity(total_size as usize);
     let mut sink = Vec::<u8>::new();
     for (xorb_hash, chunk_start, chunk_end) in &term_rows {
-        let xorb_row: Option<(Vec<u8>,)> = sqlx::query_as(
-            "SELECT content FROM xorb_bodies WHERE xorb_hash = $1",
+        // Read the xorb back FROM SIA. Look up its pinned Sia object id + size,
+        // then download+decrypt via the Rust SDK (which can decrypt objects it
+        // wrote — unlike the Go gateway). This is what makes the read path
+        // genuinely Sia-backed. A xorb that is not yet pinned surfaces as 404.
+        let meta: Option<(Option<Vec<u8>>, i64)> = sqlx::query_as(
+            "SELECT sia_object_id, size_bytes FROM xorbs \
+             WHERE xorb_merkle_hash = $1 AND pin_state = 'pinned'",
         )
         .bind(&xorb_hash[..])
         .fetch_optional(st.pool())
         .await?;
-        let body = xorb_row.ok_or(AppError::NotFound)?.0;
+        let (sia_id, size) = match meta {
+            Some((Some(id), size)) => (id, size),
+            _ => return Err(AppError::NotFound),
+        };
+        let body = st
+            .sia()
+            .download_range(&sia_id, 0, size as u64)
+            .await
+            .map_err(|e| AppError::Other(anyhow::anyhow!("sia read xorb: {e}")))?;
 
         let mut cur = Cursor::new(body.as_slice());
         let total = body.len() as u64;
