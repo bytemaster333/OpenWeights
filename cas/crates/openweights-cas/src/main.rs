@@ -31,7 +31,11 @@ async fn main() {
     };
 
     if let Err(e) = run(cfg).await {
-        tracing::error!(err = %e, "fatal runtime error");
+        // `{:#}` prints the full anyhow context chain on one line (e.g.
+        // "sia adapter init: sia_storage Builder handshake failed: <root>"),
+        // otherwise a boot failure only shows the outermost context and is
+        // undiagnosable from logs.
+        tracing::error!(err = %format!("{e:#}"), "fatal runtime error");
         std::process::exit(1);
     }
 }
