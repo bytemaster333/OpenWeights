@@ -137,7 +137,7 @@ export type BenchmarkRow = {
 
 export type BenchmarksResponse = {
   /** ISO-8601 timestamp of the Phase 5 bench run that produced the row set,
- * or `null` if the file is still the v1 placeholder. */
+   * or `null` if the file is still the v1 placeholder. */
   generated_at: string | null
   rows: BenchmarkRow[]
 }

@@ -29,7 +29,10 @@ import { formatBytes } from "@/lib/format"
 type PinMeta = {
   label: string
   variant: "default" | "secondary" | "destructive" | "outline"
-  Icon: React.ComponentType<{ size?: number; weight?: "regular" | "bold" | "fill" | "light" | "thin" | "duotone" }>
+  Icon: React.ComponentType<{
+    size?: number
+    weight?: "regular" | "bold" | "fill" | "light" | "thin" | "duotone"
+  }>
   summary: string
   detail: string
 }
@@ -135,7 +138,10 @@ export function AssetDetailPage() {
       )}
 
       {!isPending && (error || !data) && (
-        <div data-testid="asset-detail-not-found" className="rounded border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+        <div
+          data-testid="asset-detail-not-found"
+          className="rounded border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+        >
           No xorb found for hash <code className="font-mono">{hash}</code>.
           {error ? ` (${error.message})` : null}
         </div>
@@ -164,10 +170,7 @@ function AssetDetailBody({
           Xorb
         </div>
         <div className="flex flex-wrap items-start gap-2">
-          <h1
-            className="break-all font-mono text-lg leading-snug"
-            data-testid="asset-detail-hash"
-          >
+          <h1 className="break-all font-mono text-lg leading-snug" data-testid="asset-detail-hash">
             {x.hash}
           </h1>
           <CopyInline value={x.hash} label="hash" />
@@ -188,9 +191,7 @@ function AssetDetailBody({
             x.uploader_key_id === "00000000-0000-0000-0000-000000000000" ? (
               <span className="text-xs text-muted-foreground">—</span>
             ) : (
-              <code className="font-mono text-xs break-all">
-                {x.uploader_key_id.slice(0, 13)}…
-              </code>
+              <code className="font-mono text-xs break-all">{x.uploader_key_id.slice(0, 13)}…</code>
             )
           }
         />
@@ -234,8 +235,7 @@ function AssetDetailBody({
               <div className="space-y-2 border-t pt-3">
                 <div className="text-xs text-muted-foreground">
                   Deployment Sia footprint — {sia.contract_count} contracts ·{" "}
-                  {sia.distinct_host_count} hosts (any of these may hold this
-                  xorb&apos;s shards)
+                  {sia.distinct_host_count} hosts (any of these may hold this xorb&apos;s shards)
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {sia.wallet_address && (
@@ -318,9 +318,7 @@ function InfoCard({
 }) {
   return (
     <div className="rounded border bg-muted/10 p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm">{value}</div>
     </div>
   )

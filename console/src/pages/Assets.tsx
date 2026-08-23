@@ -56,7 +56,10 @@ const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
 type PinMeta = {
   label: string
-  icon: React.ComponentType<{ size?: number; weight?: "regular" | "bold" | "fill" | "light" | "thin" | "duotone" }>
+  icon: React.ComponentType<{
+    size?: number
+    weight?: "regular" | "bold" | "fill" | "light" | "thin" | "duotone"
+  }>
   variant: "default" | "secondary" | "destructive" | "outline"
   hint: string
 }
@@ -154,12 +157,12 @@ function SummaryStrip({ xorbs }: { xorbs: Xorb[] }) {
     { label: "Bytes", value: formatBytes(totalBytes), hint: "uploaded" },
     {
       label: "Sia-pinned",
-      value: (byState["pinned"] ?? 0).toString(),
+      value: (byState.pinned ?? 0).toString(),
       hint: "on hosts",
     },
     {
       label: "Pending / orphaned",
-      value: ((byState["pinning"] ?? 0) + (byState["orphaned"] ?? 0)).toString(),
+      value: ((byState.pinning ?? 0) + (byState.orphaned ?? 0)).toString(),
       hint: "awaiting hosts",
     },
   ]
@@ -168,9 +171,7 @@ function SummaryStrip({ xorbs }: { xorbs: Xorb[] }) {
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((c) => (
         <div key={c.label} className="rounded border bg-muted/10 p-4">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-            {c.label}
-          </div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">{c.label}</div>
           <div className="mt-1 text-2xl font-semibold">{c.value}</div>
           <div className="mt-0.5 text-xs text-muted-foreground">{c.hint}</div>
         </div>
@@ -365,10 +366,7 @@ export function AssetsPage() {
                     </TableCell>
                     <TableCell>{formatBytes(x.size_bytes)}</TableCell>
                     <TableCell>
-                      <span
-                        className="inline-flex items-center gap-1.5"
-                        title={pm.hint}
-                      >
+                      <span className="inline-flex items-center gap-1.5" title={pm.hint}>
                         <Icon size={14} weight="light" />
                         <Badge variant={pm.variant}>{pm.label}</Badge>
                         {x.pin_state === "pinned" && sia?.wallet_address && (

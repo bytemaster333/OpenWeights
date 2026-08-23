@@ -1,5 +1,3 @@
-import { Link, useParams } from "@tanstack/react-router"
-import { useState } from "react"
 import {
   ArrowSquareOutIcon,
   BroadcastIcon,
@@ -10,6 +8,8 @@ import {
   HashIcon,
   TerminalIcon,
 } from "@phosphor-icons/react"
+import { Link, useParams } from "@tanstack/react-router"
+import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -114,11 +114,7 @@ export function ModelDetailPage() {
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
-            <Link
-              to="/models"
-              search={{}}
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <Link to="/models" search={{}} className="text-muted-foreground hover:text-foreground">
               {info.author}
             </Link>
             <span className="text-muted-foreground"> / </span>
@@ -160,10 +156,7 @@ export function ModelDetailPage() {
                 README.md
               </h2>
               <div className="readme-prose font-sans text-sm leading-7 text-foreground/90">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {stripFrontmatter(readme)}
                 </ReactMarkdown>
               </div>
@@ -193,8 +186,7 @@ export function ModelDetailPage() {
 
           <SidebarCard title="Storage">
             <p className="text-xs text-muted-foreground">
-              Weights on Sia, served via a Xet-compatible CAS. No huggingface.co
-              round-trip.
+              Weights on Sia, served via a Xet-compatible CAS. No huggingface.co round-trip.
             </p>
           </SidebarCard>
         </aside>
@@ -299,10 +291,8 @@ function ObjectsSection({ owner, repo }: { owner: string; repo: string }) {
               {totals.pinned}/{totals.count}
             </span>{" "}
             pinned ·{" "}
-            <span className="font-mono text-foreground">
-              {formatBytes(totals.pinnedSize)}
-            </span>{" "}
-            on Sia
+            <span className="font-mono text-foreground">{formatBytes(totals.pinnedSize)}</span> on
+            Sia
           </span>
         )}
       </div>
@@ -357,14 +347,9 @@ function ObjectsSection({ owner, repo }: { owner: string; repo: string }) {
                   </TableCell>
                   <TableCell className="text-xs">
                     {o.files.length === 1 ? (
-                      <code className="font-mono text-muted-foreground">
-                        {o.files[0]}
-                      </code>
+                      <code className="font-mono text-muted-foreground">{o.files[0]}</code>
                     ) : (
-                      <span
-                        className="text-muted-foreground"
-                        title={o.files.join("\n")}
-                      >
+                      <span className="text-muted-foreground" title={o.files.join("\n")}>
                         {o.files.length} files
                       </span>
                     )}
@@ -442,11 +427,7 @@ function FilesSection({
                   {formatBytes(s.size)}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
-                  {s.blobId ? (
-                    <CopyableHash value={s.blobId} />
-                  ) : (
-                    "—"
-                  )}
+                  {s.blobId ? <CopyableHash value={s.blobId} /> : "—"}
                 </TableCell>
                 <TableCell className="text-right">
                   <a
@@ -475,6 +456,7 @@ function CopyableHash({ value }: { value: string }) {
   const short = value.length > 12 ? `${value.slice(0, 12)}…` : value
   return (
     <button
+      type="button"
       onClick={async () => {
         await navigator.clipboard.writeText(value)
         setCopied(true)
@@ -568,11 +550,7 @@ function DownloadsCard({
           <span>Last 14 days</span>
           {hasAny && <span>peak {peak}</span>}
         </div>
-        {isLoading ? (
-          <Skeleton className="h-[48px] w-full" />
-        ) : (
-          <Sparkline data={trend ?? []} />
-        )}
+        {isLoading ? <Skeleton className="h-[48px] w-full" /> : <Sparkline data={trend ?? []} />}
       </div>
     </div>
   )
@@ -609,6 +587,7 @@ function Sparkline({ data }: { data: { day: string; count: number }[] }) {
       className="w-full"
       style={{ height: H }}
     >
+      <title>Downloads over the last 14 days</title>
       <path d={areaPath} fill="currentColor" fillOpacity={0.12} />
       <polyline
         points={points}
@@ -683,13 +662,9 @@ const markdownComponents = {
     </h3>
   ),
   h4: ({ children }: { children?: React.ReactNode }) => (
-    <h4 className="mb-2 mt-4 font-heading text-sm font-semibold tracking-tight">
-      {children}
-    </h4>
+    <h4 className="mb-2 mt-4 font-heading text-sm font-semibold tracking-tight">{children}</h4>
   ),
-  p: ({ children }: { children?: React.ReactNode }) => (
-    <p className="mb-4 leading-7">{children}</p>
-  ),
+  p: ({ children }: { children?: React.ReactNode }) => <p className="mb-4 leading-7">{children}</p>,
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
     <a
       href={href}
@@ -706,14 +681,10 @@ const markdownComponents = {
   ol: ({ children }: { children?: React.ReactNode }) => (
     <ol className="mb-4 list-decimal space-y-1.5 pl-6 leading-7">{children}</ol>
   ),
-  li: ({ children }: { children?: React.ReactNode }) => (
-    <li className="pl-1">{children}</li>
-  ),
+  li: ({ children }: { children?: React.ReactNode }) => <li className="pl-1">{children}</li>,
   code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) =>
     inline ? (
-      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
-        {children}
-      </code>
+      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>
     ) : (
       <code className="block font-mono text-xs leading-relaxed">{children}</code>
     ),
@@ -737,20 +708,13 @@ const markdownComponents = {
     <thead className="bg-muted/40">{children}</thead>
   ),
   th: ({ children }: { children?: React.ReactNode }) => (
-    <th className="border-b border-border px-3 py-2 text-left font-semibold">
-      {children}
-    </th>
+    <th className="border-b border-border px-3 py-2 text-left font-semibold">{children}</th>
   ),
   td: ({ children }: { children?: React.ReactNode }) => (
     <td className="border-b border-border/50 px-3 py-2 align-top">{children}</td>
   ),
   img: ({ src, alt }: { src?: string; alt?: string }) => (
-    <img
-      src={src}
-      alt={alt}
-      className="mb-4 max-w-full rounded border"
-      loading="lazy"
-    />
+    <img src={src} alt={alt} className="mb-4 max-w-full rounded border" loading="lazy" />
   ),
   strong: ({ children }: { children?: React.ReactNode }) => (
     <strong className="font-semibold text-foreground">{children}</strong>

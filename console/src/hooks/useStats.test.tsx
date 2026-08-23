@@ -53,10 +53,10 @@ describe("useStats constant", () => {
 
 describe("useStats source invariants (D-47)", () => {
   /**
- * Guards the 10s cadence + background-pause flag from being edited out
- * by hand. Pairs with the runtime test below (proves the hook actually
- * wires to `/admin/stats` and returns data).
- */
+   * Guards the 10s cadence + background-pause flag from being edited out
+   * by hand. Pairs with the runtime test below (proves the hook actually
+   * wires to `/admin/stats` and returns data).
+   */
   it("hook source uses the constant for refetchInterval", () => {
     const source = readFileSync(join(__dirname, "useStats.ts"), "utf-8")
     expect(source).toMatch(/refetchInterval:\s*(STATS_REFETCH_INTERVAL_MS|10_000|10000)/)

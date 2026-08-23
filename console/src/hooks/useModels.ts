@@ -80,16 +80,13 @@ export type ModelTrendPoint = {
   bytes: number
 }
 
-export function useModelTrend(
-  owner: string | undefined,
-  repo: string | undefined,
-) {
+export function useModelTrend(owner: string | undefined, repo: string | undefined) {
   return useQuery<ModelTrendPoint[], ApiError>({
     queryKey: ["models", owner, repo, "trend"],
     queryFn: () =>
-      casFetch<{ days: ModelTrendPoint[] }>(
-        `/api/models/${owner}/${repo}/downloads/trend`,
-      ).then((r) => r.days),
+      casFetch<{ days: ModelTrendPoint[] }>(`/api/models/${owner}/${repo}/downloads/trend`).then(
+        (r) => r.days,
+      ),
     enabled: Boolean(owner && repo),
     staleTime: 30_000,
   })
@@ -122,16 +119,13 @@ export type ModelObject = {
   files: string[]
 }
 
-export function useModelObjects(
-  owner: string | undefined,
-  repo: string | undefined,
-) {
+export function useModelObjects(owner: string | undefined, repo: string | undefined) {
   return useQuery<ModelObject[], ApiError>({
     queryKey: ["models", owner, repo, "objects"],
     queryFn: () =>
-      casFetch<{ objects: ModelObject[] }>(
-        `/api/models/${owner}/${repo}/objects`,
-      ).then((r) => r.objects),
+      casFetch<{ objects: ModelObject[] }>(`/api/models/${owner}/${repo}/objects`).then(
+        (r) => r.objects,
+      ),
     enabled: Boolean(owner && repo),
     staleTime: 10_000,
   })

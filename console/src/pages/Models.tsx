@@ -1,11 +1,5 @@
+import { ClockIcon, CloudCheckIcon, CubeIcon, DownloadIcon, FileIcon } from "@phosphor-icons/react"
 import { Link } from "@tanstack/react-router"
-import {
-  ClockIcon,
-  CloudCheckIcon,
-  CubeIcon,
-  DownloadIcon,
-  FileIcon,
-} from "@phosphor-icons/react"
 
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -50,10 +44,8 @@ export function ModelsPage() {
           >
             <CloudCheckIcon size={14} weight="light" className="text-primary" />
             <span>
-              <span className="font-mono font-medium">
-                {formatBytes(platform.bytes_on_sia)}
-              </span>{" "}
-              on Sia ·{" "}
+              <span className="font-mono font-medium">{formatBytes(platform.bytes_on_sia)}</span> on
+              Sia ·{" "}
               <span className="font-mono">
                 {platform.xorbs_pinned}/{platform.xorbs_total}
               </span>{" "}

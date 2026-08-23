@@ -3,7 +3,7 @@
   "rows": [
     { "scenario": "cold-cache", "openweights_mbps": null, "hf_baseline_mbps": null },
     { "scenario": "warm-cache", "openweights_mbps": null, "hf_baseline_mbps": null },
-    { "scenario": "upload",     "openweights_mbps": null,   "hf_baseline_mbps": null }
+    { "scenario": "upload", "openweights_mbps": null, "hf_baseline_mbps": null }
   ],
   "fixture": {
     "repo": "xet-team/xet-spec-reference-files",

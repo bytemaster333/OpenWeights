@@ -27,8 +27,9 @@ export function LandingPage() {
         <h1 className="font-heading text-4xl font-medium tracking-tight">openweights</h1>
         <p className="max-w-2xl text-base/relaxed text-muted-foreground">
           a model hub with bytes on sia. point{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">HF_ENDPOINT</code> at
-          a openweights deployment and use the <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli as usual.
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">HF_ENDPOINT</code> at a
+          openweights deployment and use the{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">hf</code> cli as usual.
         </p>
       </section>
 

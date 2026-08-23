@@ -5,7 +5,6 @@ import { toast } from "sonner"
 import { CopyPasteCard } from "@/components/CopyPasteCard"
 import { OneTimeKeyModal } from "@/components/OneTimeKeyModal"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { CAS_URL } from "@/lib/api"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +41,7 @@ import {
   useKeys,
   useRevokeKey,
 } from "@/hooks/useKeys"
+import { CAS_URL } from "@/lib/api"
 
 /**
  * `/keys` page — formerly split across `/onboarding` + `/keys`, now a
@@ -132,13 +132,10 @@ export function KeysPage() {
       <header>
         <div className="flex items-center gap-3">
           <KeyIcon size={22} weight="light" className="text-muted-foreground" />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            API keys
-          </h1>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">API keys</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Authenticate uploads and downloads. Plaintext is shown once on
-          creation.
+          Authenticate uploads and downloads. Plaintext is shown once on creation.
         </p>
       </header>
 
@@ -189,9 +186,7 @@ export function KeysPage() {
           <Alert variant="destructive" data-testid="keys-list-error">
             <WarningCircleIcon />
             <AlertTitle>Could not load your keys</AlertTitle>
-            <AlertDescription>
-              {list.error?.message ?? "Unknown error"}
-            </AlertDescription>
+            <AlertDescription>{list.error?.message ?? "Unknown error"}</AlertDescription>
           </Alert>
         )}
 

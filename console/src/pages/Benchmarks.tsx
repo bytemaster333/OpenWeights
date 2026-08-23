@@ -60,8 +60,8 @@ export function BenchmarksPage() {
         <div>
           <h1 className="font-heading text-2xl font-medium tracking-tight">Benchmarks</h1>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            OpenWeights throughput vs HF-native (S3 + CloudFront) baseline across three representative
-            scenarios. Numbers are produced by Phase 5 CI and written to{" "}
+            OpenWeights throughput vs HF-native (S3 + CloudFront) baseline across three
+            representative scenarios. Numbers are produced by Phase 5 CI and written to{" "}
             <code className="font-mono">public/benchmarks.json</code>. See{" "}
             <a
               href="https://github.com/bytemaster333/openweights/blob/main/docs/benchmarks.md"
@@ -88,7 +88,9 @@ export function BenchmarksPage() {
               key={s}
               label={SCENARIO_LABEL[s]}
               loading={isPending}
-              value={row?.openweights_mbps != null ? `${row.openweights_mbps.toFixed(1)} MB/s` : "—"}
+              value={
+                row?.openweights_mbps != null ? `${row.openweights_mbps.toFixed(1)} MB/s` : "—"
+              }
               subtext={SCENARIO_SUBTEXT[s]}
             />
           )
