@@ -1,0 +1,29 @@
+# ops/docker-compose.mock.yml
+# Local mock-Sia dev/e2e overlay. Runs the CAS with the in-memory
+# MockSiaAdapter (OPENWEIGHTS_SIA_MOCK=true, compiled via the sia-mock feature)
+# so the HF write path + Postgres-backed read path can be exercised with a real
+# `hf` client WITHOUT an indexd, a funded wallet, or any real Sia contract
+# funds. The gateway's byte-serve path still needs a real Sia backend, so a
+# full download that goes through the gateway will not complete under this
+# overlay — it is for protocol tracing + write-path / stub-read validation.
+#
+# Merge and bring up (indexd is skipped via --no-deps):
+#   docker compose -p openweights-mock -f ops/docker-compose.yml -f ops/docker-compose.mock.yml --env-file .env up -d postgres redis
+#   docker compose -p openweights-mock -f ops/docker-compose.yml -f ops/docker-compose.mock.yml --env-file .env up -d --no-deps --build openweights-cas
+#
+# NEVER use this overlay for a real deployment.
+
+services:
+  openweights-cas:
+    build:
+      args:
+        CAS_FEATURES: sia-mock
+    environment:
+      OPENWEIGHTS_SIA_MOCK: "true"
+      V2_RECONSTRUCTION_ENABLED: "true"
+      # CAS runs on the base-compose published port 8080 here (no dev override),
+      # so the client-visible URL handed back in the xet-write-token response
+      # must point at 8080 — not the override's 28080.
+      CAS_PUBLIC_URL: "http://localhost:8080"
+      GATEWAY_BASE_URL: "http://localhost:9090"
+      RUST_LOG: "info,openweights_cas_core=debug"
