@@ -49,8 +49,23 @@ echo "[1/3] hf upload -> $CAS ($REPO)"
 HF_ENDPOINT="$CAS" HF_TOKEN="$TOKEN" "$HF_CLI" upload "$REPO" "$SRC" --repo-type model >/dev/null
 
 echo "[2/3] hf download from a FRESH cache"
-HF_ENDPOINT="$CAS" HF_TOKEN="$TOKEN" HF_HOME="$CACHE" HF_XET_CACHE="$CACHE/xet" \
-  "$HF_CLI" download "$REPO" --repo-type model --local-dir "$DST" >/dev/null
+# On real Sia the xorb pins ASYNCHRONOUSLY (the upload is accepted-pending and
+# the reconciler forms contracts + pins in the background, which can take
+# minutes on first use). A download before the pin lands 404s at reconstruction,
+# so retry until it succeeds or WAIT_SECS elapses. With the mock backend this
+# succeeds on the first try.
+WAIT_SECS="${WAIT_SECS:-900}"
+deadline=$(( $(date +%s) + WAIT_SECS ))
+until HF_ENDPOINT="$CAS" HF_TOKEN="$TOKEN" HF_HOME="$CACHE" HF_XET_CACHE="$CACHE/xet" \
+      "$HF_CLI" download "$REPO" --repo-type model --local-dir "$DST" >/dev/null 2>&1; do
+  if [[ $(date +%s) -ge $deadline ]]; then
+    echo "FAIL: download did not succeed within ${WAIT_SECS}s (xorb not pinned?)" >&2
+    exit 1
+  fi
+  echo "  ...not pinned yet; retrying in 20s"
+  rm -rf "$DST" "$CACHE"
+  sleep 20
+done
 DST_SHA="$(sha_tree "$DST")"
 
 echo "[3/3] compare sha256 of every file"
