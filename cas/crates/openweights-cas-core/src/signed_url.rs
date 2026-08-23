@@ -69,7 +69,11 @@ pub enum VerifyErr {
 pub struct VerifyOk {
     pub xorb_hash_hex: String,
     pub exp: u64,
-    pub range: Option<(u64, u64)>,
+    /// Byte-range grant carried by the URL. Empty = the URL grants the whole
+    /// xorb. One entry = a single contiguous grant (mint_v1). Two or more =
+    /// a multi-segment grant (mint_v1_multi_range → `r=s1-e1,s2-e2,...`). The
+    /// gateway enforces that every requested `Range:` sits inside one segment.
+    pub ranges: Vec<(u64, u64)>,
     pub kid: Uuid,
     /// Which key accepted the signature. `false` = `key_current`, `true` =
     /// `key_prev`. Handy for gateway metrics during rotation.
@@ -142,8 +146,24 @@ impl UrlSigner {
             Some((s, e)) => format!("{s}-{e}"),
             None => String::new(),
         };
+        Self::canonical_string_raw(version, xorb_hash_hex, exp, &r, kid)
+    }
+
+    /// Build the canonical string from an already-serialized `r` field. This is
+    /// the single source of truth for the 5-field layout; both single-range
+    /// (`s-e`) and multi-segment (`s1-e1,s2-e2,...`) grants flow through here.
+    /// `verify` builds `r_field` from the raw querystring value so the HMAC
+    /// runs over the exact bytes the minter signed — byte-identical regardless
+    /// of segment count. Field order is FIXED and load-bearing. Do not reorder.
+    pub fn canonical_string_raw(
+        version: &str,
+        xorb_hash_hex: &str,
+        exp: u64,
+        r_field: &str,
+        kid: Uuid,
+    ) -> String {
         // Five fields, four LFs (0x0A). NEVER CRLF. NEVER colon-separated.
-        format!("{version}\n{xorb_hash_hex}\n{exp}\n{r}\n{kid}")
+        format!("{version}\n{xorb_hash_hex}\n{exp}\n{r_field}\n{kid}")
     }
 
     /// Compute the base64url-nopad signature for a canonical string with the
@@ -231,11 +251,7 @@ impl UrlSigner {
         // Canonical re-uses the v1 5-field layout: the `r` slot holds the
         // already-joined segments string. HMAC runs over the exact bytes the
         // gateway verifier will reconstruct from the querystring.
-        let canonical = format!(
-            "{version}\n{hex}\n{exp}\n{r}\n{kid}",
-            version = CANONICAL_VERSION,
-            r = r_str,
-        );
+        let canonical = Self::canonical_string_raw(CANONICAL_VERSION, &hex, exp, &r_str, kid);
         let sig = self.sign_with(&self.key_current, &canonical);
 
         let mut url = self.gateway_base.clone();
@@ -277,24 +293,29 @@ impl UrlSigner {
         let mut exp: Option<u64> = None;
         let mut kid: Option<Uuid> = None;
         let mut sig: Option<String> = None;
-        let mut range: Option<(u64, u64)> = None;
+        // Raw `r=` value verbatim (already url-decoded by query_pairs). Held as
+        // a string so the canonical is rebuilt from the exact bytes the minter
+        // signed, regardless of how many comma-joined segments it carries.
+        let mut r_raw: Option<String> = None;
         for (k, v) in url.query_pairs() {
             match k.as_ref() {
                 "exp" => exp = v.parse::<u64>().ok(),
                 "kid" => kid = Uuid::parse_str(&v).ok(),
                 "sig" => sig = Some(v.into_owned()),
-                "r" => range = parse_range(&v),
+                "r" => r_raw = Some(v.into_owned()),
                 _ => {}
             }
         }
         let exp = exp.ok_or(VerifyErr::Malformed("exp"))?;
         let kid = kid.ok_or(VerifyErr::Malformed("kid"))?;
         let sig = sig.ok_or(VerifyErr::Malformed("sig"))?;
-        // If `r=` was present at all it must parse cleanly; silently dropping
-        // a malformed range would widen the signed.
-        if url.query_pairs().any(|(k, _)| k == "r") && range.is_none() {
-            return Err(VerifyErr::Malformed("range"));
-        }
+        // If `r=` was present at all it must parse cleanly into ≥1 segment;
+        // silently dropping a malformed range would widen the signed grant.
+        let ranges: Vec<(u64, u64)> = match &r_raw {
+            Some(s) => parse_range_segments(s).ok_or(VerifyErr::Malformed("range"))?,
+            None => Vec::new(),
+        };
+        let r_field = r_raw.as_deref().unwrap_or("");
 
         // Expiry check happens BEFORE signature — cheap + keeps timing profile
         // uniform across all expired URLs (no key material touched).
@@ -302,7 +323,7 @@ impl UrlSigner {
             return Err(VerifyErr::Expired);
         }
 
-        let canonical = Self::canonical_string(CANONICAL_VERSION, hex, exp, range, kid);
+        let canonical = Self::canonical_string_raw(CANONICAL_VERSION, hex, exp, r_field, kid);
         let provided_sig_bytes = B64_URL
             .decode(sig.as_bytes())
             .map_err(|_| VerifyErr::Malformed("sig_b64"))?;
@@ -316,7 +337,7 @@ impl UrlSigner {
             return Ok(VerifyOk {
                 xorb_hash_hex: hex.to_string(),
                 exp,
-                range,
+                ranges,
                 kid,
                 accepted_by_prev_key: false,
             });
@@ -332,7 +353,7 @@ impl UrlSigner {
                 return Ok(VerifyOk {
                     xorb_hash_hex: hex.to_string(),
                     exp,
-                    range,
+                    ranges,
                     kid,
                     accepted_by_prev_key: true,
                 });
@@ -417,16 +438,29 @@ fn load_hmac_key(key_b64: &str) -> Result<Hmac<Sha256>, SignerError> {
     Hmac::<Sha256>::new_from_slice(&bytes).map_err(|_| SignerError::HmacInit)
 }
 
-/// Parse `start-end` (both ASCII decimals, single hyphen, end inclusive).
-/// Returns `None` on any malformed input — caller maps to `VerifyErr::Malformed`.
-fn parse_range(s: &str) -> Option<(u64, u64)> {
-    let (start, end) = s.split_once('-')?;
-    let start = start.parse::<u64>().ok()?;
-    let end = end.parse::<u64>().ok()?;
-    if start > end {
+/// Parse the `r=` field into one or more `(start, end_inclusive)` segments.
+/// Single-range URLs carry one segment (`s-e`); multi-range URLs carry the
+/// comma-joined form (`s1-e1,s2-e2,...`) minted by `mint_v1_multi_range`.
+/// Returns `None` on any malformed input (empty string, empty segment, missing
+/// bound, non-decimal, or `start > end`) — caller maps to `VerifyErr::Malformed`.
+fn parse_range_segments(s: &str) -> Option<Vec<(u64, u64)>> {
+    if s.is_empty() {
         return None;
     }
-    Some((start, end))
+    let mut out = Vec::new();
+    for part in s.split(',') {
+        let (start, end) = part.split_once('-')?;
+        let start = start.parse::<u64>().ok()?;
+        let end = end.parse::<u64>().ok()?;
+        if start > end {
+            return None;
+        }
+        out.push((start, end));
+    }
+    if out.is_empty() {
+        return None;
+    }
+    Some(out)
 }
 
 /// Constant-time byte compare. Equal-length short-circuit is safe (length is

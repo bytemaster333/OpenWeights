@@ -44,6 +44,39 @@ type vector struct {
 		Start        uint64 `json:"start"`
 		EndInclusive uint64 `json:"end_inclusive"`
 	} `json:"range"`
+	// Ranges is the multi-segment grant (mutually exclusive with Range),
+	// present for the v1_multi_range vector.
+	Ranges []struct {
+		Start        uint64 `json:"start"`
+		EndInclusive uint64 `json:"end_inclusive"`
+	} `json:"ranges"`
+}
+
+// segments returns all grant segments as (start, end_inclusive) pairs: from
+// Ranges if present, else the single Range, else nil (whole-xorb grant).
+func (v vector) segments() [][2]uint64 {
+	if len(v.Ranges) > 0 {
+		out := make([][2]uint64, len(v.Ranges))
+		for i, r := range v.Ranges {
+			out[i] = [2]uint64{r.Start, r.EndInclusive}
+		}
+		return out
+	}
+	if v.Range != nil {
+		return [][2]uint64{{v.Range.Start, v.Range.EndInclusive}}
+	}
+	return nil
+}
+
+// rField serializes the exact `r` querystring value the minter produced (empty
+// = no grant): the comma-joined `s-e` segments.
+func (v vector) rField() string {
+	segs := v.segments()
+	parts := make([]string, len(segs))
+	for i, s := range segs {
+		parts[i] = formatUint(s[0]) + "-" + formatUint(s[1])
+	}
+	return strings.Join(parts, ",")
 }
 
 func loadVectors(t *testing.T) []vector {
@@ -78,11 +111,9 @@ func TestSignedURLVectors(t *testing.T) {
 			}
 
 			// Step 1: rebuild canonical string; MUST match byte-for-byte.
-			var rng *[2]uint64
-			if v.Range != nil {
-				rng = &[2]uint64{v.Range.Start, v.Range.EndInclusive}
-			}
-			got := CanonicalString(CanonicalVersion, v.XorbHashHex, v.Exp, rng, kid)
+			// Built from the raw `r` field so single- and multi-segment vectors
+			// share one path (byte-identical to the Rust minter).
+			got := canonicalStringRaw(CanonicalVersion, v.XorbHashHex, v.Exp, v.rField(), kid)
 			if got != v.CanonicalString {
 				t.Fatalf("canonical string drift:\n  want %q\n  got  %q", v.CanonicalString, got)
 			}
@@ -130,8 +161,8 @@ func TestSignedURLVectors(t *testing.T) {
 			q.Set("exp", formatUint(v.Exp))
 			q.Set("kid", v.Kid)
 			q.Set("sig", v.ExpectedSigB64URL)
-			if v.Range != nil {
-				q.Set("r", formatUint(v.Range.Start)+"-"+formatUint(v.Range.EndInclusive))
+			if rf := v.rField(); rf != "" {
+				q.Set("r", rf)
 			}
 
 			// Pin "now" to 1s BEFORE exp so the URL is valid.
@@ -153,13 +184,13 @@ func TestSignedURLVectors(t *testing.T) {
 			if ok.AcceptedByPrevKey != wantAccByPrev {
 				t.Fatalf("accepted_by_prev_key mismatch: want %v got %v", wantAccByPrev, ok.AcceptedByPrevKey)
 			}
-			if (ok.Range == nil) != (v.Range == nil) {
-				t.Fatalf("range nil-ness mismatch: want %v got %v", v.Range, ok.Range)
+			wantSegs := v.segments()
+			if len(ok.Ranges) != len(wantSegs) {
+				t.Fatalf("ranges count mismatch: want %d got %d", len(wantSegs), len(ok.Ranges))
 			}
-			if v.Range != nil {
-				if ok.Range[0] != v.Range.Start || ok.Range[1] != v.Range.EndInclusive {
-					t.Fatalf("range mismatch: want %d-%d got %d-%d",
-						v.Range.Start, v.Range.EndInclusive, ok.Range[0], ok.Range[1])
+			for i := range wantSegs {
+				if ok.Ranges[i] != wantSegs[i] {
+					t.Fatalf("range[%d] mismatch: want %v got %v", i, wantSegs[i], ok.Ranges[i])
 				}
 			}
 		})
@@ -175,7 +206,7 @@ func TestSignedURLNegative(t *testing.T) {
 	// Reuse the first "current"-signed vector as the positive baseline to mutate.
 	var base *vector
 	for i := range vs {
-		if vs[i].SignedBy == "current" && vs[i].Range == nil {
+		if vs[i].SignedBy == "current" && vs[i].Range == nil && len(vs[i].Ranges) == 0 {
 			base = &vs[i]
 			break
 		}

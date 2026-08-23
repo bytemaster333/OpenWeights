@@ -68,12 +68,26 @@ type urlSpec struct {
 	hashHex string
 	exp     uint64
 	rng     *[2]uint64
-	kid     uuid.UUID
-	key     []byte
+	// segs is a multi-segment grant (mutually exclusive with rng); when set,
+	// sign() emits `r=s1-e1,s2-e2,...` — the V2 multi-range URL form.
+	segs [][2]uint64
+	kid  uuid.UUID
+	key  []byte
 }
 
 func (s urlSpec) sign() url.Values {
-	canonical := CanonicalString(CanonicalVersion, s.hashHex, s.exp, s.rng, s.kid)
+	rField := ""
+	switch {
+	case len(s.segs) > 0:
+		parts := make([]string, len(s.segs))
+		for i, seg := range s.segs {
+			parts[i] = fmt.Sprintf("%d-%d", seg[0], seg[1])
+		}
+		rField = strings.Join(parts, ",")
+	case s.rng != nil:
+		rField = fmt.Sprintf("%d-%d", s.rng[0], s.rng[1])
+	}
+	canonical := canonicalStringRaw(CanonicalVersion, s.hashHex, s.exp, rField, s.kid)
 	mac := hmac.New(sha256.New, s.key)
 	mac.Write([]byte(canonical))
 	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
@@ -82,8 +96,8 @@ func (s urlSpec) sign() url.Values {
 	q.Set("exp", fmt.Sprintf("%d", s.exp))
 	q.Set("kid", s.kid.String())
 	q.Set("sig", sig)
-	if s.rng != nil {
-		q.Set("r", fmt.Sprintf("%d-%d", s.rng[0], s.rng[1]))
+	if rField != "" {
+		q.Set("r", rField)
 	}
 	return q
 }
@@ -607,6 +621,110 @@ func TestServeXorb_MultiRange_BoundedURL_Escalation_403(t *testing.T) {
 	rec := serve(q, hash, http.Header{"Range": []string{"bytes=150-199,400-499"}}, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d; want 403 (multi-range escalation)", rec.Code)
+	}
+}
+
+// TestServeXorb_MultiSegmentGrant_206_Multipart — the real V2 URL form: the
+// signed URL grants a MULTI-SEGMENT range (`r=100-199,300-399`) and the client
+// asks for exactly those segments. Must verify (not 400/403) and serve a
+// multipart/byteranges body. This is the path that was silently broken: the old
+// verifier could not parse the comma-joined `r=`.
+func TestServeXorb_MultiSegmentGrant_206_Multipart(t *testing.T) {
+	t.Parallel()
+	payload := deterministicPayload(1024)
+	now := time.Unix(1_000_000, 0)
+	hash := hashHexForTest(92)
+
+	db := &fakeDB{size: int64(len(payload))}
+	sia := &fakeSia{payload: payload}
+
+	_, key, serve := newHandlersForTest(t, db, sia, nil, now)
+	q := urlSpec{
+		hashHex: hash, exp: uint64(now.Unix()) + 60, kid: uuid.New(), key: key,
+		segs: [][2]uint64{{100, 199}, {300, 399}},
+	}.sign()
+
+	rec := serve(q, hash, http.Header{"Range": []string{"bytes=100-199,300-399"}}, nil)
+	resp := rec.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("status = %d; want 206 (multi-segment grant honored)", resp.StatusCode)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "multipart/byteranges;") {
+		t.Fatalf("Content-Type = %q; want multipart/byteranges", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_, params, _ := mime.ParseMediaType(ct)
+	mr := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+	wantSlices := [][]byte{payload[100:200], payload[300:400]}
+	for i, want := range wantSlices {
+		p, err := mr.NextPart()
+		if err != nil {
+			t.Fatalf("part[%d]: %v", i, err)
+		}
+		got, _ := io.ReadAll(p)
+		if !bytes.Equal(got, want) {
+			t.Fatalf("part[%d] bytes mismatch", i)
+		}
+	}
+	if _, err := mr.NextPart(); err != io.EOF {
+		t.Fatalf("NextPart past end: got %v; want EOF", err)
+	}
+}
+
+// TestServeXorb_MultiSegmentGrant_NoClientRange_ServesGrant — a multi-segment
+// signed URL with NO client `Range:` header must serve exactly the granted
+// segments (as multipart), never the whole xorb.
+func TestServeXorb_MultiSegmentGrant_NoClientRange_ServesGrant(t *testing.T) {
+	t.Parallel()
+	payload := deterministicPayload(1024)
+	now := time.Unix(1_000_000, 0)
+	hash := hashHexForTest(93)
+
+	db := &fakeDB{size: int64(len(payload))}
+	sia := &fakeSia{payload: payload}
+
+	_, key, serve := newHandlersForTest(t, db, sia, nil, now)
+	q := urlSpec{
+		hashHex: hash, exp: uint64(now.Unix()) + 60, kid: uuid.New(), key: key,
+		segs: [][2]uint64{{0, 99}, {500, 599}},
+	}.sign()
+
+	rec := serve(q, hash, nil, nil)
+	resp := rec.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("status = %d; want 206 (granted segments served)", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "multipart/byteranges;") {
+		t.Fatalf("Content-Type = %q; want multipart/byteranges", ct)
+	}
+}
+
+// TestServeXorb_MultiSegmentGrant_GapEscalation_403 — a client range that lives
+// in the GAP between two granted segments must be rejected (403), never served.
+func TestServeXorb_MultiSegmentGrant_GapEscalation_403(t *testing.T) {
+	t.Parallel()
+	payload := deterministicPayload(1024)
+	now := time.Unix(1_000_000, 0)
+	hash := hashHexForTest(94)
+
+	db := &fakeDB{size: int64(len(payload))}
+	sia := &fakeSia{payload: payload}
+
+	_, key, serve := newHandlersForTest(t, db, sia, nil, now)
+	q := urlSpec{
+		hashHex: hash, exp: uint64(now.Unix()) + 60, kid: uuid.New(), key: key,
+		segs: [][2]uint64{{100, 199}, {300, 399}},
+	}.sign()
+
+	// 200-299 sits in the gap between the two granted segments.
+	rec := serve(q, hash, http.Header{"Range": []string{"bytes=200-299"}}, nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d; want 403 (range in grant gap)", rec.Code)
 	}
 }
 

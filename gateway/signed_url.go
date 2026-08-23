@@ -50,9 +50,14 @@ func (e *VerifyErr) Error() string { return e.Kind }
 // VerifyOk is returned on successful verification. `AcceptedByPrevKey` lets
 // callers emit a rotation-observability metric or debug log.
 type VerifyOk struct {
-	XorbHashHex       string
-	Exp               uint64
-	Range             *[2]uint64 // (start, end_inclusive); nil if URL granted whole xorb
+	XorbHashHex string
+	Exp         uint64
+	// Ranges is the byte-range grant the URL carries. Empty = whole xorb. One
+	// entry = a single contiguous grant (mint_v1). Two or more = a multi-segment
+	// grant (mint_v1_multi_range → `r=s1-e1,s2-e2,...`). Each entry is
+	// (start, end_inclusive). The handler enforces every requested `Range:`
+	// sits entirely inside one of these segments.
+	Ranges            [][2]uint64
 	Kid               uuid.UUID
 	AcceptedByPrevKey bool
 }
@@ -105,9 +110,19 @@ func CanonicalString(version, hashHex string, exp uint64, r *[2]uint64, kid uuid
 	if r != nil {
 		rStr = strconv.FormatUint(r[0], 10) + "-" + strconv.FormatUint(r[1], 10)
 	}
+	return canonicalStringRaw(version, hashHex, exp, rStr, kid)
+}
+
+// canonicalStringRaw builds the canonical string from an already-serialized `r`
+// field. This is the single source of truth for the 5-field layout; both
+// single-range (`s-e`) and multi-segment (`s1-e1,s2-e2,...`) grants flow through
+// here. `Verify` builds `rField` from the raw querystring value so the HMAC runs
+// over the exact bytes the Rust minter signed — byte-identical regardless of
+// segment count. Matches `UrlSigner::canonical_string_raw` on the Rust side.
+func canonicalStringRaw(version, hashHex string, exp uint64, rField string, kid uuid.UUID) string {
 	// Five fields, four LFs. Matches `format!("{version}\n{hash}\n{exp}\n{r}\n{kid}")` in Rust.
 	return version + "\n" + hashHex + "\n" +
-		strconv.FormatUint(exp, 10) + "\n" + rStr + "\n" + kid.String()
+		strconv.FormatUint(exp, 10) + "\n" + rField + "\n" + kid.String()
 }
 
 // Verify checks the signed URL query against the given xorb hash path segment.
@@ -153,22 +168,20 @@ func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*
 		return nil, &VerifyErr{Kind: "malformed:kid"}
 	}
 
-	var rng *[2]uint64
-	// `url.Values.Has` (Go 1.17+) distinguishes "absent" from "empty-string"
-	// an empty `r=` value still counts as PRESENT and must parse to a range,
-	// matching Rust `url::Url.query_pairs.any(|k| k == "r")`.
+	var ranges [][2]uint64
+	rField := ""
+	// `url.Values.Has` (Go 1.17+) distinguishes "absent" from "empty-string" —
+	// an empty `r=` value still counts as PRESENT and must parse to ≥1 segment,
+	// matching Rust `url::Url.query_pairs.any(|k| k == "r")`. The raw value is
+	// fed verbatim into the canonical so the HMAC matches the minter regardless
+	// of how many comma-joined segments it carries.
 	if q.Has("r") {
-		rs := q.Get("r")
-		parts := strings.SplitN(rs, "-", 2)
-		if len(parts) != 2 {
+		rField = q.Get("r")
+		segs, ok := parseRangeSegments(rField)
+		if !ok {
 			return nil, &VerifyErr{Kind: "malformed:range"}
 		}
-		s, e1 := strconv.ParseUint(parts[0], 10, 64)
-		e, e2 := strconv.ParseUint(parts[1], 10, 64)
-		if e1 != nil || e2 != nil || s > e {
-			return nil, &VerifyErr{Kind: "malformed:range"}
-		}
-		rng = &[2]uint64{s, e}
+		ranges = segs
 	}
 
 	// Expiry BEFORE signature check (timing uniformity).
@@ -176,7 +189,7 @@ func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*
 		return nil, &VerifyErr{Kind: "expired"}
 	}
 
-	canonical := CanonicalString(CanonicalVersion, xorbHashHex, exp, rng, kid)
+	canonical := canonicalStringRaw(CanonicalVersion, xorbHashHex, exp, rField, kid)
 	// base64url WITHOUT padding (matches Rust `URL_SAFE_NO_PAD`).
 	provided, err := base64.RawURLEncoding.DecodeString(sigStr)
 	if err != nil {
@@ -189,7 +202,7 @@ func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*
 		return &VerifyOk{
 			XorbHashHex:       xorbHashHex,
 			Exp:               exp,
-			Range:             rng,
+			Ranges:            ranges,
 			Kid:               kid,
 			AcceptedByPrevKey: false,
 		}, nil
@@ -201,7 +214,7 @@ func (v *UrlVerifier) Verify(xorbHashHex string, q url.Values, now time.Time) (*
 			return &VerifyOk{
 				XorbHashHex:       xorbHashHex,
 				Exp:               exp,
-				Range:             rng,
+				Ranges:            ranges,
 				Kid:               kid,
 				AcceptedByPrevKey: true,
 			}, nil
@@ -222,4 +235,39 @@ func hmacSHA256(key, msg []byte) []byte {
 // so mixed-case would silently widen the signed.
 func isHexLower(b byte) bool {
 	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f')
+}
+
+// parseRangeSegments parses the `r=` field into one or more (start,
+// end_inclusive) segments. Single-range URLs carry one segment (`s-e`);
+// multi-range URLs carry the comma-joined form (`s1-e1,s2-e2,...`) minted by
+// `mint_v1_multi_range`. Returns (nil, false) on any malformed input: empty
+// string, empty segment (leading/trailing/double comma), missing bound
+// (`-5` / `5-`), non-decimal, or start > end. Mirrors Rust
+// `parse_range_segments`; the two MUST agree so the cross-language vector gate
+// holds.
+func parseRangeSegments(s string) ([][2]uint64, bool) {
+	if s == "" {
+		return nil, false
+	}
+	parts := strings.Split(s, ",")
+	out := make([][2]uint64, 0, len(parts))
+	for _, p := range parts {
+		dash := strings.IndexByte(p, '-')
+		// dash must exist with a non-empty bound on each side. dash<=0 rejects a
+		// missing/empty start (incl. suffix form `-N`, never used in a grant);
+		// dash==len-1 rejects a missing end (`N-`).
+		if dash <= 0 || dash == len(p)-1 {
+			return nil, false
+		}
+		start, e1 := strconv.ParseUint(p[:dash], 10, 64)
+		end, e2 := strconv.ParseUint(p[dash+1:], 10, 64)
+		if e1 != nil || e2 != nil || start > end {
+			return nil, false
+		}
+		out = append(out, [2]uint64{start, end})
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
 }

@@ -5,7 +5,6 @@
     "expected_sig_b64url_nopad": "6k9TLkPhAxXgRFbJMys3JkoRZ7sK-zpGTGZfOCqGTfI",
     "kid": "01945edc-5f0a-71a3-9c82-3a0000000001",
     "name": "v1_basic_no_range",
-    "range": null,
     "signed_by": "current",
     "signing_key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
     "xorb_hash_hex": "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632"
@@ -44,9 +43,28 @@
     "expected_sig_b64url_nopad": "XTgVtiBw64VpfT_shzmld1yL8C_7CV7k_00xXw-H_wI",
     "kid": "01945edc-5f0a-71a3-9c82-3a0000000002",
     "name": "v1_rotation_prev_key",
-    "range": null,
     "signed_by": "prev",
     "signing_key_b64": "//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eA=",
+    "xorb_hash_hex": "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632"
+  },
+  {
+    "canonical_string": "v1\neea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632\n2000000000\n1024-8191,12288-16383\n01945edc-5f0a-71a3-9c82-3a0000000001",
+    "exp": 2000000000,
+    "expected_sig_b64url_nopad": "ESTvvPOf2B2kQ3JiQQKKR3XkyqCDNfx9FKIcT7IWfPc",
+    "kid": "01945edc-5f0a-71a3-9c82-3a0000000001",
+    "name": "v1_multi_range",
+    "ranges": [
+      {
+        "end_inclusive": 8191,
+        "start": 1024
+      },
+      {
+        "end_inclusive": 16383,
+        "start": 12288
+      }
+    ],
+    "signed_by": "current",
+    "signing_key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
     "xorb_hash_hex": "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632"
   }
 ]
