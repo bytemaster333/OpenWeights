@@ -20,18 +20,25 @@ import (
 
 func TestDecodeXorbHash_Valid(t *testing.T) {
 	t.Parallel()
-	// Known fixture — 64-char lowercase hex of a 32-byte pattern.
+	// The verifier hands us the xet-core canonical MerkleHash hex (byte-reversed
+	// per 8-byte group, gotcha #1). decodeXorbHash must invert that codec to the
+	// raw digest the BYTEA column stores — NOT straight-hex-decode. Assert the
+	// round-trip through the codec, and that it is NOT a straight decode.
 	input := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	got, err := decodeXorbHash(input)
 	if err != nil {
 		t.Fatalf("decodeXorbHash: %v", err)
 	}
-	want, _ := hex.DecodeString(input)
-	if !bytes.Equal(got, want) {
-		t.Fatalf("decoded bytes mismatch\n got: %x\nwant: %x", got, want)
-	}
 	if len(got) != 32 {
 		t.Fatalf("decoded length = %d; want 32", len(got))
+	}
+	var d [32]byte
+	copy(d[:], got)
+	if DigestToHex(d) != input {
+		t.Fatalf("round-trip mismatch: DigestToHex(decode(%q)) = %q", input, DigestToHex(d))
+	}
+	if straight, _ := hex.DecodeString(input); bytes.Equal(got, straight) {
+		t.Fatalf("decodeXorbHash did a straight hex decode; expected MerkleHash byte-reversal")
 	}
 }
 

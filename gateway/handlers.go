@@ -213,6 +213,7 @@ func (h *Handlers) ServeXorb(w http.ResponseWriter, r *http.Request) {
 			rl.Status = 499
 			return
 		}
+		slog.ErrorContext(ctx, "sia fetch failed", "hash", hash, "err", err.Error())
 		rl.Status = h.respondError(w, r, http.StatusBadGateway, "bad gateway", err.Error())
 		return
 	}

@@ -171,29 +171,22 @@ func (d *DB) QueryXorbPinned(ctx context.Context, hashHex string) (siaObjectID s
 	return id.String(), nil
 }
 
-// decodeXorbHash validates the 64-char lowercase hex representation the
-// verifier hands us and returns the raw 32 bytes the BYTEA column stores.
-// Non-hex input is a 400-class error (malformed URL); the verifier itself
-// rejects malformed hashes with `VerifyErr.Kind == "malformed:xorb_hash_hex"`
-// before we ever reach the DB, so reaching here with garbage input is a
-// programmer error on the handler side.
+// decodeXorbHash converts the xet-core canonical MerkleHash hex the verifier
+// hands us into the raw 32 bytes the `xorb_merkle_hash` BYTEA column stores.
+// CRITICAL (gotcha #1): the hex is byte-reversed per 8-byte group, so it MUST
+// be decoded through the MerkleHash codec (`ParseMerkleHashHex`) and NOT a
+// straight hex decode — a straight decode yields byte-reversed bytes that never
+// match a pinned row, so every real download 404s at the gateway. The CAS
+// stores the raw digest (`MerkleHash::into::<[u8;32]>()`) and emits the reversed
+// hex (`MerkleHash::hex()`) in reconstruction URLs; this is the inverse.
+// Non-hex/length errors are 400-class; the verifier already rejects malformed
+// hashes before we reach the DB.
 func decodeXorbHash(hashHex string) ([]byte, error) {
-	if len(hashHex) != 64 {
-		return nil, fmt.Errorf("xorb hash must be 64 hex chars; got %d", len(hashHex))
+	digest, err := ParseMerkleHashHex(hashHex)
+	if err != nil {
+		return nil, err
 	}
-	buf := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		hi, err := hexNibble(hashHex[i*2])
-		if err != nil {
-			return nil, err
-		}
-		lo, err := hexNibble(hashHex[i*2+1])
-		if err != nil {
-			return nil, err
-		}
-		buf[i] = hi<<4 | lo
-	}
-	return buf, nil
+	return digest[:], nil
 }
 
 func hexNibble(c byte) (byte, error) {

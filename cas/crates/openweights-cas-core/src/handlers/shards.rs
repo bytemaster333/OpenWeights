@@ -228,7 +228,7 @@ where
     // (9) Sia upload+pin. : tx has already committed, so reconstruction
     // data is DURABLE even if this fails — reconciler retries.
     let upload_res = with_timeout(
-        Duration::from_secs(300),
+        sia_upload_budget(),
         st.sia().upload_and_pin(&collected),
     )
     .await;
@@ -266,13 +266,33 @@ where
             Err(AppError::Other(e))
         }
         Err(_timeout) => {
+            // Same carve-out as the Unavailable branch + the xorb handler:
+            // reconstruction data is already durable from the committed tx, so
+            // accept pending (SyncPerformed) and let the reconciler finish the
+            // pin with its larger budget rather than 503-stalling hf_xet against
+            // a slow/hosted indexer.
             let _ = shard_q::set_pin_state(pool, &shard_hash, XorbPinState::Pinning, None).await;
-            Err(AppError::SiaUnavailable(Box::new(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "sia upload+pin exceeded 300s budget",
-            ))))
+            tracing::warn!(
+                "sia upload+pin exceeded {:?} synchronous budget — accepted pending (reconciler will finish the pin)",
+                sia_upload_budget()
+            );
+            Ok(Json(UploadShardResponse {
+                result: UploadShardResponseType::SyncPerformed,
+            }))
         }
     }
+}
+
+/// Synchronous Sia upload+pin budget for the shard request path. Mirror of
+/// `handlers::xorbs::sia_upload_budget`; env-tunable via
+/// `OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS` (default 300).
+fn sia_upload_budget() -> Duration {
+    let secs = std::env::var("OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(300);
+    Duration::from_secs(secs)
 }
 
 /// Map shard-parse errors onto the `AppError` taxonomy AND bump the P19

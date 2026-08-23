@@ -175,7 +175,7 @@ where
     // (7) Sia upload + pin. SiaAdapter::upload_and_pin is the ONLY path that
     // actually writes to Sia — is enforced by the early return above.
     let upload_res = with_timeout(
-        Duration::from_secs(300),
+        sia_upload_budget(),
         st.sia().upload_and_pin(&collected),
     )
     .await;
@@ -223,14 +223,39 @@ where
             Err(AppError::Other(e))
         }
         Err(_timeout) => {
-            // Upload timed out — treat as unavailable. Reconciler retries.
+            // Upload didn't finish inside the (short) synchronous budget. Same
+            // demo-mode carve-out as the Unavailable branch: the body is durable
+            // in `xorb_bodies` and the row stays 'pinning', so accept the xorb
+            // (200) and let the reconciler complete the pin in the background
+            // with its own, larger budget. Returning 503 here would stall
+            // hf_xet in a retry loop against a slow/hosted indexer whose first
+            // upload (on-chain contract formation) legitimately exceeds the
+            // synchronous budget.
             let _ = xorb_q::set_pin_state(pool, &hash_bytes, XorbPinState::Pinning, None).await;
-            Err(AppError::SiaUnavailable(Box::new(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "sia upload+pin exceeded 300s budget",
-            ))))
+            tracing::warn!(
+                "sia upload+pin exceeded {:?} synchronous budget — accepted pending (reconciler will finish the pin)",
+                sia_upload_budget()
+            );
+            crate::metering::log_on_err(
+                "usage_log insert (xorb_upload, sia-pending) failed",
+                crate::metering::record_xorb_upload(pool, &ctx, &hash_bytes, size_bytes).await,
+            );
+            Ok(Json(UploadXorbResponse { was_inserted: true }))
         }
     }
+}
+
+/// Synchronous Sia upload+pin budget for the request path. Kept short so a slow
+/// or hosted indexer doesn't block hf_xet past its client timeout — on expiry
+/// the handler accepts the xorb pending and the reconciler finishes the pin.
+/// Env-tunable via `OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS` (default 300).
+fn sia_upload_budget() -> Duration {
+    let secs = std::env::var("OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(300);
+    Duration::from_secs(secs)
 }
 
 /// Deserialize the xorb footer in `bytes` and return the recomputed aggregated
