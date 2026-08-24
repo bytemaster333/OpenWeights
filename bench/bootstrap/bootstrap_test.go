@@ -37,6 +37,39 @@ func TestLoadWriteEnvRoundtrip(t *testing.T) {
 	}
 }
 
+// TestLoadEnvStripsInlineComments: ops/.env.example documents vars as
+// `KEY= # description`; loadEnv must not take the comment as the value.
+func TestLoadEnvStripsInlineComments(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	content := strings.Join([]string{
+		"OPENWEIGHTS_APP_ID= # 32-byte hex constant; bootstrap reads from bench/appid",
+		"OPENWEIGHTS_INDEXER_URL=https://sia.storage # hosted indexer",
+		"REDIS_PASSWORD=abc#notacomment",
+		`QUOTED="value # with hash"`,
+		"PLAIN=simple",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	kv, err := loadEnv(path)
+	if err != nil {
+		t.Fatalf("loadEnv: %v", err)
+	}
+	cases := map[string]string{
+		"OPENWEIGHTS_APP_ID":     "",                    // empty → main.go fills the real id
+		"OPENWEIGHTS_INDEXER_URL": "https://sia.storage", // trailing comment stripped
+		"REDIS_PASSWORD":         "abc#notacomment",     // hash without leading space kept
+		"QUOTED":                 "value # with hash",   // quoted value kept verbatim
+		"PLAIN":                  "simple",
+	}
+	for k, want := range cases {
+		if kv[k] != want {
+			t.Errorf("%s = %q, want %q", k, kv[k], want)
+		}
+	}
+}
+
 // TestWriteEnvIdempotent: writing the same map twice produces byte-identical files.
 func TestWriteEnvIdempotent(t *testing.T) {
 	dir := t.TempDir()

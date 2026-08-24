@@ -33,9 +33,33 @@ func loadEnv(path string) (map[string]string, error) {
 		if eq < 1 {
 			continue
 		}
-		kv[strings.TrimSpace(line[:eq])] = strings.TrimSpace(line[eq+1:])
+		kv[strings.TrimSpace(line[:eq])] = parseEnvValue(line[eq+1:])
 	}
 	return kv, nil
+}
+
+// parseEnvValue extracts the value after `=`, honoring the dotenv convention
+// that an inline comment starts at an unquoted ` #` (whitespace + hash). This
+// matters because ops/.env.example documents vars as `KEY= # description`;
+// without stripping, OPENWEIGHTS_APP_ID etc. would take the comment as value.
+// A quoted value ("...") is returned verbatim minus the surrounding quotes.
+func parseEnvValue(raw string) string {
+	v := strings.TrimSpace(raw)
+	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+		return v[1 : len(v)-1]
+	}
+	// A value that is nothing but a comment (e.g. `KEY= # description`) is empty.
+	if strings.HasPrefix(v, "#") {
+		return ""
+	}
+	// Strip a trailing inline comment: first ` #` (space/tab before hash).
+	for i := 1; i < len(v); i++ {
+		if v[i] == '#' && (v[i-1] == ' ' || v[i-1] == '\t') {
+			v = v[:i]
+			break
+		}
+	}
+	return strings.TrimSpace(v)
 }
 
 // writeEnv writes kv atomically (tmpfile + rename) with 0600 perms, sorted for determinism.
