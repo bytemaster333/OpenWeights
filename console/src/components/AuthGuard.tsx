@@ -8,7 +8,7 @@ import { useMe } from "@/hooks/useMe"
  *
  * Behavior:
  * - `/admin/me` → 200 → render children.
- * - `/admin/me` → 401 → navigate to `/login`.
+ * - `/admin/me` → 401 → navigate to `/` (the public landing, which hosts the sign-in button).
  * - Query pending → render a neutral "Loading…" placeholder.
  * - Query error (500, network, etc.) → propagate to `<AppErrorBoundary>`
  * via the thrown `ApiError` from `useMe`.
