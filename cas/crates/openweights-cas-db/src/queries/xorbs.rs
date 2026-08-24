@@ -36,11 +36,20 @@ pub async fn insert_pending(
     size_bytes: i64,
     owner_user_id: i64,
     owner_api_key_id: Uuid,
+    chunk_boundaries: &[i64],
 ) -> Result<bool, sqlx::Error> {
-    // RETURNING xorb_merkle_hash → Some(_) on insert, None on ON CONFLICT.
+    // `chunk_boundaries` are the physical end-exclusive byte offsets of each
+    // chunk in the serialized xorb (see migration 0014); NULL when unknown
+    // (footer-absent upload). RETURNING xorb_merkle_hash → Some(_) on insert,
+    // None on ON CONFLICT.
+    let boundaries: Option<&[i64]> = if chunk_boundaries.is_empty() {
+        None
+    } else {
+        Some(chunk_boundaries)
+    };
     let row: Option<(Vec<u8>,)> = sqlx::query_as(
-        "INSERT INTO xorbs (xorb_merkle_hash, sia_object_id, size_bytes, owner_user_id, owner_api_key_id) \
-         VALUES ($1, NULL, $2, $3, $4) \
+        "INSERT INTO xorbs (xorb_merkle_hash, sia_object_id, size_bytes, owner_user_id, owner_api_key_id, chunk_boundaries) \
+         VALUES ($1, NULL, $2, $3, $4, $5) \
          ON CONFLICT (xorb_merkle_hash) DO NOTHING \
          RETURNING xorb_merkle_hash",
     )
@@ -48,10 +57,41 @@ pub async fn insert_pending(
     .bind(size_bytes)
     .bind(owner_user_id)
     .bind(owner_api_key_id)
+    .bind(boundaries)
     .fetch_optional(pool)
     .await?;
 
     Ok(row.is_some())
+}
+
+/// Fetch the stored physical chunk-boundary offsets for a set of xorb hashes.
+/// Returns a map hash → boundaries; xorbs with NULL boundaries (uploaded before
+/// migration 0014, or footer-absent) are simply absent from the map, and the
+/// caller keeps the shard-derived byte range for those terms.
+pub async fn get_chunk_boundaries(
+    pool: &PgPool,
+    hashes: &[[u8; 32]],
+) -> Result<std::collections::HashMap<[u8; 32], Vec<i64>>, sqlx::Error> {
+    let mut out = std::collections::HashMap::new();
+    if hashes.is_empty() {
+        return Ok(out);
+    }
+    let flat: Vec<Vec<u8>> = hashes.iter().map(|h| h.to_vec()).collect();
+    let rows: Vec<(Vec<u8>, Option<Vec<i64>>)> = sqlx::query_as(
+        "SELECT xorb_merkle_hash, chunk_boundaries FROM xorbs \
+         WHERE xorb_merkle_hash = ANY($1)",
+    )
+    .bind(&flat)
+    .fetch_all(pool)
+    .await?;
+    for (h, b) in rows {
+        if let (Ok(arr), Some(bounds)) = (<[u8; 32]>::try_from(h.as_slice()), b) {
+            if !bounds.is_empty() {
+                out.insert(arr, bounds);
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Update `pin_state`. When `sia_object_id` is provided, it is written (or

@@ -133,7 +133,9 @@ fn flag_on_build_v2_response_produces_per_xorb_single_url() {
     // xorb_a: terms 1+2 merge to [1024, 8192); term 3 disjoint [12288, 16384).
     // → END-INCLUSIVE: 1024..=8191 and 12288..=16383.
     let a_key = MerkleHash::from(xorb_a).hex();
-    let a_entry: &XorbFetchInfoV2 = resp.fetch_info.get(&a_key).expect("xorb_a present");
+    let a_list = resp.fetch_info.get(&a_key).expect("xorb_a present");
+    assert_eq!(a_list.len(), 1, "one multi-range fetch entry per xorb");
+    let a_entry: &XorbFetchInfoV2 = &a_list[0];
     assert_eq!(
         a_entry.ranges.len(),
         2,
@@ -171,7 +173,7 @@ fn flag_on_build_v2_response_produces_per_xorb_single_url() {
     // xorb_b — single range 0..=65535. Single-segment input still emits
     // `r=0-65535` with no comma.
     let b_key = MerkleHash::from(xorb_b).hex();
-    let b_entry: &XorbFetchInfoV2 = resp.fetch_info.get(&b_key).expect("xorb_b present");
+    let b_entry: &XorbFetchInfoV2 = &resp.fetch_info.get(&b_key).expect("xorb_b present")[0];
     assert_eq!(b_entry.ranges.len(), 1);
     assert_eq!(b_entry.ranges[0].url_range.end_inclusive, 65535);
     assert!(b_entry.url.contains("r=0-65535"));
@@ -248,7 +250,7 @@ fn flag_on_v2_single_range_matches_v1_byte_boundary() {
     let resp = build_v2_response(&row, test_signer().as_ref(), Uuid::nil(), 1_700_000_000);
 
     let hex = MerkleHash::from(xorb).hex();
-    let entry = resp.fetch_info.get(&hex).expect("xorb present");
+    let entry = &resp.fetch_info.get(&hex).expect("xorb present")[0];
     assert_eq!(entry.ranges.len(), 1);
     assert_eq!(entry.ranges[0].url_range.start, 0);
     assert_eq!(entry.ranges[0].url_range.end_inclusive, 1023);
@@ -261,9 +263,12 @@ fn flag_on_v2_single_range_matches_v1_byte_boundary() {
 }
 
 #[test]
-fn flag_on_v2_json_uses_url_range_end_key() {
-    // Wire-shape sanity: V2's `url_range` serializes as `{"start", "end"}`,
-    // same as V1 (reuses V1's `UrlRange` type — see handler source).
+fn flag_on_v2_json_matches_xet_core_1_6_wire_shape() {
+    // Wire-shape sanity, pinned to xet-core 1.6.0's `QueryReconstructionResponseV2`:
+    //   * top-level map is `xorbs`, value is a LIST per xorb hash;
+    //   * each range descriptor is `{"chunks":{start,end}, "bytes":{start,end}}`.
+    // An earlier 1.5.x shape (`fetch_info` + single object + `chunk_range`/
+    // `url_range`) made hf_xet 1.6.0 silently reject the response and retry-loop.
     let xorb = [0xee; 32];
     let row = ReconstructionRow {
         file: ReconstructionFile {
@@ -274,16 +279,24 @@ fn flag_on_v2_json_uses_url_range_end_key() {
     };
     let resp = build_v2_response(&row, test_signer().as_ref(), Uuid::nil(), 0);
     let s = serde_json::to_string(&resp).unwrap();
+    // top-level key is `xorbs` with a list value.
     assert!(
-        s.contains(r#""url_range":{"start":0,"end":41}"#),
-        "v2 response shape drift: {s}"
+        s.contains(r#""xorbs":{"#),
+        "v2 top-level must be `xorbs`: {s}"
     );
-    // V2 differs from V1 in the fetch_info value shape: one `url` + `ranges[]`
-    // per xorb (not one entry per merged range). Pin that too.
+    // byte range serializes under `bytes` as {start,end} (end-inclusive).
     assert!(
-        s.contains(r#""ranges":[{"chunk_range":"#),
-        "v2 ranges[] shape drift: {s}"
+        s.contains(r#""bytes":{"start":0,"end":41}"#),
+        "v2 byte range must serialize as `bytes`: {s}"
     );
+    // per-xorb value is a LIST of `{url, ranges:[{chunks, bytes}]}` entries.
+    assert!(
+        s.contains(r#""ranges":[{"chunks":"#),
+        "v2 ranges[] must use `chunks`: {s}"
+    );
+    // round-trips back into the typed response (list-valued xorbs).
+    let back: QueryReconstructionResponseV2 = serde_json::from_str(&s).unwrap();
+    assert_eq!(back.fetch_info.get(&MerkleHash::from(xorb).hex()).unwrap().len(), 1);
 }
 
 // -------------------------------------------------------------------------
@@ -369,7 +382,10 @@ impl<'a> SnapshotV2<'a> {
                 .fetch_info
                 .iter()
                 .map(|(k, v)| {
-                    let url = url::Url::parse(&v.url).expect("signer produces valid URL");
+                    // xorbs value is a list per xet-core 1.6.0; the builder emits
+                    // exactly one entry, so snapshot the first.
+                    let entry = &v[0];
+                    let url = url::Url::parse(&entry.url).expect("signer produces valid URL");
                     let url_path = url.path().to_string();
                     let url_r_param = url
                         .query_pairs()
@@ -380,7 +396,7 @@ impl<'a> SnapshotV2<'a> {
                         SnapshotFetch {
                             url_path,
                             url_r_param,
-                            ranges: v
+                            ranges: entry
                                 .ranges
                                 .iter()
                                 .map(|s| SnapshotSegment {

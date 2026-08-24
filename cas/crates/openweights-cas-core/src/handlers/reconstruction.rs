@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, RawQuery, State},
 };
 use serde::{Deserialize, Serialize};
 
@@ -102,11 +102,21 @@ pub struct QueryReconstructionResponse {
 /// (validated at ).
 pub type BatchQueryReconstructionResponse = BTreeMap<String, QueryReconstructionResponse>;
 
-/// Query params for batch endpoint: repeated `file_id=<hex>` entries.
-#[derive(Debug, Deserialize)]
-pub struct BatchQueryParams {
-    #[serde(default)]
-    pub file_id: Vec<String>,
+/// Parse repeated `file_id=<hex>` values out of a raw query string.
+///
+/// axum's `Query` extractor is backed by `serde_urlencoded`, which cannot
+/// deserialize repeated keys into a `Vec` (it fails with "expected a
+/// sequence"). xet-core's `batch_get_reconstruction` sends exactly that shape
+/// (`?file_id=A&file_id=B`), so we parse the raw query by hand. file_ids are
+/// straight hex, so no percent-decoding is required; a comma-joined value is
+/// tolerated defensively.
+fn parse_file_id_query(raw: &str) -> Vec<String> {
+    raw.split('&')
+        .filter_map(|kv| kv.strip_prefix("file_id="))
+        .flat_map(|v| v.split(','))
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
 }
 
 // -------------------------------------------------------------------------
@@ -138,11 +148,28 @@ pub trait ReconstructionState: AuthStateRef {
 // Handlers
 // -------------------------------------------------------------------------
 
+/// Parse the start offset of a `Range: bytes=<start>-<end>` reconstruction
+/// request. xet-core fetches reconstruction in blocks (min 256 MB) and treats
+/// a `416` as "no more data" — so a request whose start is at/after the file's
+/// end MUST return 416 for the client to stop cleanly. A whole-file download
+/// sends `start=0` for the first block and `start=file_size` for the next,
+/// which is exactly the 416 boundary. Returns None when no Range header is
+/// present (serve the whole file). Only the start is needed: we always serve
+/// from `start` to the end of the file, which satisfies xet-core's min-fetch
+/// semantics (returning more than the requested block is allowed).
+pub(crate) fn reconstruction_range_start(headers: &axum::http::HeaderMap) -> Option<u64> {
+    let raw = headers.get(axum::http::header::RANGE)?.to_str().ok()?;
+    let spec = raw.trim().strip_prefix("bytes=")?;
+    let start = spec.split('-').next()?.trim();
+    start.parse::<u64>().ok()
+}
+
 /// `GET /v1/reconstructions/{file_id_hex}` —.
 pub async fn query_reconstruction_v1<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
     Path(file_id_hex): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<QueryReconstructionResponse>, AppError>
 where
     S: ReconstructionState,
@@ -172,6 +199,13 @@ where
         .await?
         .ok_or(AppError::NotFound)?;
 
+    // (3a) A ranged request that starts at/after EOF → 416 so xet-core stops.
+    if let Some(start) = reconstruction_range_start(&headers) {
+        if start >= row.file.total_size.max(0) as u64 {
+            return Err(AppError::RangeNotSatisfiable);
+        }
+    }
+
     // (4) Build response body.
     let now_unix = unix_now();
     let resp = build_response(&row, st.url_signer().as_ref(), ctx.api_key_id, now_unix);
@@ -193,15 +227,16 @@ where
 pub async fn query_reconstructions_batch_v1<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
-    Query(params): Query<BatchQueryParams>,
+    RawQuery(raw): RawQuery,
 ) -> Result<Json<BatchQueryReconstructionResponse>, AppError>
 where
     S: ReconstructionState,
 {
     // (1) Parse every file_id hex — ANY parse failure → 400.
-    let mut file_ids: Vec<[u8; 32]> = Vec::with_capacity(params.file_id.len());
+    let file_id_params = parse_file_id_query(raw.as_deref().unwrap_or(""));
+    let mut file_ids: Vec<[u8; 32]> = Vec::with_capacity(file_id_params.len());
     let mut hex_for_id: BTreeMap<[u8; 32], String> = BTreeMap::new();
-    for fid_hex in &params.file_id {
+    for fid_hex in &file_id_params {
         // Straight hex decode — see query_reconstruction_v1 for why file_id is
         // NOT the byte-reversed MerkleHash codec. The response is keyed by the
         // exact hex the client sent.

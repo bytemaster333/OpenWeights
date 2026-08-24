@@ -1,0 +1,18 @@
+-- 0014_xorb_chunk_boundaries.sql — store the physical (serialized) chunk
+-- boundary offsets from each xorb so reconstruction can map a term's
+-- chunk-index range to the exact byte range in the stored xorb.
+--
+-- Why: the uploaded shard only carries UNPACKED chunk offsets (the reconstructed
+-- content), which omit the 8-byte CASChunkHeader that precedes every chunk in
+-- the serialized xorb. Deriving a term's xorb byte range from unpacked offsets
+-- truncates it by (num_chunks * 8) bytes, so the gateway serves a short byte
+-- range and hf_xet's chunk deserializer walks off the end (garbage lengths).
+-- XorbObject::deserialize already exposes the true physical boundaries
+-- (`chunk_boundary_offsets`) at upload time; we persist them here.
+--
+-- chunk_boundaries[i] is the END byte offset (exclusive) of chunk i in the
+-- serialized xorb; length == num_chunks; last element == chunk-region size.
+-- chunk i occupies bytes [ (i==0 ? 0 : chunk_boundaries[i-1]) , chunk_boundaries[i] ).
+-- Nullable: rows written before this migration (and dedup rows that never
+-- re-upload the body) keep NULL and fall back to the shard-derived range.
+ALTER TABLE xorbs ADD COLUMN IF NOT EXISTS chunk_boundaries BIGINT[];

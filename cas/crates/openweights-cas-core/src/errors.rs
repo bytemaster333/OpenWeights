@@ -39,6 +39,12 @@ pub enum AppError {
     #[error("not found")]
     NotFound,
 
+    /// 416 — a reconstruction Range request starts at/after the file end.
+    /// xet-core treats 416 as "no more data" and stops fetching, so this is how
+    /// a ranged download signals EOF (see reconstruction handlers).
+    #[error("range not satisfiable")]
+    RangeNotSatisfiable,
+
     #[error("{0}")]
     BadRequest(&'static str),
 
@@ -90,6 +96,10 @@ impl IntoResponse for AppError {
             ),
             Self::Forbidden => (StatusCode::FORBIDDEN, json!({ "error": "forbidden" })),
             Self::NotFound => (StatusCode::NOT_FOUND, json!({ "error": "not_found" })),
+            Self::RangeNotSatisfiable => (
+                StatusCode::RANGE_NOT_SATISFIABLE,
+                json!({ "error": "range_not_satisfiable" }),
+            ),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, json!({ "error": *msg })),
             Self::HashMismatch { expected, actual } => (
                 StatusCode::BAD_REQUEST,

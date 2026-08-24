@@ -1880,12 +1880,18 @@ pub async fn resolve_head<S: HfApiState>(
 
 /// Whether to advertise the Xet reconstruction path on `resolve` responses so
 /// hf_xet downloads via `/v1/reconstructions` -> the Go gateway (option A).
-/// Default OFF: the gateway's `siastorage v0.0.3` cannot decrypt objects the
-/// Rust CAS (`sia_storage 0.7.0`) wrote (SDK version skew), so downloads instead
-/// take the `resolve` -> `/xet/files` path where the CAS reconstructs from Sia
-/// with the Rust SDK. Set `OPENWEIGHTS_GATEWAY_READS=true` to re-enable the
-/// gateway read path once the Go and Rust Sia SDKs reach object-encryption
-/// parity.
+///
+/// The Go gateway CAN decrypt Rust-CAS-written Sia objects: `siastorage
+/// v0.0.3` and `sia_storage 0.7.0` derive byte-identical data-key wrapping keys
+/// (verified). An earlier "SDK version skew" claim here was WRONG; the real
+/// cause of the gateway's `chacha20poly1305: message authentication failed` was
+/// the gateway Dockerfile cross-compiling to `GOARCH=amd64` and running under
+/// arm64 emulation, which mis-executes the x86 chacha/poly SIMD assembly. Fixed
+/// by building for the native arch (see gateway/Dockerfile TARGETARCH).
+///
+/// When OFF, downloads take the `resolve` -> `/xet/files` path where the CAS
+/// reconstructs from Sia with the Rust SDK. Set `OPENWEIGHTS_GATEWAY_READS=true`
+/// to advertise the gateway read path.
 fn gateway_reads_enabled() -> bool {
     std::env::var("OPENWEIGHTS_GATEWAY_READS").as_deref() == Ok("true")
 }

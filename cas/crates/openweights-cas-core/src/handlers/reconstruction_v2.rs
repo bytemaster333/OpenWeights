@@ -75,8 +75,12 @@ use crate::signed_url::UrlMinter;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RangeSegment {
     /// END-EXCLUSIVE chunk-index range (matches `terms[].range` semantics).
+    /// Wire name `chunks` per xet-core `XorbRangeDescriptor`.
+    #[serde(rename = "chunks")]
     pub chunk_range: ChunkRange,
     /// END-INCLUSIVE HTTP Range byte offsets inside the xorb.
+    /// Wire name `bytes` per xet-core `XorbRangeDescriptor`.
+    #[serde(rename = "bytes")]
     pub url_range: UrlRange,
 }
 
@@ -102,9 +106,15 @@ pub struct XorbFetchInfoV2 {
 pub struct QueryReconstructionResponseV2 {
     pub offset_into_first_range: u64,
     pub terms: Vec<ReconstructionTerm>,
-    /// Map: xorb_hash_hex → one fetch_info-v2 entry. `BTreeMap` → deterministic
-    /// key order (golden snapshot stability; matches V1's discipline).
-    pub fetch_info: BTreeMap<String, XorbFetchInfoV2>,
+    /// Map: xorb_hash_hex → LIST of multi-range fetch entries (typically one;
+    /// multiple only when a URL-length limit forces a split). Wire name `xorbs`
+    /// and the list-valued shape match xet-core 1.6.0's
+    /// `QueryReconstructionResponseV2` (`xorbs: HashMap<hash, Vec<..>>`). An
+    /// earlier single-object `fetch_info` shape (xet-core 1.5.x) made hf_xet
+    /// 1.6.0 silently reject the response and retry-loop. `BTreeMap` →
+    /// deterministic key order.
+    #[serde(rename = "xorbs")]
+    pub fetch_info: BTreeMap<String, Vec<XorbFetchInfoV2>>,
 }
 
 // -------------------------------------------------------------------------
@@ -139,6 +149,7 @@ pub async fn query_reconstruction_v2<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
     Path(file_id_hex): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Response, AppError>
 where
     S: ReconstructionState,
@@ -172,6 +183,17 @@ where
     let row = recon_q::get_reconstruction(st.pool(), &file_id_bytes)
         .await?
         .ok_or(AppError::NotFound)?;
+
+    // (4a) A ranged request starting at/after EOF → 416 so xet-core's block
+    // fetcher (min 256 MB blocks) stops instead of expecting phantom data past
+    // the file end. See reconstruction::reconstruction_range_start.
+    if let Some(start) =
+        crate::handlers::reconstruction::reconstruction_range_start(&headers)
+    {
+        if start >= row.file.total_size.max(0) as u64 {
+            return Err(AppError::RangeNotSatisfiable);
+        }
+    }
 
     // (5) Build V2 response.
     let now_unix = unix_now();
@@ -240,7 +262,7 @@ pub(crate) fn build_v2_response(
             });
     }
 
-    let mut fetch_info: BTreeMap<String, XorbFetchInfoV2> = BTreeMap::new();
+    let mut fetch_info: BTreeMap<String, Vec<XorbFetchInfoV2>> = BTreeMap::new();
     for (xorb_hash, byte_ranges) in coalesced {
         let xorb_mhash = MerkleHash::from(xorb_hash);
         let hex_key = xorb_mhash.hex();
@@ -299,7 +321,9 @@ pub(crate) fn build_v2_response(
         // is unreachable from this builder.
         let url = signer.mint_v1_multi_range(&xorb_mhash, &signed_segments, kid, now_unix);
 
-        fetch_info.insert(hex_key, XorbFetchInfoV2 { url, ranges });
+        // xet-core 1.6.0 expects a LIST per xorb (splits only when a URL-length
+        // limit is hit). We emit exactly one entry covering all merged ranges.
+        fetch_info.insert(hex_key, vec![XorbFetchInfoV2 { url, ranges }]);
     }
 
     QueryReconstructionResponseV2 {
