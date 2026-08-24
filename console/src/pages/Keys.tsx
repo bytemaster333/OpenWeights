@@ -290,6 +290,7 @@ export function KeysPage() {
         <OneTimeKeyModal
           open={!!created}
           plaintext={created.plaintext_key}
+          scope={created.scope}
           onAck={() => setCreated(null)}
         />
       )}
