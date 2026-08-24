@@ -24,7 +24,9 @@ import { casFetch } from "@/lib/api"
  * — if the admin's browser tab is hidden, we don't need to spam CAS.*/
 
 export type SubsystemStatus = {
-  status: "ok" | "degraded" | "error"
+  // "external" = a hosted indexer (e.g. sia.storage) with no local node to
+  // probe — a neutral state, not a failure.
+  status: "ok" | "degraded" | "error" | "external"
   latency_ms?: number
 }
 

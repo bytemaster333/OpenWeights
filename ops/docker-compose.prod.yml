@@ -89,22 +89,6 @@ services:
       - "6379"
     restart: unless-stopped
 
-  # ─── indexd: keep p2p port public (required by Sia protocol), loopback
-  # the admin/app APIs. The base compose already loopback-binds 9980/9982
-  # so this is a belt-and-suspenders explicit reset.
-  indexd:
-    # Keep the p2p syncer port (9981) network-reachable; drop the rest.
-    ports: !override
-      - "9981:9981"
-    expose:
-      - "9980"
-      - "9982"
-    environment:
-      # Default to mainnet in prod. Owner overrides to `zen` in.env for a
-      # testnet-funded demo. Keep in sync with OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS.
-      INDEXD_NETWORK: ${SIA_NETWORK:-mainnet}
-    restart: unless-stopped
-
 volumes:
   caddy-data:
     name: openweights-caddy-data

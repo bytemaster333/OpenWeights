@@ -1,6 +1,3 @@
-//go:build !a3probe
-// +build !a3probe
-
 package main
 
 import (
@@ -97,12 +94,10 @@ func sha256Prefix8(s string) string {
 func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 	required := []string{
 		"POSTGRES_SUPERUSER_PASSWORD",
-		"INDEXD_POSTGRES_PASSWORD",
 		"OPENWEIGHTS_POSTGRES_PASSWORD",
 		// : dedicated minimal-privilege role for openweights-gateway.
 		// See cas/migrations/0005_openweights_gw_role.sql.
 		"OPENWEIGHTS_GW_POSTGRES_PASSWORD",
-		"INDEXD_ADMIN_PASSWORD",
 		"REDIS_PASSWORD",
 	}
 	populated := []string{}

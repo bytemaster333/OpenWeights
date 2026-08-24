@@ -67,12 +67,13 @@ pub struct Config {
     #[serde(default)]
     pub indexd_admin_password: String,
 
-    /// Admin-API base URL (no trailing `/`). Distinct from `indexd_url`
-    /// because the app API (`:9982`) is protocol-signed against
-    /// `advertiseURL` while the admin API (`:9980`) is plain HTTP Basic.
-    /// Map + setup probes talk to admin; SDK handshake talks to app.
-    /// Defaults to compose-internal DNS name; host-side callers override.
-    #[serde(default = "default_indexd_admin_url")]
+    /// Admin-API base URL (no trailing `/`) of a SELF-HOSTED indexd, e.g.
+    /// `http://indexd:9980`. Distinct from `indexd_url` (the app API, the
+    /// storage data path). The console Map + Setup "on Sia network" panels
+    /// read this admin API. Empty by default: a hosted indexer
+    /// (https://sia.storage) has no admin API, so those panels degrade to
+    /// empty. Operators running their own indexd set INDEXD_ADMIN_URL.
+    #[serde(default)]
     pub indexd_admin_url: String,
 
     /// HS256 signing secret for OpenWeights-issued Xet JWTs (migration 0008).
@@ -92,10 +93,6 @@ pub struct Config {
     /// `https://cas.openweights.app`.
     #[serde(default = "default_cas_public_url")]
     pub cas_public_url: String,
-}
-
-fn default_indexd_admin_url() -> String {
-    "http://indexd:9980".to_string()
 }
 
 fn default_bind() -> String {

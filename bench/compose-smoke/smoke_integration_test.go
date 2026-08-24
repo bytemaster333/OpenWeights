@@ -3,8 +3,7 @@
 
 // Package compose_smoke — integration test for the Compose stack healthcheck gating.
 // Run via `make compose-smoke` or `cd bench && go test -tags=integration -timeout=35m./compose-smoke/...`.
-// requires a populated `.env` at repo root with INDEXD_ADMIN_PASSWORD set.
-// The bootstrap wizard (PLAN 07) produces this; dev without bootstrap must set manually.
+// requires a populated `.env` at repo root (the bootstrap wizard produces one).
 package compose_smoke
 
 import (
@@ -13,7 +12,6 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -29,17 +27,8 @@ func TestFullStackReady(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available on PATH")
 	}
-	if os.Getenv("INDEXD_ADMIN_PASSWORD") == "" {
-		t.Skip("INDEXD_ADMIN_PASSWORD not set; skipping — bootstrap wizard must run first")
-	}
 
-	// Verify the readiness binary exists (cross-compiled in Task 3 Part A).
-	readinessPath, _ := filepath.Abs("readiness/bin/readiness")
-	if _, err := os.Stat(readinessPath); err != nil {
-		t.Fatalf("readiness binary missing at %s — run `make build-readiness-probe` first", readinessPath)
-	}
-
-	// Start the stack (postgres + indexd + redis).
+	// Start the stack (postgres + redis).
 	t.Log("bringing Compose stack up...")
 	composeUp := exec.Command("docker", "compose", "-f", composeFile, "up", "-d")
 	composeUp.Stdout = os.Stdout

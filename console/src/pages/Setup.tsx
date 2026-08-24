@@ -25,13 +25,19 @@ import { formatBytes, formatHastingsToSC } from "@/lib/format"
 
 function StatusIcon({ s }: { s: SubsystemStatus["status"] }) {
   if (s === "ok") return <CheckCircle weight="fill" className="size-4 text-primary" />
+  if (s === "external")
+    return <CloudCheckIcon weight="light" className="size-4 text-foreground/70" />
   if (s === "degraded") return <Warning weight="fill" className="size-4 text-foreground/70" />
   return <WarningCircle weight="fill" className="size-4 text-destructive" />
 }
 
 function StatusBadge({ s }: { s: SubsystemStatus }) {
   const variant =
-    s.status === "ok" ? "default" : s.status === "degraded" ? "secondary" : "destructive"
+    s.status === "ok"
+      ? "default"
+      : s.status === "degraded" || s.status === "external"
+        ? "secondary"
+        : "destructive"
   return (
     <Badge variant={variant} data-testid="setup-status-badge" data-status={s.status}>
       <StatusIcon s={s.status} />
@@ -114,23 +120,33 @@ export function SetupPage() {
                 <StatusBadge s={data.indexd} />
               </CardHeader>
               <CardContent className="space-y-1 text-xs text-muted-foreground">
-                <div>
-                  Chain synced:{" "}
-                  <span
-                    className="font-mono"
-                    data-testid="setup-indexd-synced"
-                    data-synced={data.indexd.synced ? "true" : "false"}
-                  >
-                    {data.indexd.synced ? "yes" : "no"}
-                  </span>
-                </div>
-                <div>
-                  Round-trip latency:{" "}
-                  <span className="font-mono">{latencyText(data.indexd.latency_ms)}</span>
-                </div>
-                <p className="pt-1 text-[0.7rem]">
-                  Self-hosted <code className="font-mono">indexd</code> node tracking the Sia chain.
-                </p>
+                {data.indexd.status === "external" ? (
+                  <p className="pt-1 text-[0.7rem]">
+                    Using a hosted indexer (e.g. <code className="font-mono">sia.storage</code>).
+                    There is no local node to probe — uploads and downloads still flow through it.
+                  </p>
+                ) : (
+                  <>
+                    <div>
+                      Chain synced:{" "}
+                      <span
+                        className="font-mono"
+                        data-testid="setup-indexd-synced"
+                        data-synced={data.indexd.synced ? "true" : "false"}
+                      >
+                        {data.indexd.synced ? "yes" : "no"}
+                      </span>
+                    </div>
+                    <div>
+                      Round-trip latency:{" "}
+                      <span className="font-mono">{latencyText(data.indexd.latency_ms)}</span>
+                    </div>
+                    <p className="pt-1 text-[0.7rem]">
+                      Self-hosted <code className="font-mono">indexd</code> node tracking the Sia
+                      chain.
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>

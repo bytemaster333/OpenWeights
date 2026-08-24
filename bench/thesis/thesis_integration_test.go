@@ -9,8 +9,8 @@
 // Execution requirements (enforced at runtime; test skips otherwise):
 // - TESTNET_LIVE=1 (opt-in flag; CI defaults off)
 // - OPENWEIGHTS_APP_KEY, OPENWEIGHTS_APP_ID (from PLAN 07 bootstrap wizard)
-// - OPENWEIGHTS_INDEXER_URL (live indexd, typically http://localhost:9982)
-// - indexd is synced + wallet is funded (PLAN 05 readiness probe path; operator responsibility)
+// - OPENWEIGHTS_INDEXER_URL (external hosted indexer, e.g. https://sia.storage)
+// - the indexer wallet is funded and can form contracts (operator responsibility)
 // Invocation (authoritative per VALIDATION.md):
 // cd bench && go test -tags=integration./thesis/... -run TestRangeDownloadSectorScoping -timeout 30m
 // Discovery check:

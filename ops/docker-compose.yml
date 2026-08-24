@@ -1,7 +1,7 @@
 # ops/docker-compose.yml
-# Compose stack — indexd + postgres + redis (no openweights-cas / gateway / console yet).
-# See §9 for design notes.
-# the indexd healthcheck binary ships from PLAN 05; bind-mount path is contractual.
+# Compose stack — postgres + redis + openweights-cas / gateway / console / hf-proxy.
+# No indexd: the operator points OPENWEIGHTS_INDEXER_URL at an external indexer
+# (https://sia.storage by default, or their own indexd URL).
 
 services:
 
@@ -12,13 +12,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD must be set in .env}
       POSTGRES_DB: postgres
       # Passed through to init.sql via the psql-injected psql environment variables.
-      INDEXD_PASSWORD: ${INDEXD_POSTGRES_PASSWORD:?INDEXD_POSTGRES_PASSWORD must be set in .env}
       OPENWEIGHTS_PASSWORD: ${OPENWEIGHTS_POSTGRES_PASSWORD:?OPENWEIGHTS_POSTGRES_PASSWORD must be set in .env}
-      # : openweights_gw role is created at first-boot by indexd-postgres-init.sql.
+      # openweights_gw role is created at first-boot by postgres-init.sql.
       OPENWEIGHTS_GW_PASSWORD: ${OPENWEIGHTS_GW_POSTGRES_PASSWORD:?OPENWEIGHTS_GW_POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./indexd-postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
@@ -50,36 +49,9 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  indexd:
-    # Pin to digest at close:
-    # docker pull ghcr.io/siafoundation/indexd:latest
-    # docker inspect --format='{{index.RepoDigests 0}}' ghcr.io/siafoundation/indexd:latest
-    image: ${INDEXD_IMAGE:-ghcr.io/siafoundation/indexd:latest}
-    container_name: openweights-indexd
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - indexd-data:/data
-      - ./indexd.yml:/data/indexd.yml:ro
-      - ../bench/compose-smoke/readiness/bin/readiness:/usr/local/bin/openweights-readiness:ro
-    environment:
-      INDEXD_DATA_DIR: /data
-      INDEXD_CONFIG_FILE: /data/indexd.yml
-    # Normal p2p sync (--instant removed while diagnosing Zen checkpoint-peer unreachability).
-    # command: ["--instant"]
-    ports:
-      - "127.0.0.1:9980:9980"   # admin API (loopback only)
-      - "9981:9981"              # p2p syncer (must be network-reachable)
-      - "127.0.0.1:9982:9982"   # app API (loopback only; openweights-cas talks via internal network)
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/openweights-readiness"]
-      # 60 retries * 30s = 30 min max sync wait; start_period gives indexd headroom.
-      interval: 30s
-      timeout: 10s
-      retries: 60
-      start_period: 300s
-    restart: unless-stopped
+  # NOTE: OpenWeights does NOT bundle an indexd. The operator supplies an
+  # indexer via OPENWEIGHTS_INDEXER_URL — the hosted https://sia.storage
+  # (default; 50 GB free tier, no wallet funding) or their own indexd URL.
 
   # openweights-gateway — Go gateway. Plans.. own this service.
   # Wave 1 scaffold: serves `/health` + stub `/xorb/{hash}` (501). Real range
@@ -92,7 +64,6 @@ services:
     depends_on:
       postgres:    { condition: service_healthy }
       redis:       { condition: service_healthy }
-      indexd:      { condition: service_healthy }
       openweights-cas:  { condition: service_healthy }
     environment:
       GATEWAY_ADDR: ":8081"
@@ -109,10 +80,10 @@ services:
       # URL). If OPENWEIGHTS_GW_POSTGRES_PASSWORD is unset, the gateway fails
       # fast on boot instead of silently connecting as the wrong role.
       POSTGRES_URL: ${GATEWAY_POSTGRES_URL:-postgres://openweights_gw:${OPENWEIGHTS_GW_POSTGRES_PASSWORD}@postgres:5432/openweights?application_name=openweights-gateway}
-      # Indexer URL. Defaults to the bundled self-hosted indexd; override
-      # OPENWEIGHTS_INDEXER_URL in .env (e.g. https://sia.storage) to point the
-      # whole stack at a hosted mainnet indexer.
-      OPENWEIGHTS_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-http://indexd:9982}
+      # Indexer URL — operator-supplied. Default is the hosted https://sia.storage
+      # (50 GB free tier, no wallet funding); set OPENWEIGHTS_INDEXER_URL in .env
+      # to point the whole stack at your own indexd instead.
+      OPENWEIGHTS_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-https://sia.storage}
       OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
       # The gateway accepts the SAME value the CAS uses (base64 of the 32-byte
       # seed): parseAppKey expands it to the 64-byte ed25519 key so both derive
@@ -120,7 +91,7 @@ services:
       OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Back-compat aliases — accepted by config.go's firstNonEmpty resolver.
       # Remove once the downstream consumers migrate to the OPENWEIGHTS_* names.
-      SIA_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-http://indexd:9982}
+      SIA_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-https://sia.storage}
       APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Whole-xorb disk LRU ( / 03-06). 100 GiB default. GATEWAY_CACHE_*
       # are the canonical env var names; CACHE_DIR / CACHE_SIZE_BYTES remain
@@ -152,11 +123,10 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
-      indexd:   { condition: service_healthy }
     environment:
       DATABASE_URL: postgres://openweights:${OPENWEIGHTS_POSTGRES_PASSWORD}@postgres:5432/openweights
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      INDEXD_URL: ${OPENWEIGHTS_INDEXER_URL:-http://indexd:9982}
+      INDEXD_URL: ${OPENWEIGHTS_INDEXER_URL:-https://sia.storage}
       OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
       OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       GATEWAY_URL_SIGNING_KEY: ${GATEWAY_URL_SIGNING_KEY}
@@ -245,7 +215,5 @@ services:
 volumes:
   postgres-data:
     name: openweights-postgres-data
-  indexd-data:
-    name: openweights-indexd-data
   gateway-cache:
     name: openweights-gateway-cache

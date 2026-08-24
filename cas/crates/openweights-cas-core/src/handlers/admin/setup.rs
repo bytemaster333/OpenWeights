@@ -138,6 +138,17 @@ async fn probe_redis<S: SetupState>(st: &S) -> ProbeStatus {
 async fn probe_indexd<S: SetupState>(st: &S) -> IndexdStatus {
     // state.rs binds indexd_url() to cfg.indexd_admin_url (port 9980)
     let url_base = st.indexd_admin_url().trim_end_matches('/').to_string();
+    // no admin url → hosted indexer (e.g. sia.storage). there is no local
+    // indexd to probe, so report "external" rather than a misleading
+    // "degraded". uploads/downloads still flow through the app-api indexer.
+    if url_base.is_empty() {
+        return IndexdStatus {
+            status: "external",
+            latency_ms: 0.0,
+            synced: None,
+            url: String::new(),
+        };
+    }
     let state_url = format!("{}/api/state", url_base);
     let start = Instant::now();
     let req = st

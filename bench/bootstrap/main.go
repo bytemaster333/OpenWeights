@@ -1,9 +1,7 @@
-//go:build !a3probe
-// +build !a3probe
-
 // Package main — `make bootstrap` wizard per RESEARCH §10.
-// From zero to a running OpenWeights stack: generate BIP-39 if needed, derive App Key,
-// bring Compose up, wait for indexd ready, fund wallet (manual step), run smoke.
+// From zero to a running OpenWeights stack: generate BIP-39 if needed, register
+// the app against the configured indexer, derive the App Key, bring the local
+// supporting services up, and run the smoke round-trip.
 package main
 
 import (
@@ -22,10 +20,8 @@ import (
 
 const (
 	envPath          = ".env"
-	indexdTmplPath   = "ops/indexd.yml.tmpl"
-	indexdOutPath    = "ops/indexd.yml"
 	composeFile      = "ops/docker-compose.yml"
-	bootstrapTimeout = 60 * time.Minute // includes indexd sync + wallet funding
+	bootstrapTimeout = 60 * time.Minute // manual app-approval click can take a while
 )
 
 func main() {
@@ -53,13 +49,8 @@ func main() {
 		kv["OPENWEIGHTS_APP_ID"] = appid.OpenWeightsAppID
 	}
 	if kv["OPENWEIGHTS_INDEXER_URL"] == "" {
-		kv["OPENWEIGHTS_INDEXER_URL"] = "http://indexd:9982"
-	}
-	if kv["SIA_NETWORK"] == "" {
-		kv["SIA_NETWORK"] = "zen"
-	}
-	if kv["OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS"] == "" {
-		kv["OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS"] = "1000000000000000000000000" // 1 zSC
+		// external hosted indexer; self-hosted indexd is gone.
+		kv["OPENWEIGHTS_INDEXER_URL"] = "https://sia.storage"
 	}
 
 	// 3. Generate missing passwords.
@@ -72,49 +63,25 @@ func main() {
 	}
 	logger.Info(".env written", "path", envPath)
 
-	// 5. Render ops/indexd.yml.
-	if err := renderIndexdYML(indexdTmplPath, indexdOutPath, indexdYMLData{
-		RecoveryPhrase:   kv["OPENWEIGHTS_RECOVERY_PHRASE"],
-		AdminPassword:    kv["INDEXD_ADMIN_PASSWORD"],
-		PostgresPassword: kv["INDEXD_POSTGRES_PASSWORD"],
-		Network:          kv["SIA_NETWORK"],
-	}); err != nil {
-		logger.Error("renderIndexdYML", "err", err)
-		os.Exit(1)
-	}
-	logger.Info("ops/indexd.yml rendered")
-
-	// 6. Compose up (postgres + redis first, then indexd).
+	// 5. Bring up the local supporting services (postgres + redis).
 	if err := runCompose("up", "-d", "postgres", "redis"); err != nil {
 		logger.Error("compose up postgres/redis", "err", err)
 		os.Exit(1)
 	}
-	if err := runCompose("up", "-d", "indexd"); err != nil {
-		logger.Error("compose up indexd", "err", err)
-		os.Exit(1)
-	}
-	logger.Info("compose up complete; indexd syncing (may take 10-30 min with --instant)")
+	logger.Info("compose up complete")
 
-	// 7. Wait for wallet (manual funding UX).
+	// 6. Register the app against the indexer + derive the App Key.
 	ctx, cancel := context.WithTimeout(context.Background(), bootstrapTimeout)
 	defer cancel()
 
-	adminURL := "http://localhost:9980/api" // wizard runs on host; loopback port
-	adminPass := kv["INDEXD_ADMIN_PASSWORD"]
-	if err := pollWalletFunded(ctx, logger, adminURL, adminPass, kv["OPENWEIGHTS_WALLET_THRESHOLD_HASTINGS"]); err != nil {
-		logger.Error("pollWalletFunded", "err", err)
-		os.Exit(1)
-	}
-
-	// 8. Derive App Key (Option A or B per A3 verdict).
-	indexerURL := "http://localhost:9982" // wizard runs on host
-	appKeyHex, err := deriveAppKey(ctx, logger, indexerURL, adminURL, adminPass, kv["OPENWEIGHTS_RECOVERY_PHRASE"], kv["OPENWEIGHTS_APP_ID"])
+	indexerURL := kv["OPENWEIGHTS_INDEXER_URL"]
+	appKeyHex, err := deriveAppKey(ctx, logger, indexerURL, kv["OPENWEIGHTS_RECOVERY_PHRASE"], kv["OPENWEIGHTS_APP_ID"])
 	if err != nil {
 		logger.Error("deriveAppKey", "err", err)
 		os.Exit(1)
 	}
 
-	// 9. Persist OPENWEIGHTS_APP_KEY into.env.
+	// 7. Persist OPENWEIGHTS_APP_KEY into.env.
 	kv["OPENWEIGHTS_APP_KEY"] = appKeyHex
 	if err := writeEnv(envPath, kv); err != nil {
 		logger.Error("writeEnv (app key)", "err", err)
@@ -122,7 +89,7 @@ func main() {
 	}
 	logger.Info("app key persisted", "key_sha_prefix", sha256Prefix8(appKeyHex))
 
-	// 10. Run smoke test.
+	// 8. Run smoke test.
 	logger.Info("running smoke test (1 MiB round-trip)")
 	smokeCmd := exec.Command("go", "run", "./smoke")
 	smokeCmd.Dir = "bench" // repo-root CWD; smoke package lives at bench/smoke

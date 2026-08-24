@@ -1,4 +1,4 @@
-// Package main — 1 MiB round-trip smoke test against live indexd ( SC-3).
+// Package main — 1 MiB round-trip smoke test against the configured indexer (OPENWEIGHTS_INDEXER_URL) ( SC-3).
 // Uploads, pins, full-downloads, range-downloads, and byte-compares a 1 MiB
 // random fixture. Invoked by `make smoke` and by the bootstrap wizard at its
 // final step; NOT unit-tested against live network (unit test just ensures
