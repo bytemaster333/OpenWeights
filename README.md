@@ -11,11 +11,11 @@ and come back byte-identical.
 |---|---|
 | `openweights-cas` | xet protocol + hf-api-compat endpoints; writes xorbs to sia, mints signed gateway URLs (rust, axum) |
 | `openweights-gateway` | verifies signed URLs, range-fetches + decrypts xorbs from sia, serves bytes (go) |
-| `openweights-console` | web ui for github sign-in, api keys, models, assets, stats (react) |
-| `indexd` | sia chain indexer (siafoundation/indexd) |
+| `openweights-console` | web ui for sign-in, api keys, models, assets, stats (react) |
 | `postgres` / `redis` | metadata + rate limits / request coalescing |
 
-the cas is the only writer (it holds the sia app key); the gateway is read-only
+OpenWeights does **not** bundle an indexer — you point it at one (see below).
+The cas is the only writer (it holds the sia app key); the gateway is read-only
 and serves bytes only for cas-signed URLs. on download, `hf` asks the cas for a
 reconstruction, then fetches the xorbs straight from the gateway.
 
@@ -23,42 +23,45 @@ reconstruction, then fetches the xorbs straight from the gateway.
 
 ```bash
 cp ops/.env.example .env
-make bootstrap        # first-time wizard: generates secrets, brings the stack
-                      # up, funds the wallet, registers the sia app, smoke-tests
-# or, if you already have a populated .env:
-make up
+make setup            # interactive wizard: pick an indexer, set an admin
+                      # password, generate all secrets + keys → writes .env
+make bootstrap        # registers the sia app on the indexer (approve in your
+                      # browser when prompted), then brings the whole stack up
 ```
 
-`make bootstrap` fills the blank secrets in `.env` and writes
-`OPENWEIGHTS_APP_ID` / `OPENWEIGHTS_APP_KEY` after registering the app with the
-indexer. **Keep `.env` (and especially `OPENWEIGHTS_RECOVERY_PHRASE`) safe —
-losing the phrase orphans every stored byte permanently.**
+`make setup` fills `.env` (passwords, signing keys, App ID). `make bootstrap`
+then runs the app-approval flow and writes `OPENWEIGHTS_APP_KEY`. **Keep `.env`
+(and especially `OPENWEIGHTS_RECOVERY_PHRASE`) safe — losing the phrase orphans
+every stored byte permanently.**
+
+Already have a fully-populated `.env`? Just `make up`.
 
 ### choosing an indexer
 
-The stack defaults to the bundled self-hosted `indexd`, which needs a funded
-wallet and enough usable hosts to form storage contracts. If contract formation
-stalls (e.g. on a sparse testnet), point everything at a hosted mainnet indexer
-with a deep host pool by setting one line in `.env`:
+OpenWeights reaches Sia through an indexer you supply via
+`OPENWEIGHTS_INDEXER_URL`. Two options:
 
-```bash
-OPENWEIGHTS_INDEXER_URL=https://sia.storage
-```
-
-then re-register the app against it (`make bootstrap` does this) and `make up`.
+- **Hosted (default): `https://sia.storage`** — 50 GB free tier, no wallet
+  funding, a deep host pool. `make setup` picks this unless you choose otherwise.
+- **Your own `indexd`** — set the URL to your instance
+  (`http://my-indexd:9982` or `https://indexd.example.com`). You fund its wallet
+  and keep it synced.
 
 ## upload / download
 
-Sign in to the console (`http://localhost:5173`), mint a key on the `/keys`
-page, then use the stock `hf` CLI with `HF_ENDPOINT` pointed at the cas:
+Sign in to the console at `http://localhost:5173` (password auth uses
+`OPENWEIGHTS_ADMIN_PASSWORD` from `.env`; GitHub OAuth is optional). Mint a key
+on the `/keys` page — the default **read + write** scope carries both upload and
+download, so one key does a full round-trip. Then use the stock `hf` CLI with
+`HF_ENDPOINT` pointed at the cas:
 
 ```bash
 # upload
 HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
   hf upload <owner>/<repo> ./model-dir
 
-# download from a fresh cache (public repo needs no token)
-HF_ENDPOINT=http://localhost:8080 \
+# download from a fresh cache (same read+write key, or a read key)
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
   hf download <owner>/<repo> --local-dir ./out
 ```
 
