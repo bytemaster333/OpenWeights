@@ -177,6 +177,10 @@ services:
       # CAS URL for xet-write-token responses.
       XET_JWT_SIGNING_KEY: ${XET_JWT_SIGNING_KEY:-}
       CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-http://localhost:28080}
+      # Password sign-in for single-operator self-hosting. Set a password to
+      # skip GitHub OAuth entirely; leave empty to disable password auth.
+      OPENWEIGHTS_ADMIN_PASSWORD: ${OPENWEIGHTS_ADMIN_PASSWORD:-}
+      OPENWEIGHTS_ADMIN_USERNAME: ${OPENWEIGHTS_ADMIN_USERNAME:-admin}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "127.0.0.1:8080:8080"

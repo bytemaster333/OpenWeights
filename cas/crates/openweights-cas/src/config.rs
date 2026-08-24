@@ -44,6 +44,16 @@ pub struct Config {
     pub github_oauth_client_id: String,
     #[serde(default)]
     pub github_oauth_client_secret: String,
+
+    /// Password sign-in for self-hosted, single-operator setups. When set,
+    /// the console shows a password box and the operator can run OpenWeights
+    /// without registering a GitHub OAuth app. Empty ⇒ password auth off.
+    /// Lives only here (env), never in the DB or logs.
+    #[serde(default)]
+    pub openweights_admin_password: String,
+    /// Display login for the synthetic password-admin user (`users.id = -1`).
+    #[serde(default = "default_admin_username")]
+    pub openweights_admin_username: String,
     #[serde(default = "default_github_callback_url")]
     pub github_oauth_callback_url: String,
     /// Where to redirect the browser after a successful OAuth callback.
@@ -107,6 +117,9 @@ fn default_github_callback_url() -> String {
     // `GITHUB_OAUTH_CALLBACK_URL=https://cas.openweights.app/auth/github/callback`
     // (or equivalent). Must match the GitHub OAuth App registration.
     "http://localhost:8080/auth/github/callback".to_string()
+}
+fn default_admin_username() -> String {
+    "admin".to_string()
 }
 fn default_console_base_url() -> String {
     // Vite dev server origin by default; production overrides via

@@ -163,6 +163,14 @@ pub fn build(state: AppState) -> Router {
             get(handlers::auth::github::callback::<AppState>),
         )
         .route(
+            "/auth/login",
+            post(handlers::auth::password::login::<AppState>),
+        )
+        .route(
+            "/auth/methods",
+            get(handlers::auth::password::auth_methods::<AppState>),
+        )
+        .route(
             "/auth/logout",
             post(handlers::auth::logout::logout::<AppState>),
         )

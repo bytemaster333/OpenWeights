@@ -29,10 +29,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(base: string, path: string, init: RequestInit = {}): Promise<T> {
+  // Destructure `headers` out and apply it last so per-call headers always
+  // merge with the defaults instead of clobbering them.
+  const { headers: initHeaders, ...rest } = init
   const res = await fetch(`${base}${path}`, {
     credentials: "include",
-    headers: { Accept: "application/json", ...init.headers },
-    ...init,
+    ...rest,
+    headers: { Accept: "application/json", ...initHeaders },
   })
   const requestId = res.headers.get("x-request-id") ?? undefined
   if (!res.ok) {
@@ -69,6 +72,34 @@ export function gatewayFetch<T>(path: string, init: RequestInit = {}): Promise<T
  * any cached user data after this resolves.*/
 export function logout(): Promise<void> {
   return casFetch<void>("/auth/logout", { method: "POST" })
+}
+
+/** Which sign-in methods the operator enabled. Drives the login page UI. */
+export interface AuthMethods {
+  password: boolean
+  github: boolean
+}
+
+/**
+ * Public probe of the enabled sign-in methods. Lets the login page show a
+ * password box, a GitHub button, or both, without baking the choice into the
+ * build. Never returns secrets — only two booleans.
+ */
+export function authMethods(): Promise<AuthMethods> {
+  return casFetch<AuthMethods>("/auth/methods")
+}
+
+/**
+ * Password sign-in for single-operator self-hosting. Hits CAS
+ * `POST /auth/login`, which on success sets the same `openweights_session`
+ * cookie the GitHub flow would. Throws `ApiError` (401) on a wrong password.
+ */
+export function login(password: string): Promise<void> {
+  return casFetch<void>("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  })
 }
 
 export { CAS_URL, GATEWAY_URL }

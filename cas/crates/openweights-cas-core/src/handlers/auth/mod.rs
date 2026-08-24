@@ -4,6 +4,8 @@
 //! |----------------------------|-------------------------------|
 //! | GET /auth/github/start | `github::start` |
 //! | GET /auth/github/callback | `github::callback` |
+//! | POST /auth/login | `password::login` |
+//! | GET /auth/methods | `password::auth_methods` |
 //! | POST /auth/logout | `logout::logout` |
 //! The start+callback pair exchanges an OAuth `code` with GitHub, upserts the
 //! `users` row keyed on numeric `users.id BIGINT` (NOT email — ), mints a
@@ -16,3 +18,4 @@
 
 pub mod github;
 pub mod logout;
+pub mod password;
