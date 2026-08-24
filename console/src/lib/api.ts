@@ -12,8 +12,7 @@
  * - No auth header is attached. Plaintext API keys live only in the
  * `POST /admin/keys` response body + onboarding copy-paste.*/
 
-const CAS_URL = import.meta.env.VITE_CAS_URL ?? "http://localhost:8080"
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "http://localhost:9090"
+import { CAS_URL, GATEWAY_URL } from "@/lib/config"
 
 export class ApiError extends Error {
   readonly status: number

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import { type ApiError, casFetch } from "@/lib/api"
+import { CAS_URL } from "@/lib/config"
 
 /**
  * One row in `GET /api/models`. Matches `ModelListItem` in
@@ -141,7 +142,7 @@ export function useModelReadme(owner: string | undefined, repo: string | undefin
     queryKey: ["models", owner, repo, "README.md"],
     queryFn: async () => {
       if (!owner || !repo) return null
-      const base = import.meta.env.VITE_CAS_URL ?? "http://localhost:8080"
+      const base = CAS_URL
       const res = await fetch(`${base}/${owner}/${repo}/resolve/main/README.md`, {
         redirect: "follow",
       })

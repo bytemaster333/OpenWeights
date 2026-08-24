@@ -33,6 +33,7 @@ import {
   useModelTrend,
 } from "@/hooks/useModels"
 import { usePlatformSia } from "@/hooks/useSetupStatus"
+import { CAS_URL } from "@/lib/config"
 import { formatBytes, formatRelative } from "@/lib/format"
 
 /**
@@ -54,8 +55,6 @@ import { formatBytes, formatRelative } from "@/lib/format"
  *
  * The owner-only HF-announce card lives below the grid so it never
  * competes with the primary download UX.*/
-
-const CAS_URL = import.meta.env.VITE_CAS_URL ?? "http://localhost:8080"
 
 // ---------------------------------------------------------------------------
 // Main page

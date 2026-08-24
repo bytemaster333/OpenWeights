@@ -60,6 +60,9 @@ services:
     build:
       context: ../gateway
       dockerfile: Dockerfile
+    # Prebuilt image published to GHCR on each release tag. `docker compose
+    # pull` fetches it (no local build); `docker compose build` re-tags it.
+    image: ghcr.io/bytemaster333/openweights-gateway:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-gateway
     depends_on:
       postgres:    { condition: service_healthy }
@@ -119,6 +122,7 @@ services:
     build:
       context: ..
       dockerfile: cas/Dockerfile
+    image: ghcr.io/bytemaster333/openweights-cas:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-cas
     depends_on:
       postgres: { condition: service_healthy }
@@ -174,7 +178,15 @@ services:
         VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:9090}
         VITE_HF_PROXY_URL: ${VITE_HF_PROXY_URL:-http://localhost:28090}
         VITE_CONFORMANCE_BADGE_URL: ${VITE_CONFORMANCE_BADGE_URL:-}
+    image: ghcr.io/bytemaster333/openweights-console:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-console
+    environment:
+      # Runtime config written into /config.js at container start (see console
+      # Dockerfile) so the prebuilt image targets any deployment. Defaults match
+      # the build-time VITE_* for dev consistency; prod sets real URLs.
+      OPENWEIGHTS_CONSOLE_CAS_URL: ${VITE_CAS_URL:-http://localhost:8080}
+      OPENWEIGHTS_CONSOLE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:9090}
+      OPENWEIGHTS_CONSOLE_HF_PROXY_URL: ${VITE_HF_PROXY_URL:-http://localhost:28090}
     depends_on:
       openweights-cas: { condition: service_healthy }
     ports:
@@ -195,6 +207,7 @@ services:
     build:
       context: ..
       dockerfile: hf-proxy/Dockerfile
+    image: ghcr.io/bytemaster333/openweights-hf-proxy:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-hf-proxy
     environment:
       LISTEN_ADDR: ":28090"
