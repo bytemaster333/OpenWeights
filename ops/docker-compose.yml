@@ -109,12 +109,18 @@ services:
       # URL). If OPENWEIGHTS_GW_POSTGRES_PASSWORD is unset, the gateway fails
       # fast on boot instead of silently connecting as the wrong role.
       POSTGRES_URL: ${GATEWAY_POSTGRES_URL:-postgres://openweights_gw:${OPENWEIGHTS_GW_POSTGRES_PASSWORD}@postgres:5432/openweights?application_name=openweights-gateway}
-      OPENWEIGHTS_INDEXER_URL: http://indexd:9982
+      # Indexer URL. Defaults to the bundled self-hosted indexd; override
+      # OPENWEIGHTS_INDEXER_URL in .env (e.g. https://sia.storage) to point the
+      # whole stack at a hosted mainnet indexer.
+      OPENWEIGHTS_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-http://indexd:9982}
       OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
+      # The gateway accepts the SAME value the CAS uses (base64 of the 32-byte
+      # seed): parseAppKey expands it to the 64-byte ed25519 key so both derive
+      # the identical object-encryption key.
       OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Back-compat aliases — accepted by config.go's firstNonEmpty resolver.
       # Remove once the downstream consumers migrate to the OPENWEIGHTS_* names.
-      SIA_INDEXER_URL: http://indexd:9982
+      SIA_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-http://indexd:9982}
       APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Whole-xorb disk LRU ( / 03-06). 100 GiB default. GATEWAY_CACHE_*
       # are the canonical env var names; CACHE_DIR / CACHE_SIZE_BYTES remain
@@ -150,14 +156,23 @@ services:
     environment:
       DATABASE_URL: postgres://openweights:${OPENWEIGHTS_POSTGRES_PASSWORD}@postgres:5432/openweights
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      INDEXD_URL: http://indexd:9982
+      INDEXD_URL: ${OPENWEIGHTS_INDEXER_URL:-http://indexd:9982}
       OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
       OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       GATEWAY_URL_SIGNING_KEY: ${GATEWAY_URL_SIGNING_KEY}
       GATEWAY_URL_SIGNING_KEY_PREV: ${GATEWAY_URL_SIGNING_KEY_PREV:-}
       GATEWAY_URL_TTL_SECS: ${GATEWAY_URL_TTL_SECS:-7200}
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://127.0.0.1:9090}
-      V2_RECONSTRUCTION_ENABLED: ${V2_RECONSTRUCTION_ENABLED:-false}
+      # Downloads flow through the Go gateway (proposal-faithful) by default: the
+      # CAS advertises the Xet reconstruction path so hf_xet fetches xorbs from
+      # the gateway. Set false to fall back to the CAS-serves-reads path.
+      OPENWEIGHTS_GATEWAY_READS: ${OPENWEIGHTS_GATEWAY_READS:-true}
+      V2_RECONSTRUCTION_ENABLED: ${V2_RECONSTRUCTION_ENABLED:-true}
+      # First mainnet pin = on-chain contract formation across many hosts, which
+      # exceeds the default per-op budgets. Handler accepts-pending fast; the
+      # reconciler finishes the slow pin. Tune for local vs. mainnet indexers.
+      OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS: ${OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS:-20}
+      OPENWEIGHTS_SIA_OP_TIMEOUT_SECS: ${OPENWEIGHTS_SIA_OP_TIMEOUT_SECS:-3600}
       # HF-API-compat (migration 0008): HS256 signing key + client-visible
       # CAS URL for xet-write-token responses.
       XET_JWT_SIGNING_KEY: ${XET_JWT_SIGNING_KEY:-}

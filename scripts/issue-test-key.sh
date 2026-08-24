@@ -78,7 +78,11 @@ fi
 # real account that would share this Postgres). Idempotent upsert so repeat
 # CI runs reuse the same row.
 CI_USER_ID=999999999
-CI_USER_LOGIN="openweights-ci-test"
+# Must match the owner namespace the round-trip harness uploads under
+# (tests/hf-roundtrip/standalone-roundtrip.sh -> openweights-e2e/...): the HF
+# read path resolves `/api/models/{owner}/{repo}` by joining repos to
+# users.github_login, so a mismatch here makes every download 404.
+CI_USER_LOGIN="openweights-e2e"
 
 # psql exec shim. COMPOSE Postgres container runs as user `postgres`; the
 # `openweights` database was created by indexd-postgres-init.sql at first boot.
@@ -88,7 +92,7 @@ psql_exec() {
 }
 
 # Upsert the CI test user (ON CONFLICT DO NOTHING — second call is a no-op).
-psql_exec "INSERT INTO users (id, github_login, email) VALUES ($CI_USER_ID, '$CI_USER_LOGIN', NULL) ON CONFLICT (id) DO NOTHING;" >/dev/null
+psql_exec "INSERT INTO users (id, github_login, email) VALUES ($CI_USER_ID, '$CI_USER_LOGIN', NULL) ON CONFLICT (id) DO UPDATE SET github_login = EXCLUDED.github_login;" >/dev/null
 
 # Insert the api_keys row. key_hash is BYTEA — feed it as \x-prefixed hex.
 psql_exec "INSERT INTO api_keys (user_id, key_hash, scopes, label, masked_prefix) VALUES ($CI_USER_ID, decode('$KEY_HASH_HEX', 'hex'), ARRAY['$DB_SCOPE'::api_key_scope], 'ci-test-$(date +%s)', '$MASKED');" >/dev/null
