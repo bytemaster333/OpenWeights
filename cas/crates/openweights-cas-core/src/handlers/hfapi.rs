@@ -1359,18 +1359,17 @@ pub async fn platform_stats<S: HfApiState>(
                FROM repo_downloads rd \
                JOIN repos r ON r.id = rd.repo_id \
               WHERE r.visibility = 'public') AS total_downloads, \
-            (SELECT COALESCE(SUM(rd.bytes)::BIGINT, 0) \
-               FROM repo_downloads rd \
-               JOIN repos r ON r.id = rd.repo_id \
-              WHERE r.visibility = 'public') AS total_bytes_served, \
+            (SELECT COALESCE(SUM(ul.bytes)::BIGINT, 0) \
+               FROM usage_log ul \
+              WHERE ul.event = 'download' AND ul.bytes IS NOT NULL) AS total_bytes_served, \
             (SELECT COALESCE(SUM(rd.count)::BIGINT, 0) \
                FROM repo_downloads rd \
                JOIN repos r ON r.id = rd.repo_id \
               WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS downloads_today, \
-            (SELECT COALESCE(SUM(rd.bytes)::BIGINT, 0) \
-               FROM repo_downloads rd \
-               JOIN repos r ON r.id = rd.repo_id \
-              WHERE r.visibility = 'public' AND rd.day >= CURRENT_DATE) AS bytes_served_today, \
+            (SELECT COALESCE(SUM(ul.bytes)::BIGINT, 0) \
+               FROM usage_log ul \
+              WHERE ul.event = 'download' AND ul.bytes IS NOT NULL \
+                AND ul.occurred_at >= CURRENT_DATE) AS bytes_served_today, \
             (SELECT COUNT(*)::BIGINT FROM xorbs WHERE pin_state = 'pinned' AND sia_object_id IS NOT NULL) AS xorbs_pinned, \
             (SELECT COUNT(*)::BIGINT FROM xorbs) AS xorbs_total, \
             (SELECT COALESCE(SUM(size_bytes)::BIGINT, 0) FROM xorbs WHERE pin_state = 'pinned' AND sia_object_id IS NOT NULL) AS bytes_on_sia",
