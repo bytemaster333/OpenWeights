@@ -39,10 +39,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$SCOPE" in
-  read)  DB_SCOPE="download" ;;
-  write) DB_SCOPE="upload" ;;
-  admin) DB_SCOPE="admin" ;;
-  *) echo "invalid --scope '$SCOPE' (expected read|write|admin)" >&2; exit 2 ;;
+  read)      DB_SCOPES_SQL="ARRAY['download'::api_key_scope]" ;;
+  write)     DB_SCOPES_SQL="ARRAY['upload'::api_key_scope]" ;;
+  # readwrite = both, so one key completes a full upload+download round-trip.
+  readwrite) DB_SCOPES_SQL="ARRAY['download','upload']::api_key_scope[]" ;;
+  admin)     DB_SCOPES_SQL="ARRAY['admin'::api_key_scope]" ;;
+  *) echo "invalid --scope '$SCOPE' (expected read|write|readwrite|admin)" >&2; exit 2 ;;
 esac
 
 : "${OPENWEIGHTS_POSTGRES_PASSWORD:?OPENWEIGHTS_POSTGRES_PASSWORD must be exported (matches .env)}"
@@ -95,7 +97,7 @@ psql_exec() {
 psql_exec "INSERT INTO users (id, github_login, email) VALUES ($CI_USER_ID, '$CI_USER_LOGIN', NULL) ON CONFLICT (id) DO UPDATE SET github_login = EXCLUDED.github_login;" >/dev/null
 
 # Insert the api_keys row. key_hash is BYTEA — feed it as \x-prefixed hex.
-psql_exec "INSERT INTO api_keys (user_id, key_hash, scopes, label, masked_prefix) VALUES ($CI_USER_ID, decode('$KEY_HASH_HEX', 'hex'), ARRAY['$DB_SCOPE'::api_key_scope], 'ci-test-$(date +%s)', '$MASKED');" >/dev/null
+psql_exec "INSERT INTO api_keys (user_id, key_hash, scopes, label, masked_prefix) VALUES ($CI_USER_ID, decode('$KEY_HASH_HEX', 'hex'), $DB_SCOPES_SQL, 'ci-test-$(date +%s)', '$MASKED');" >/dev/null
 
 # Plaintext to stdout — harness captures via $(cmd).
 printf '%s\n' "$PLAINTEXT"

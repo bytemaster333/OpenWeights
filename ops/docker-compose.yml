@@ -155,6 +155,22 @@ services:
       # skip GitHub OAuth entirely; leave empty to disable password auth.
       OPENWEIGHTS_ADMIN_PASSWORD: ${OPENWEIGHTS_ADMIN_PASSWORD:-}
       OPENWEIGHTS_ADMIN_USERNAME: ${OPENWEIGHTS_ADMIN_USERNAME:-admin}
+      # Console origin — drives BOTH the CORS allow-origin and the post-OAuth
+      # redirect. MUST be the browser-facing console URL. Base compose serves
+      # the console on localhost:5173; prod sets the real domain in .env.
+      # (Read here in the base file so it reaches the CAS in prod too, where the
+      # dev override is not merged.)
+      CONSOLE_BASE_URL: ${CONSOLE_BASE_URL:-http://localhost:5173}
+      # GitHub OAuth — optional (password sign-in works without it). Set all
+      # three in .env to also offer "Continue with GitHub". Callback must match
+      # the GitHub OAuth App registration.
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CALLBACK_URL: ${GITHUB_OAUTH_CALLBACK_URL:-http://localhost:8080/auth/github/callback}
+      # Self-hosted indexd admin API (optional) — powers the console Map + Setup
+      # "on Sia network" panels. Empty with a hosted indexer (no admin API).
+      INDEXD_ADMIN_URL: ${INDEXD_ADMIN_URL:-}
+      INDEXD_ADMIN_PASSWORD: ${INDEXD_ADMIN_PASSWORD:-}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "127.0.0.1:8080:8080"
@@ -219,7 +235,8 @@ services:
     ports:
       - "127.0.0.1:28090:28090"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:28090/health"]
+      # distroless image has no shell/wget — probe via the binary's own subcommand.
+      test: ["CMD", "/usr/local/bin/openweights-hf-proxy", "healthcheck"]
       interval: 10s
       retries: 3
       start_period: 5s

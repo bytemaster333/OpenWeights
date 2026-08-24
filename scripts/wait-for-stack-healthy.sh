@@ -65,7 +65,6 @@ echo "Waiting for OpenWeights compose stack to become healthy..."
 # Order reflects compose dependency graph. Foundations first, then services.
 wait_healthy postgres         30
 wait_healthy redis            30
-wait_healthy indexd          600
 wait_healthy openweights-cas      120
 wait_healthy openweights-gateway  120
 wait_healthy openweights-console   60

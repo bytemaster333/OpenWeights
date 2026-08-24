@@ -141,13 +141,18 @@ func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 			logger.Info("generated password", "key", k, "sha_prefix", sha256Prefix8(kv[k]))
 		}
 	}
-	// HMAC key for signed gateway URLs — base64, MANDATORY (the gateway fails
-	// to boot if empty). Shared by CAS (mints) and gateway (verifies).
-	if kv["GATEWAY_URL_SIGNING_KEY"] == "" {
-		kv["GATEWAY_URL_SIGNING_KEY"] = generateSigningKey()
-		populated = append(populated, "GATEWAY_URL_SIGNING_KEY")
-		logger.Info("generated signing key", "key", "GATEWAY_URL_SIGNING_KEY",
-			"sha_prefix", sha256Prefix8(kv["GATEWAY_URL_SIGNING_KEY"]))
+	// base64 keys the CAS/gateway need. Generated here so a fresh operator's
+	// stack boots and the HF round-trip works without hand-editing .env.
+	//   GATEWAY_URL_SIGNING_KEY — MANDATORY; gateway won't boot if empty.
+	//     shared by CAS (mints signed URLs) and gateway (verifies).
+	//   XET_JWT_SIGNING_KEY — without it the HF-compat token endpoints 503,
+	//     so `hf upload` / `hf download` fail.
+	for _, k := range []string{"GATEWAY_URL_SIGNING_KEY", "XET_JWT_SIGNING_KEY"} {
+		if kv[k] == "" {
+			kv[k] = generateSigningKey()
+			populated = append(populated, k)
+			logger.Info("generated signing key", "key", k, "sha_prefix", sha256Prefix8(kv[k]))
+		}
 	}
 	return populated
 }

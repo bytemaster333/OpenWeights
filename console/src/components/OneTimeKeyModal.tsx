@@ -35,7 +35,7 @@ import {
 export type OneTimeKeyModalProps = {
   open: boolean
   plaintext: string
-  scope: "read" | "write" | "admin"
+  scope: "read" | "write" | "readwrite" | "admin"
   onAck: () => void
 }
 
@@ -44,6 +44,7 @@ export type OneTimeKeyModalProps = {
 const SCOPE_BLURB: Record<OneTimeKeyModalProps["scope"], string> = {
   read: "it can download objects on your behalf",
   write: "it can upload new xorbs and shards on your behalf",
+  readwrite: "it can upload and download on your behalf — enough for a full round-trip",
   admin: "it has full admin access on your behalf",
 }
 

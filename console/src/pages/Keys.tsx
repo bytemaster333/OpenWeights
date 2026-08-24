@@ -82,7 +82,8 @@ export function KeysPage() {
 
   const [created, setCreated] = useState<CreatedKey | null>(null)
   const [name, setName] = useState("")
-  const [scope, setScope] = useState<KeyScope>("write")
+  // default to read+write so one key completes a full upload+download round-trip.
+  const [scope, setScope] = useState<KeyScope>("readwrite")
 
   const canSubmit = name.trim().length > 0 && !create.isPending
 
@@ -171,8 +172,9 @@ export function KeysPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="read">read</SelectItem>
+                  <SelectItem value="readwrite">read + write</SelectItem>
                   <SelectItem value="write">write</SelectItem>
+                  <SelectItem value="read">read</SelectItem>
                 </SelectContent>
               </Select>
             </div>
