@@ -3,7 +3,7 @@
 # Targets whose recipes depend on code from later plans emit a clear
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
 
-.PHONY: bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
+.PHONY: setup bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
  help \
  cas-build cas-check cas-clippy cas-run cas-image cas-up \
  gateway-build gateway-check gateway-vet gateway-run gateway-test gateway-image gateway-up \
@@ -52,8 +52,14 @@ help:
 	@echo " make deploy-smoke Post-deploy objective smoke (ops/smoke.sh; /)"
 	@echo " make preload-fixture Seed the hosted demo with the pinned fixture model "
 
+setup:
+	@echo "setup: interactive .env wizard (prompts for indexer + admin password + recovery phrase, generates the rest)..."
+	@mkdir -p bin
+	$(BENCH) $(GO) build -o "$(CURDIR)/bin/bootstrap" ./bootstrap
+	./bin/bootstrap -env-only
+
 bootstrap:
-	@echo "bootstrap: running wizard (brings up stack + funds wallet + smoke)..."
+	@echo "bootstrap: running wizard (writes .env, brings up the stack, registers the app on the indexer, smoke-tests)..."
 	@mkdir -p bin
 	$(BENCH) $(GO) build -o "$(CURDIR)/bin/bootstrap" ./bootstrap
 	./bin/bootstrap

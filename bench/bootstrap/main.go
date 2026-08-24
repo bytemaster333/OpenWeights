@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/mattn/go-isatty"
-	"go.sia.tech/siastorage"
 
 	"github.com/bytemaster333/openweights/bench/appid"
 )
@@ -25,43 +24,58 @@ const (
 )
 
 func main() {
+	// `-env-only` (used by `make setup`) writes .env and stops — no stack
+	// bring-up, no app registration, no smoke test.
+	envOnly := false
+	for _, a := range os.Args[1:] {
+		if a == "-env-only" || a == "--env-only" {
+			envOnly = true
+		}
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	isTTY := isatty.IsTerminal(os.Stdin.Fd())
 
-	// 1. Load.env (or empty map).
+	// 1. Load .env (or empty map).
 	kv, err := loadEnv(envPath)
 	if err != nil {
 		logger.Error("loadEnv", "err", err)
 		os.Exit(1)
 	}
 
-	// 2. Set defaults + generate BIP-39 if phrase empty.
-	if kv["OPENWEIGHTS_RECOVERY_PHRASE"] == "" {
-		if !isTTY {
-			_ = requireEnv(kv, "OPENWEIGHTS_RECOVERY_PHRASE")
-			fmt.Fprintln(os.Stderr, "FATAL: non-TTY mode requires OPENWEIGHTS_RECOVERY_PHRASE in .env")
-			os.Exit(2)
-		}
-		kv["OPENWEIGHTS_RECOVERY_PHRASE"] = siastorage.NewSeedPhrase()
-		logger.Info("generated BIP-39 phrase", "phrase_sha_prefix", sha256Prefix8(kv["OPENWEIGHTS_RECOVERY_PHRASE"]))
+	// 2. Non-TTY has nothing to prompt — require the phrase to be pre-set.
+	if !isTTY && kv["OPENWEIGHTS_RECOVERY_PHRASE"] == "" {
+		fmt.Fprintln(os.Stderr, "FATAL: non-TTY mode requires OPENWEIGHTS_RECOVERY_PHRASE in .env")
+		os.Exit(2)
 	}
+
+	// 3. Interactively fill the operator's choices (phrase, indexer, admin
+	//    password) on a TTY.
+	promptOperatorValues(logger, kv, isTTY)
+
+	// 4. Non-interactive defaults for anything still empty + generate the
+	//    infrastructure passwords.
 	if kv["OPENWEIGHTS_APP_ID"] == "" {
 		kv["OPENWEIGHTS_APP_ID"] = appid.OpenWeightsAppID
 	}
 	if kv["OPENWEIGHTS_INDEXER_URL"] == "" {
-		// external hosted indexer; self-hosted indexd is gone.
 		kv["OPENWEIGHTS_INDEXER_URL"] = "https://sia.storage"
 	}
-
-	// 3. Generate missing passwords.
 	_ = fillMissing(logger, kv)
 
-	// 4. Persist.env (atomic).
+	// 5. Persist .env (atomic, 0600).
 	if err := writeEnv(envPath, kv); err != nil {
 		logger.Error("writeEnv", "err", err)
 		os.Exit(1)
 	}
 	logger.Info(".env written", "path", envPath)
+
+	// `make setup` stops here — the .env is ready to use.
+	if envOnly {
+		fmt.Fprintln(os.Stderr, "setup: .env written. Next: `docker compose -f ops/docker-compose.yml up -d`")
+		fmt.Fprintln(os.Stderr, "       (or `make bootstrap` to also register the app on the indexer + smoke-test).")
+		return
+	}
 
 	// 5. Bring up the local supporting services (postgres + redis).
 	if err := runCompose("up", "-d", "postgres", "redis"); err != nil {
