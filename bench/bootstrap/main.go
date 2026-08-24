@@ -61,6 +61,16 @@ func main() {
 	if kv["OPENWEIGHTS_INDEXER_URL"] == "" {
 		kv["OPENWEIGHTS_INDEXER_URL"] = "https://sia.storage"
 	}
+	// Client-reachable CAS URL. The base compose publishes the CAS on
+	// localhost:8080; hf-proxy hard-requires OPENWEIGHTS_CAS_PUBLIC_URL and the
+	// CAS stamps CAS_PUBLIC_URL into xet-write-token responses. Operators with a
+	// domain override both in .env; this default makes `docker compose up` work
+	// out of the box.
+	for _, k := range []string{"OPENWEIGHTS_CAS_PUBLIC_URL", "CAS_PUBLIC_URL"} {
+		if kv[k] == "" {
+			kv[k] = "http://localhost:8080"
+		}
+	}
 	_ = fillMissing(logger, kv)
 
 	// 5. Persist .env (atomic, 0600).

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -82,6 +83,14 @@ func generateRandomPassword() string {
 	return hex.EncodeToString(b[:])
 }
 
+// generateSigningKey produces a base64 (std) 32-byte key — the format the CAS
+// and gateway expect for GATEWAY_URL_SIGNING_KEY (openssl rand 32 | base64).
+func generateSigningKey() string {
+	var b [32]byte
+	_, _ = rand.Read(b[:])
+	return base64.StdEncoding.EncodeToString(b[:])
+}
+
 // sha256Prefix8 returns the first 8 hex chars of SHA-256(s). Used for
 // non-reversible log identifiers (recovery phrases, app keys).
 func sha256Prefix8(s string) string {
@@ -107,6 +116,14 @@ func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 			populated = append(populated, k)
 			logger.Info("generated password", "key", k, "sha_prefix", sha256Prefix8(kv[k]))
 		}
+	}
+	// HMAC key for signed gateway URLs — base64, MANDATORY (the gateway fails
+	// to boot if empty). Shared by CAS (mints) and gateway (verifies).
+	if kv["GATEWAY_URL_SIGNING_KEY"] == "" {
+		kv["GATEWAY_URL_SIGNING_KEY"] = generateSigningKey()
+		populated = append(populated, "GATEWAY_URL_SIGNING_KEY")
+		logger.Info("generated signing key", "key", "GATEWAY_URL_SIGNING_KEY",
+			"sha_prefix", sha256Prefix8(kv["GATEWAY_URL_SIGNING_KEY"]))
 	}
 	return populated
 }
