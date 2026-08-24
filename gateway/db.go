@@ -82,14 +82,24 @@ func NewDB(ctx context.Context, connStr string) (*DB, error) {
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	// Fail fast on unreachable Postgres. A 2s timeout is sane for the
-	// docker-compose internal network; longer deadlines are the caller's
-	// problem (they pass `ctx`).
-	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if err := pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("ping pool: %w", err)
+	// Retry the initial ping with backoff. On `docker compose up` Postgres may
+	// still be initializing (it briefly refuses connections / returns
+	// SQLSTATE 57P03 "the database system is starting up") when the gateway
+	// boots; a single failed ping used to leave the gateway permanently
+	// DB-less, 500ing every /xorb until a manual restart. Give it up to ~60s.
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		err := pool.Ping(pingCtx)
+		cancel()
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			pool.Close()
+			return nil, fmt.Errorf("ping pool (after retries): %w", err)
+		}
+		time.Sleep(2 * time.Second)
 	}
 
 	return &DB{pool: pool}, nil

@@ -9,7 +9,12 @@
 # or a sidecar on the same docker network.
 # syntax=docker/dockerfile:1.7
 
-FROM golang:1.26-alpine AS build
+# Build on the native build platform, then emit a binary for the *target*
+# platform. Hardcoding GOARCH=amd64 previously produced an x86 binary that ran
+# under emulation on arm64 hosts, where the x/crypto chacha20+poly1305 SSE/AVX
+# assembly is emulated incorrectly and every AEAD unlock failed. TARGETOS /
+# TARGETARCH are set automatically by buildkit to the platform being built.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 WORKDIR /src
 
 # Dependency layer — cacheable.
@@ -20,8 +25,11 @@ RUN go mod download
 COPY . .
 
 # Static build. `CGO_ENABLED=0` + `-tags netgo` keeps the binary self-contained
-# for distroless. `-s -w` strips debug info.
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# for distroless. `-s -w` strips debug info. GOARCH follows the target platform
+# so the crypto assembly runs natively (no emulation).
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -tags netgo -ldflags='-s -w' -o /out/gateway .
 
 # Distroless static — no shell, no libc, UID 65532 (nonroot).
