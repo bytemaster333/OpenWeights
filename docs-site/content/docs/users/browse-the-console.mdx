@@ -1,0 +1,104 @@
+---
+title: Browse the console
+description: What each page of the web console shows and what you can do there.
+---
+
+The console is at `http://localhost:5173` with the shipped Compose file. It
+reads the CAS API in your browser, so it always shows live state.
+
+Once you are signed in, the header carries the whole navigation: **Models**,
+**Assets**, **Stats**, **Map**, **Keys**, **Status**, and **Docs**. Status is the
+`/setup` page. Your account menu sits on the right, showing your login and a
+sign-out control.
+
+## Pages that need a session
+
+### Dashboard, `/dashboard`
+
+Where you land after signing in. Four counters (bytes uploaded, bytes served,
+your models, your keys), your five most recent repositories, your five most
+recent usage events with links into the asset that produced them, and the
+`hf upload` command to run once you have copied a key.
+
+### API keys, `/keys`
+
+Create keys, see the ones you have, and revoke them. Also holds copy-ready
+`hf upload` and `hf download` snippets already pointed at this deployment. See
+[Create and revoke API keys](/docs/users/api-keys).
+
+### Assets, `/assets`
+
+Every stored object in the deployment. The top strip totals the object count and
+bytes and breaks them down by pin state. Below it you can filter by hash prefix
+or by the API key that uploaded the object.
+
+Each row shows the hash, size, pin state, upload time, and uploading key. Pin
+state is labelled rather than raw, so `pinning` and `orphaned` explain
+themselves without opening the row.
+
+### Asset detail, `/assets/<hash>`
+
+One object in full: its hash with a copy button, its pin state and what that
+state means, and the repositories that reference it, each linking into the model
+catalog.
+
+Pin states you will see:
+
+| State | Meaning |
+| --- | --- |
+| `uploading` | Accepted by the CAS, not yet handed to Sia |
+| `pinning` | Handed to Sia, contracts forming, pin not yet acknowledged |
+| `pinned` | Acknowledged by a Sia host, durable |
+| `orphaned` | Pinning failed repeatedly and the reconciler stopped retrying |
+| `inline` | A small file stored directly in Postgres through the LFS path rather than as a xorb |
+
+### Stats, `/stats`
+
+Live usage counters, refreshed every 10 seconds and paused while the tab is
+hidden. Per-key rows use your key names, falling back to a short ID for revoked
+keys. Keys with no activity are hidden behind a **Show idle keys** toggle.
+
+### Host map, `/stats/map`
+
+A world map of usable Sia storage hosts with a filterable list beside it.
+Clicking a host pans the map to it.
+
+This page reads your indexer's admin API, so it has data only when you run your
+own `indexd` and have set `INDEXD_ADMIN_URL` and `INDEXD_ADMIN_PASSWORD`. See
+[Choose an indexer](/docs/users/choose-an-indexer).
+
+### Setup, `/setup`
+
+Status tiles for the subsystems behind your deployment: the metadata database,
+the cache, and the Sia indexer. Each reports `ok`, `degraded`, `external`, or an
+error state.
+
+## Public pages
+
+These need no session and no key.
+
+### Landing, `/`
+
+Four live counters for the deployment: models, bytes stored, downloads, and
+bytes on Sia with a pinned-of-total xorb count that links through to the status
+page. Below them sit ready-made `hf upload` and `hf download` commands, and a
+sign-in button.
+
+### Models, `/models`
+
+The catalog of public models on this deployment, and the total bytes stored on
+Sia. Private repositories never appear here.
+
+### Model detail, `/models/<owner>/<repo>`
+
+One model, laid out like a hub model page: the rendered README, a file table
+with per-row download links, and a sidebar with file count, total size, last
+update, and commit SHA. A tabbed card gives you the command to fetch it with the
+`hf` CLI, from Python, or with `curl`. An "Objects on Sia" list links each
+backing object through to its asset page, and a downloads card charts the last
+14 days.
+
+When the model is yours, meaning your login matches the owner, the page also
+offers an **Announce on huggingface.co** card. It generates a ready-to-run
+script, with a shell picker for bash, zsh, or fish, that creates a pointer
+repository on huggingface.co describing where the real bytes live.

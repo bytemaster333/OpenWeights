@@ -1,0 +1,85 @@
+---
+title: Verify a round-trip
+description: Prove that what you uploaded is byte-for-byte what you get back.
+---
+
+The claim OpenWeights makes is that an upload followed by a download from a cold
+cache returns identical bytes. Here is how to check it yourself.
+
+## By hand
+
+Upload a file, download it into a fresh directory with fresh caches, and compare
+SHA-256 hashes:
+
+```bash
+# 1. upload
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf upload <owner>/<repo> ./model-dir
+
+# 2. download from empty caches
+HF_ENDPOINT=http://localhost:8080 \
+HF_HOME=$(mktemp -d) HF_XET_CACHE=$(mktemp -d) \
+  hf download <owner>/<repo> --local-dir ./out
+
+# 3. compare
+shasum -a 256 ./model-dir/weights.bin
+shasum -a 256 ./out/weights.bin
+```
+
+The two hashes match.
+
+If step 2 fails, the most common cause is that the xorb is not pinned yet. Wait
+and retry: see
+[Choose an indexer](/docs/users/choose-an-indexer#the-first-pin-takes-time).
+
+## With the bundled harness
+
+The repository ships a script that does the whole thing, including waiting for
+the pin:
+
+```bash
+OPENWEIGHTS_API_KEY=<your-key> \
+CAS_URL=http://localhost:8080 \
+  bash tests/hf-roundtrip/standalone-roundtrip.sh
+```
+
+Use a key with the **read + write** scope (the console default). The harness
+both uploads and downloads with the same key, so it needs both scopes.
+
+What it does:
+
+1. Creates a temporary directory with a 4 MiB random binary (which exercises the
+   Xet chunking path) and a small text file.
+2. Records the SHA-256 of every file.
+3. Runs `hf upload` against `CAS_URL` with `HF_ENDPOINT` pointed at it.
+4. Runs `hf download` with `HF_HOME` and `HF_XET_CACHE` set to empty
+   directories, retrying every 20 seconds until it succeeds.
+5. Compares the hash of every downloaded file against the original and exits
+   non-zero on any mismatch.
+
+On success it prints `OK: byte-identical round-trip` followed by the hashes, and
+exits `0`.
+
+### Variables it reads
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENWEIGHTS_API_KEY` | required | Key with upload and download scope (a `read + write` key) |
+| `CAS_URL` | `http://localhost:8080` | CAS base URL, used as `HF_ENDPOINT` |
+| `HF_CLI` | `hf` | The client binary to invoke |
+| `REPO` | `openweights-e2e/roundtrip-<pid>` | Target repository |
+| `WAIT_SECS` | `900` | How long to keep retrying the download |
+| `KEEP` | unset | Set to any value to keep the temp directory for inspection |
+
+The shipped Compose stack serves the CAS on `http://localhost:8080` (the
+default). Set `CAS_URL` explicitly only if you run the dev override, which
+remaps it to `http://localhost:28080`.
+
+## What makes this hold
+
+Each layer verifies the bytes it handles, so corruption cannot pass silently:
+
+- The CAS recomputes each xorb's Merkle hash before writing to Sia, and rejects
+  a mismatch with `400`.
+- The gateway hash-verifies every xorb before writing it into its disk cache.
+- `hf_xet` verifies each reconstructed file against its content hash.

@@ -1,0 +1,24 @@
+{
+  "title": "How it works",
+  "description": "Architecture, protocol, API reference, and the internals of every service.",
+  "root": true,
+  "pages": [
+    "index",
+    "---Concepts---",
+    "architecture",
+    "write-path",
+    "read-path",
+    "xet-protocol",
+    "security",
+    "---Reference---",
+    "cas-api",
+    "gateway",
+    "hf-proxy",
+    "configuration",
+    "database",
+    "---Working on OpenWeights---",
+    "local-development",
+    "testing",
+    "deployment"
+  ]
+}

@@ -1,0 +1,68 @@
+---
+title: What OpenWeights is
+description: A Hugging Face-compatible model hub you run yourself, storing bytes on the Sia network.
+---
+
+OpenWeights is a model hub you run on your own machine or server. It speaks the
+part of the Hugging Face Hub API and the Xet transfer protocol that the standard
+`hf` CLI actually calls, so the commands you already know keep working:
+
+```bash
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf upload <owner>/<repo> ./model-dir
+```
+
+The `hf` CLI and the `hf_xet` transfer engine are used unmodified. You point
+`HF_ENDPOINT` at your OpenWeights deployment and the file bytes are written to
+the Sia decentralized storage network instead of Hugging Face's own storage.
+Download them again and you get the same bytes back, verified by SHA-256.
+
+## What you get
+
+- **Upload and download with the stock `hf` CLI.** Repository creation, upload,
+  and download all work against your deployment.
+- **Bytes on Sia.** Every uploaded chunk is written through the Sia SDK to an
+  indexer, then pinned so it stays available.
+- **A web console.** Sign in, mint and revoke API keys, and browse the models
+  and stored objects in your deployment along with their pin state.
+- **Content-addressed storage.** Files are split into content-defined chunks and
+  grouped into xorbs, each addressed by its hash. Re-uploading a xorb your
+  deployment already holds stores it once.
+- **Byte-range reads.** Downloads request only the byte ranges they need, served
+  from a caching gateway that keeps whole xorbs on local disk.
+
+## The three services
+
+| Service | Language | Role |
+| --- | --- | --- |
+| `openweights-cas` | Rust (Axum) | The control plane. Serves the Hub API and Xet protocol endpoints, writes bytes to Sia, and signs gateway URLs. The only service that writes. |
+| `openweights-gateway` | Go | The data plane. Verifies signed URLs and serves byte ranges, backed by a whole-xorb disk cache. Read-only. |
+| `openweights-console` | React | The web UI for sign-in, API keys, models, and stored objects. |
+
+They run alongside Postgres (catalog and metadata) and Redis (rate limits and
+request coalescing), plus an optional `openweights-hf-proxy` for the
+[huggingface.co-integrated path](/docs/users/mirror-through-hugging-face).
+
+OpenWeights does not bundle a Sia indexer. You point it at one: the hosted
+`https://sia.storage` or your own `indexd`. See
+[Choose an indexer](/docs/users/choose-an-indexer).
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="Get started"
+    href="/docs/users/self-host"
+    description="Pick your path — self-host, operate for a team, or use an existing deployment."
+  />
+  <Card
+    title="Prerequisites"
+    href="/docs/users/prerequisites"
+    description="What you need installed before you start."
+  />
+  <Card
+    title="How it works"
+    href="/docs/developers/architecture"
+    description="The internals: architecture, protocol, and API reference."
+  />
+</Cards>

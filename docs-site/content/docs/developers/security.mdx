@@ -1,0 +1,152 @@
+---
+title: Security model
+description: Why the CAS is the only writer, and what protects each boundary.
+---
+
+## The write and read split
+
+The CAS is the only service with write authority. It holds the Sia App Key,
+validates every credential, and is the only component that calls upload or pin.
+
+The gateway holds no write credential. It serves bytes only for URLs the CAS has
+signed, and its Postgres role can `SELECT` on `xorbs` and `INSERT` into
+`usage_log` and nothing else. Compromising the gateway yields the ability to
+serve bytes it was already going to serve.
+
+This split is the system's primary protection, and it is why the signed-URL
+format has to be identical across a Rust minter and a Go verifier. Cross-language
+vectors in `conformance/fixtures/signed_url_vectors.json` pin that contract and
+both sides assert against them.
+
+## Secrets
+
+| Secret | Where it lives | Notes |
+| --- | --- | --- |
+| `OPENWEIGHTS_RECOVERY_PHRASE` | `.env` only | Read at registration to derive the App Key. Never in the database, never in logs |
+| `OPENWEIGHTS_APP_KEY` | `.env` only | Base64 of 32 bytes. Read at boot |
+| `GATEWAY_URL_SIGNING_KEY` | `.env` only | Shared by the CAS minter and the gateway verifier |
+| `XET_JWT_SIGNING_KEY` | `.env` only | HS256 secret for Xet tokens |
+| `OPENWEIGHTS_ADMIN_PASSWORD` | `.env` only | Compared in constant time. Never in the database or logs |
+| API keys | Postgres, SHA-256 only | Plaintext returned exactly once, at creation |
+
+`.env` is written with permissions `0600`.
+
+<Callout type="warn">
+Sia's end-user documentation says to discard your recovery phrase after
+onboarding. For OpenWeights the opposite holds: the phrase must stay in the
+operator's `.env` permanently. It is the only input to the App Key, and losing
+it orphans every stored byte with no recovery.
+</Callout>
+
+## API keys
+
+Generated as 32 random bytes from the system CSPRNG, encoded base64url without
+padding. Only `SHA-256(plaintext)` is stored, as raw bytes. The plaintext is
+returned once in the creation response and appears in no other response; an
+integration test greps list responses for it.
+
+The stored `masked_prefix` is the first 8 characters plus `...`. Eight
+characters of a 43-character base64url string is a label, not a usable secret.
+
+Lookups are cached in process for 5 seconds, which bounds how long a revoked key
+keeps authenticating. Revocation sets `revoked_at`; the lookup query filters on
+it.
+
+Plaintext is never logged. Debug breadcrumbs use a hash prefix.
+
+## Scope enforcement
+
+Scopes are enforced by a const-generic extractor, so the required scope is part
+of the handler's type. An unknown scope value is rejected rather than defaulting
+to permissive.
+
+The order matters: an unknown key returns `401` before any scope comparison
+happens, so `403` only ever means "known credential, wrong scope" and never
+leaks whether a key exists.
+
+## Sessions
+
+```
+openweights_session=<uuid>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
+```
+
+UUID v4 from the system CSPRNG, 7-day lifetime refreshed on each authenticated
+request. `HttpOnly` keeps it out of browser JavaScript, and the console never
+touches it directly. Every failure mode (missing, unknown, expired, revoked)
+collapses to `401`; the extractor never emits `403`.
+
+`Max-Age` is used rather than `Expires` so the header is robust against client
+clock skew.
+
+## OAuth
+
+The GitHub flow stores a single-use state nonce before redirecting, so a forged
+callback finds no matching row. Accounts are keyed on the numeric GitHub ID,
+which is stable, rather than on the login or the email, which are not and may be
+absent.
+
+The password admin is a synthetic user at id `-1`. GitHub IDs are always
+positive, so the two can never collide.
+
+## Password comparison
+
+The submitted password and the configured one are both SHA-256 digested and
+compared in constant time, so a wrong guess leaks neither length nor content
+through timing. A login attempt against an instance with no password configured
+returns `401` rather than revealing that the feature is off.
+
+## Integrity
+
+Corruption cannot pass silently, because each layer verifies what it handles.
+
+1. **Upload.** When the client ships the xorb footer, the CAS recomputes the
+   Merkle hash and rejects a mismatch with `400` before any Sia call. When the
+   footer is absent, as current `hf_xet` releases send, the body is accepted
+   under the hash in the URL and the CAS logs a warning. Integrity still holds,
+   because `xet-core` re-hashes every chunk on download, so a corrupted upload
+   fails reconstruction rather than returning wrong bytes.
+2. **Gateway cache.** Every xorb is hashed while streaming to a temporary file,
+   compared against the expected hash, and only then renamed into place. A
+   mismatch deletes the file, increments a counter, and returns `502`. The bytes
+   are never served. A size mismatch against what Postgres recorded is treated
+   the same way. This is the defence against cache poisoning.
+3. **Cold boot.** The cache index starts empty and files from a previous run are
+   not rehydrated, because trusting them would mean serving bytes without a
+   fresh verification.
+4. **Client.** `xet-core` verifies each reconstructed file against its content
+   hash.
+
+## Denial-of-service bounds
+
+Body reads are bounded **during** the read, not checked afterwards, so an
+oversized body cannot be buffered into memory first: 64 MiB plus 4096 bytes for
+a xorb, 500 MiB for an inline LFS object.
+
+Rate limits are Redis token buckets per API key: 100 per minute for uploads and
+100 per minute for downloads, answering `429` with `Retry-After`. The upload
+limit is checked after hash verification, so rejected uploads do not consume
+tokens.
+
+The gateway sets `ReadHeaderTimeout` to 10 seconds and `IdleTimeout` to 120
+seconds, and caps HTTP/2 concurrent streams at 256. It sets no wall-clock
+request timeout, because large xorbs and slow clients are legitimate; a client
+disconnect cancels the Sia download through the request context.
+
+## Network exposure
+
+Every Compose port binds to `127.0.0.1`. Prometheus metrics sit on a separate
+loopback listener on both services, and the production Caddyfile answers `404`
+for `/metrics` as a second guard against a future overlay exposing it.
+
+## Cross-origin policy
+
+The CAS allows exactly one origin, the value of `CONSOLE_BASE_URL`, with
+credentials enabled. There is no wildcard, which browsers would reject alongside
+credentials anyway. A console served from any other origin cannot make
+credentialed calls.
+
+## Error disclosure
+
+Database and internal errors return the literal body `internal`. The real error
+is logged and never returned. Signed-URL failures return `403` for both expiry
+and a bad signature, so the two are indistinguishable to a caller.

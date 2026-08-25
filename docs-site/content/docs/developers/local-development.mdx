@@ -1,0 +1,179 @@
+---
+title: Local development
+description: Build and run each service from source.
+---
+
+The root `Makefile` is the entry point for everything. `make help` lists the
+targets.
+
+```
+COMPOSE := docker compose -f ops/docker-compose.yml --env-file .env
+```
+
+## Toolchains
+
+| Service | Toolchain | Pinned by |
+| --- | --- | --- |
+| `openweights-cas` | Rust, channel `1.89` | `cas/rust-toolchain.toml` |
+| `openweights-gateway` | Go `1.26.0` | `gateway/go.mod` |
+| `openweights-hf-proxy` | Go `1.26.0` | `hf-proxy/go.mod` |
+| `openweights-console` | Node 22 or newer, pnpm `9.15.0` | `console/package.json` |
+| `bench/` | Go `1.26.0` | `bench/go.mod` |
+
+`rustup` reads `rust-toolchain.toml` automatically inside `cas/`. Enable pnpm
+with `corepack enable`; the `packageManager` field pins the version.
+
+## Stack
+
+| Target | Does |
+| --- | --- |
+| `make setup` | Interactive `.env` wizard, then stops |
+| `make bootstrap` | Registers the app on the indexer (via `openweights-cas-register`), writes the App Key, then brings the full stack up. Run `make setup` first to write `.env` |
+| `make bootstrap-reset` | Removes `.env`. Leaves volumes alone |
+| `make up` | `docker compose up -d` |
+| `make down` | `docker compose down` |
+| `make clean` | `docker compose down -v` and clears benchmark run directories. Destroys the Postgres data and gateway cache volumes |
+
+## openweights-cas
+
+```bash
+make cas-check     # cargo check --workspace
+make cas-clippy    # cargo clippy --workspace --all-targets -- -D warnings
+make cas-build     # cargo build --release --bin openweights-cas
+make cas-run       # cargo run --bin openweights-cas
+make cas-image     # docker compose build openweights-cas
+make cas-up        # build the image, then start just this service
+```
+
+Run one test:
+
+```bash
+cd cas && cargo test -p openweights-cas-core <test_name>
+```
+
+Clippy runs with `-D warnings` and CI gates on it, so a warning is a failure.
+
+The workspace has six crates:
+
+| Crate | Contents |
+| --- | --- |
+| `openweights-cas` | The Axum binary: `router.rs`, `config.rs`, `state.rs` |
+| `openweights-cas-core` | Every handler, plus `auth.rs`, `signed_url.rs`, `rate_limit.rs`, `scopes.rs`, `session.rs`, `xet_jwt.rs`, `metering.rs` |
+| `openweights-cas-storage` | The Sia write path and the pin reconciler |
+| `openweights-cas-db` | sqlx queries and types |
+| `openweights-cas-proto` | The only re-export of `xet-core-structures` |
+| `openweights-cas-register` | The one-shot indexer registration CLI |
+
+Read `router.rs` before adding a route. Its doc comments carry the dual-path and
+V1/V2 reconstruction constraints.
+
+<Callout type="warn">
+Import `xet-core-structures` through `openweights-cas-proto` and nowhere else.
+Hash encoding is the one place a plausible-looking reimplementation corrupts
+data silently.
+</Callout>
+
+### Running without Sia
+
+Build with the `sia-mock` cargo feature and set `OPENWEIGHTS_SIA_MOCK=true` to
+wire an in-memory adapter, which lets the CAS boot with no live indexer. Bytes
+are not durable. The Compose build accepts `CAS_FEATURES=sia-mock` as a build
+argument, and `ops/docker-compose.mock.yml` is the overlay for this. Never use
+it for a real deployment.
+
+## openweights-gateway
+
+```bash
+make gateway-check   # go build ./...
+make gateway-vet     # go vet ./...
+make gateway-test    # go test ./...
+make gateway-build   # binary into gateway/bin/
+make gateway-run     # go run .
+make gateway-image
+make gateway-up
+```
+
+Run one test, or check for races:
+
+```bash
+cd gateway && go test -run TestName ./...
+cd gateway && go test -race ./...
+```
+
+The package is flat. The load-bearing files are `signed_url.go` (must match the
+CAS byte for byte), `ranges.go` (multi-range framing), `merklehash.go` (the
+byte-reversal encoding), `cache.go`, `sia.go`, `singleflight.go`, and
+`metering.go`.
+
+## openweights-console
+
+Uses pnpm, not npm.
+
+```bash
+make console-install   # pnpm install --frozen-lockfile
+make console-dev       # Vite dev server on :5173
+make console-build     # tsc --noEmit && vite build
+make console-check     # biome check . && tsc --noEmit && vitest run
+make console-test      # vitest run
+make console-image
+make console-up
+```
+
+Run one test file:
+
+```bash
+cd console && pnpm vitest run src/pages/Keys.test.tsx
+```
+
+`make console-check` is what CI runs.
+
+The design system is locked to the shadcn preset `b7C9wTXYe`. `components.json`
+is the source of truth for style, base colour, and icon library; read it rather
+than assuming. Initialise with:
+
+```bash
+npx shadcn@latest init --preset b7C9wTXYe --template vite
+```
+
+Pass preset codes to the CLI directly. Do not decode them.
+
+## openweights-hf-proxy
+
+```bash
+cd hf-proxy && go build ./... && go test ./...
+```
+
+## This documentation site
+
+```bash
+cd docs-site
+npm install
+npm run dev     # http://localhost:3000
+npm run build   # static export into out/
+npm run lint    # biome
+```
+
+Fumadocs with a Next.js static export. Content is MDX under
+`docs-site/content/docs/`, and navigation comes from the `meta.json` files. The
+two top-level folders each carry `"root": true`, which is what makes them
+separate sidebar sections.
+
+## Logs
+
+Every service writes structured JSON to stdout.
+
+```bash
+docker compose -f ops/docker-compose.yml --env-file .env logs -f openweights-cas
+```
+
+`RUST_LOG` controls CAS verbosity.
+
+## Metrics
+
+Both the CAS and the gateway expose Prometheus text. Neither port is published,
+so scrape through the container:
+
+```bash
+docker compose -f ops/docker-compose.yml --env-file .env exec \
+  openweights-gateway wget -qO- http://127.0.0.1:9100/metrics
+```

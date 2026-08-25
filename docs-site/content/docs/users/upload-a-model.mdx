@@ -1,0 +1,98 @@
+---
+title: Upload a model
+description: Push files to your OpenWeights deployment with the standard hf CLI.
+---
+
+You need a running stack ([run the stack](/docs/users/run-the-stack)) and an API
+key that can upload — the default **read + write** key, or a single-scope
+**write** key ([mint one](/docs/users/api-keys)).
+
+## The command
+
+Point `HF_ENDPOINT` at your CAS and pass the key as `HF_TOKEN`:
+
+```bash
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf upload <owner>/<repo> ./model-dir
+```
+
+`hf` creates the repository if it does not exist, classifies each file, uploads
+the file bytes, and records a commit. No flags beyond the ones you would use
+against huggingface.co.
+
+## Naming the repository
+
+`<owner>` is a display label. Whatever you pass, the repository is owned by the
+account whose API key you used, so you can publish `alice/model` and
+`team/model` from the same key and own both.
+
+`<repo>` must be:
+
+- between 1 and 96 characters
+- ASCII letters, digits, `-`, `_`, and `.` only
+- not starting with `.`
+
+Anything else returns `400` with `invalid_repo_name`.
+
+## Private repositories
+
+`hf upload` passes `--private` through to repository creation:
+
+```bash
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf upload <owner>/<repo> ./model-dir --private
+```
+
+A public repository is listable and browsable without a token, but downloading
+its bytes still needs a `read`-scoped key (see
+[Download a model](/docs/users/download-a-model)). A private one is visible only
+to its owner.
+
+## What happens to your files
+
+1. **Classification.** The CAS labels each file `lfs` or `regular`. A file is
+   `regular` only if it is smaller than 10 KiB *and* looks like text: named
+   `README.md`, `.gitattributes`, `config.json`, or `tokenizer.json`, or ending
+   in `.md`, `.txt`, or `.json`. Everything else is `lfs`, which is what routes
+   it through the Xet transfer path.
+2. **Chunking.** `hf_xet` splits each file into content-defined chunks and
+   groups them into xorbs, each addressed by the hash of its contents.
+3. **Hash verification and dedup.** When the client ships the xorb footer, the
+   CAS recomputes the Merkle hash and rejects a mismatch with `400`, before any
+   Sia call. Insertion is keyed on the xorb hash, so a xorb the deployment
+   already holds is stored once and the response reports `was_inserted: false`.
+4. **Write to Sia.** The CAS erasure-codes the xorb and uploads it through the
+   Sia SDK, then pins it.
+5. **Commit.** The file list, sizes, and hashes are recorded against the
+   repository.
+
+## The first upload is slow
+
+On a fresh indexer, the first pin forms on-chain storage contracts across many
+hosts. The upload request itself returns as soon as the bytes are accepted; a
+background reconciler finishes the pin.
+
+This means an upload can report success before the bytes are pinned. A download
+attempted in that window returns `404` at reconstruction. See
+[Choose an indexer](/docs/users/choose-an-indexer#the-first-pin-takes-time) for
+the two timeout variables that control this.
+
+Watch the pin state move from `uploading` to `pinning` to `pinned` on the
+console's assets view.
+
+## Rate limits
+
+Upload requests are limited to 100 per minute per API key, as a token bucket. If
+you exceed it the CAS returns `429` with a `Retry-After` header and a body of
+`{"error":"rate_limited","retry_after":<seconds>}`.
+
+## Uploading through huggingface.co instead
+
+The command above makes OpenWeights the hub. If you want to keep using your
+huggingface.co account and repositories while the bytes land on Sia, see
+[Mirror through Hugging Face](/docs/users/mirror-through-hugging-face).
+
+## Next
+
+[Download a model](/docs/users/download-a-model), then
+[verify the round-trip](/docs/users/verify-a-round-trip).

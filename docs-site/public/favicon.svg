@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#0a0a0a"/>
-  <text x="32" y="46" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-weight="700" font-size="40" fill="#ffffff">s</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <rect width="24" height="24" rx="5" fill="#0a0f12"/>
+  <g stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M12 4.5 19.5 8 12 11.5 4.5 8 12 4.5Z" stroke-width="1.5"/>
+    <path d="M4.5 12 12 15.5 19.5 12" stroke-width="1.5" opacity="0.6"/>
+    <path d="M4.5 16 12 19.5 19.5 16" stroke-width="1.5" opacity="0.3"/>
+  </g>
 </svg>

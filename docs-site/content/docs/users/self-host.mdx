@@ -1,0 +1,98 @@
+---
+title: Self-host for yourself
+description: Run OpenWeights on your own machine, just for you, with a password login.
+---
+
+You want your own model hub, for your own use — no teammates, no public sign-up.
+This is the shortest path: password sign-in, the hosted indexer, one key that
+both uploads and downloads.
+
+## Steps
+
+**1. Generate `.env`.**
+
+```bash
+git clone https://github.com/bytemaster333/OpenWeights.git
+cd OpenWeights
+make setup
+```
+
+Press Enter at each prompt to accept the defaults: a fresh recovery phrase,
+`https://sia.storage` as the indexer, and a generated admin password (it prints
+once — save it). `make setup` fills in every other secret and writes `.env`.
+
+<Callout type="warn">
+Back up `.env`. `OPENWEIGHTS_RECOVERY_PHRASE` is the only input to your Sia App
+Key, and losing it permanently orphans every byte you store.
+</Callout>
+
+**2. Register and start.**
+
+```bash
+make bootstrap
+```
+
+It prints an approval URL — open it, approve the app on your indexer — then
+brings the whole stack up.
+
+**3. Sign in and mint a key.**
+
+Open `http://localhost:5173/login`, sign in with the admin password from step 1,
+go to **API keys**, and create one with the default **read + write** scope. Copy
+the plaintext — it is shown once.
+
+**4. Upload.**
+
+```bash
+mkdir -p /tmp/ow-demo
+head -c 4194304 /dev/urandom > /tmp/ow-demo/weights.bin
+echo "hello openweights" > /tmp/ow-demo/README.md
+
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf upload me/first-model /tmp/ow-demo
+```
+
+**5. Download from a clean cache and confirm the bytes match.**
+
+The first pin forms on-chain storage contracts, which takes minutes. Until it
+lands the download returns `404` — retry. The same key does both legs.
+
+```bash
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+HF_HOME=$(mktemp -d) HF_XET_CACHE=$(mktemp -d) \
+  hf download me/first-model --local-dir /tmp/ow-out
+
+shasum -a 256 /tmp/ow-demo/weights.bin /tmp/ow-out/weights.bin
+```
+
+The two hashes are identical — your bytes made a full round-trip through Sia.
+
+<Callout>
+The repository ships a harness that runs the upload, the retry loop, the
+fresh-cache download, and the hash compare for you:
+
+```bash
+OPENWEIGHTS_API_KEY=<your-key> CAS_URL=http://localhost:8080 \
+  bash tests/hf-roundtrip/standalone-roundtrip.sh
+```
+</Callout>
+
+## More detail
+
+<Cards>
+  <Card
+    title="Run the stack"
+    href="/docs/users/run-the-stack"
+    description="What make setup generates, and every value it writes to .env."
+  />
+  <Card
+    title="Choose an indexer"
+    href="/docs/users/choose-an-indexer"
+    description="Stay on sia.storage, or point at your own indexd."
+  />
+  <Card
+    title="Troubleshooting"
+    href="/docs/users/troubleshooting"
+    description="What to do when something does not come up."
+  />
+</Cards>

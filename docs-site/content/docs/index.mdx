@@ -1,0 +1,56 @@
+---
+title: OpenWeights documentation
+description: A Hugging Face-compatible model hub that stores your bytes on the Sia network.
+---
+
+OpenWeights is a self-hostable model hub. You point the standard Hugging Face
+`hf` CLI at your own OpenWeights deployment, and the files you upload are stored
+on the Sia decentralized storage network. The CLI is unmodified: no fork of
+`huggingface_hub`, no patched `hf_xet` wheel.
+
+## Pick your path
+
+Three short quickstarts, one per way of using OpenWeights. Each links on to the
+detailed pages.
+
+<Cards>
+  <Card
+    title="Self-host for yourself"
+    href="/docs/users/self-host"
+    description="Run it on your own machine, just for you, with a password login."
+  />
+  <Card
+    title="Operate for a team"
+    href="/docs/users/operate"
+    description="Run it for others, with GitHub sign-in and a real domain."
+  />
+  <Card
+    title="Use an existing deployment"
+    href="/docs/users/use-a-deployment"
+    description="Someone else runs it — upload and download with the hf CLI."
+  />
+</Cards>
+
+## Or browse the full docs
+
+<Cards>
+  <Card
+    title="Using OpenWeights"
+    href="/docs/users"
+    description="Run the stack, sign in, mint an API key, and upload and download models with the hf CLI."
+  />
+  <Card
+    title="How it works"
+    href="/docs/developers"
+    description="Architecture, the Xet protocol implementation, the HTTP API reference, and every configuration knob."
+  />
+</Cards>
+
+## Start here
+
+If you have never run OpenWeights before, [self-hosting for
+yourself](/docs/users/self-host) takes you from an empty directory to a
+byte-identical upload and download.
+
+If you want to know what happens between `hf upload` and bytes landing on Sia
+hosts, start with the [architecture](/docs/developers/architecture).

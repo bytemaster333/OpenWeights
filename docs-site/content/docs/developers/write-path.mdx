@@ -1,0 +1,160 @@
+---
+title: Write path
+description: From hf upload to a pinned xorb on Sia, request by request.
+---
+
+This traces a standalone upload, where `HF_ENDPOINT` points at the CAS and
+OpenWeights is the hub.
+
+## The request sequence
+
+<Mermaid chart={`
+sequenceDiagram
+    participant C as hf + hf_xet
+    participant CAS as openweights-cas
+    participant PG as Postgres
+    participant SIA as Sia indexer
+
+    C->>CAS: GET /api/whoami-v2
+    C->>CAS: POST /api/repos/create
+    CAS->>PG: INSERT repos
+    C->>CAS: POST /api/models/{o}/{r}/preupload/{ref}
+    CAS-->>C: per file: lfs | regular
+    C->>CAS: GET /api/models/{o}/{r}/xet-write-token/{ref}
+    CAS-->>C: casUrl + Xet JWT
+    loop each xorb
+        C->>CAS: POST /v1/xorbs/{prefix}/{hash}
+        CAS->>CAS: verify hash, rate limit
+        CAS->>PG: insert_pending
+        CAS->>SIA: upload + pin
+        CAS->>PG: pin_state = pinned
+        CAS-->>C: {"was_inserted": bool}
+    end
+    C->>CAS: POST /shards
+    C->>CAS: POST /api/models/{o}/{r}/commit/{ref}
+    CAS->>PG: record commit + files
+`} />
+
+## Step by step
+
+### 1. Identity
+
+`GET /api/whoami-v2` with the API key. Accepts any authenticated key (no
+specific scope required).
+
+### 2. Repository creation
+
+`POST /api/repos/create` with `{type, name, organization, private}`, requiring
+`write`. The name is validated, `private` chooses visibility, and the row is
+owned by the account behind the key. Creating a repository you already own
+returns the existing one rather than failing.
+
+### 3. Preupload classification
+
+`POST /api/models/{owner}/{repo}/preupload/{ref}` asks, for each file, whether to
+use the LFS path or a plain upload. A file is `regular` only when it is smaller
+than 10 KiB **and** text-like; everything else is `lfs`, which is what puts it
+on the Xet transfer.
+
+Ownership is checked here so a wasted upload fails fast.
+
+### 4. Xet write token
+
+`GET /api/models/{owner}/{repo}/xet-write-token/{ref}` returns
+`{casUrl, accessToken, exp}`, mirroring the token into `X-Xet-Access-Token`.
+`casUrl` is `CAS_PUBLIC_URL`, which is why it has to be the address the client
+can reach.
+
+The token is HS256, signed with `XET_JWT_SIGNING_KEY`. With that variable empty
+this endpoint returns `500`.
+
+### 5. Chunking and xorb upload
+
+`hf_xet` splits each file into content-defined chunks and packs them into xorbs,
+then `POST /v1/xorbs/{prefix}/{hash}` per xorb. The handler order is
+load-bearing:
+
+1. **Parse the path hash.** `prefix` is a pool namespace, not hash bytes; the
+   real client sends `default`. The 64-hex hash is parsed from the last segment,
+   with the older split shape accepted as a fallback.
+2. **Bounded body read.** The read stops at 64 MiB plus 4096 bytes rather than
+   buffering an unbounded body and checking afterwards. Over that returns
+   `400 xorb_too_large`.
+3. **Merkle verification.** When the client ships the xorb footer, the hash is
+   recomputed from it and a mismatch returns `400` with both hashes, before any
+   database write and any Sia call.
+4. **Rate limit.** Checked after verification, so a rejected upload does not
+   consume a token.
+5. **Atomic insert.** Keyed on the xorb hash, so a xorb already held is not
+   re-stored. The response `was_inserted` reports which happened.
+6. **Sia write.** Erasure-code, upload, pin, then set `pin_state = 'pinned'`. A
+   Sia failure leaves the row in `pinning` for the reconciler.
+7. **Metering.** A `usage_log` row.
+
+<Callout>
+Current `hf_xet` releases omit the xorb footer. Without it the server cannot
+recompute the hash, and accepts the body under the hash in the URL. Round-trip
+integrity still holds: `xet-core` re-hashes every chunk on download, so a
+corrupted upload fails reconstruction rather than returning wrong bytes. The CAS
+logs a warning whenever it takes this path.
+</Callout>
+
+Physical chunk boundaries are recovered either from the footer or by walking the
+chunk-header stream. They are what later lets reconstruction map a chunk range
+to the exact byte range the gateway must serve.
+
+### 6. Shard upload
+
+`POST /shards`, or `/v1/shards`. The shard records which chunks live in which
+xorb at which offset. The response is `{"result": 0}` for `Exists` or
+`{"result": 1}` for `SyncPerformed`. A shard referencing xorbs the CAS does not
+hold returns `400` listing the missing hashes.
+
+### 7. Commit
+
+`POST /api/models/{owner}/{repo}/commit/{ref}` records the file list, sizes, and
+hashes against a commit.
+
+## Pin states
+
+```
+uploading -> pinning -> pinned
+                 \
+                  -> orphaned
+```
+
+| State | Meaning |
+| --- | --- |
+| `uploading` | Row exists, bytes not yet handed to Sia |
+| `pinning` | Handed to Sia, pin not yet acknowledged. `sia_object_id` is still null |
+| `pinned` | Acknowledged. `sia_object_id` is set |
+| `orphaned` | Repeated permanent failures; the reconciler gave up |
+
+A background reconciler sweeps on a 60-second tick and advances rows stuck in
+`uploading` or `pinning`. Transient failures such as a temporary host shortage
+do not count toward the orphan cap, so a passing outage cannot strand durable
+data.
+
+`OPENWEIGHTS_SIA_OP_TIMEOUT_SECS`, default 600 in code and 3600 in the Compose
+file, bounds a single reconciler attempt. A first mainnet pin forms contracts
+across many hosts and can exceed ten minutes, which is why the Compose value is
+raised: every attempt hitting the same cap would leave xorbs in `pinning`
+forever.
+
+## Erasure coding
+
+`OPENWEIGHTS_DATA_SHARDS` (default `10`) and `OPENWEIGHTS_PARITY_SHARDS`
+(default `20`) set the scheme. The defaults need enough usable hosts for
+10-of-30. A value that is not a valid `u8` fails at startup rather than silently
+falling back.
+
+## The LFS path
+
+Small text files skip Xet. `POST /{owner}/{repo}.git/info/lfs/objects/batch`
+negotiates, then `PUT /lfs/objects/{oid}` stores the body inline in Postgres, up
+to 500 MiB. That endpoint takes no credential because it is content-addressed:
+the body must hash to the `oid` in the path, or it returns `400 oid_mismatch`.
+
+## Next
+
+The [read path](/docs/developers/read-path).

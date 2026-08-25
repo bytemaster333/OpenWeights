@@ -1,0 +1,82 @@
+---
+title: Create and revoke API keys
+description: Mint a key in the console, pick its scope, and revoke it when you are done.
+---
+
+API keys authenticate `hf upload` and `hf download` against your deployment. You
+manage them on the console's `/keys` page.
+
+## Create a key
+
+1. Sign in to the console and open **API keys** (`/keys`).
+2. Type a name. It is trimmed, must not be empty, and is capped at 80
+   characters.
+3. Pick a scope.
+4. Submit. The plaintext key appears in a modal.
+
+**Copy the key from that modal.** It is shown exactly once. The server stores
+only its SHA-256 hash, so nothing can recover the plaintext afterwards. If you
+dismiss the modal without copying, mint a new key.
+
+The key itself is 32 random bytes encoded as base64url without padding.
+
+## Scopes
+
+The scope picker offers three choices. **`read + write` is the default** — one
+key that both uploads and downloads, so it covers a full round-trip.
+
+| Scope | What it allows |
+| --- | --- |
+| `read + write` | Both of the below in one key (the default) |
+| `write` | Upload: xorb upload, shard upload, repository creation, preupload classification, and minting Xet write tokens |
+| `read` | Download: reconstruction queries, chunk-dedup queries, and minting Xet read tokens |
+
+For most workflows keep the default `read + write` — a single `HF_TOKEN` then
+handles upload and download. Pick a single-scope `write` or `read` key only when
+you want to hand out a narrower credential. A request with a valid key but the
+wrong scope returns `403`; an unknown or revoked key returns `401`.
+
+The API and the database also define an `admin` scope covering the `/admin/*`
+routes. The console reaches those routes with your session cookie instead, so
+the picker does not offer it.
+
+Internally the database stores scopes as an array: a `read + write` key is
+`{download, upload}`; the console names map to `upload`, `download`, and `admin`.
+
+## Use a key
+
+Pass it as `HF_TOKEN`:
+
+```bash
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf upload <owner>/<repo> ./model-dir
+```
+
+Calling the CAS directly, send it as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer <your-key>" http://localhost:8080/admin/keys
+```
+
+## See your keys
+
+The `/keys` table lists every key you own that is not revoked, with its name,
+scope, masked prefix, creation time, and last-used time. The masked prefix is
+the first 8 characters of the key followed by `...`, which is enough to tell two
+keys apart and not enough to use one.
+
+The list endpoint never returns plaintext.
+
+## Revoke a key
+
+Click **Revoke** on the row and confirm. The key is marked revoked immediately
+and stops authenticating.
+
+The CAS caches key lookups in memory for 5 seconds, so a revoked key can be
+accepted for up to 5 seconds after you revoke it. There is no un-revoke.
+
+## Keys and repository ownership
+
+Repositories are owned by the account the key belongs to, whatever `<owner>` you
+type in the `hf` command. A key can only upload to and manage repositories owned
+by its own account.

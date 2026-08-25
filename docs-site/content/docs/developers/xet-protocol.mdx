@@ -1,0 +1,152 @@
+---
+title: Xet protocol
+description: Chunks, xorbs, shards, hash encoding, and the dual-path routes.
+---
+
+Xet is the content-addressed transport `hf_xet` uses for large files.
+OpenWeights implements the server side of it so unmodified clients work.
+
+## The data model
+
+**Chunk.** A content-defined slice of a file. Boundaries come from the content,
+so an edit in the middle of a file changes only the chunks it touches.
+
+**Xorb.** A pack of chunks uploaded as one object, addressed by the Merkle hash
+of its contents. This is the unit OpenWeights stores on Sia, caches on gateway
+disk, and signs URLs for.
+
+**Shard.** Metadata recording which chunks live in which xorb at which offset.
+Shards are what make reconstruction possible.
+
+**Reconstruction.** The instruction list for rebuilding one file: an ordered set
+of terms, each naming a xorb and a chunk range within it.
+
+## Hash encoding
+
+`xet-core` does not straight hex-encode its Merkle hashes. It reverses each
+8-byte group first.
+
+1. `blake3::keyed_hash(DATA_KEY, data)`, with a fixed 32-byte key, gives a
+   32-byte digest.
+2. Reinterpret the digest as four little-endian `u64` words.
+3. Print each word with `%016x`.
+
+Printing little-endian words as big-endian hex is the same as reversing each
+8-byte group and then hex-encoding.
+
+<Callout type="warn">
+Hand-rolling this produces hashes that look plausible and disagree with every
+`xet-core` client, which corrupts silently rather than failing loudly. The CAS
+re-exports the upstream `merklehash` crate through `openweights-cas-proto` and
+uses nothing else. The gateway carries a Go port covered by parity tests against
+the Rust output.
+
+`openweights-cas-proto` is the only crate that re-exports
+`xet-core-structures`. Import it from anywhere else and the discipline is lost.
+</Callout>
+
+## Dual-path routes
+
+Two protocol endpoints are registered at two paths each, deliberately.
+
+| Registered | Also registered | Why |
+| --- | --- | --- |
+| `/v1/shards` | `/shards` | The OpenAPI spec documents `/v1/shards`; the production `xet-core` client calls `/shards` |
+| `/v1/reconstructions` | `/reconstructions` | Same split for batch reconstruction |
+
+Both point at the same handler. Serving only the documented form breaks real
+clients, and it breaks them quietly.
+
+## Range conventions
+
+Two range types travel in the same JSON document and they do not mean the same
+thing.
+
+| Field | Unit | End |
+| --- | --- | --- |
+| `terms[].range` | Chunk index | Exclusive |
+| `fetch_info[].range` (V1) | Chunk index | Exclusive |
+| `xorbs[].ranges[].chunks` (V2) | Chunk index | Exclusive |
+| `fetch_info[].url_range` (V1) | Byte offset | Inclusive |
+| `xorbs[].ranges[].bytes` (V2) | Byte offset | Inclusive |
+
+Byte ranges are end-inclusive because they map onto HTTP `Range` semantics.
+Chunk ranges are end-exclusive because `xet-core` walks the fetch map by
+matching `fetch.range.start == term.range.end`.
+
+## V1 and V2 reconstruction
+
+V1 emits one fetch entry per merged range, each with a single-range signed URL.
+
+V2 emits one entry per xorb under the key `xorbs`, each carrying a single
+multi-range signed URL plus the per-segment descriptors. The client then issues
+one multi-range HTTP request per xorb instead of several single-range ones.
+
+V2 is gated by `V2_RECONSTRUCTION_ENABLED`, which the Compose file sets to
+`true`. With it off, the endpoint answers `501` and `xet-core` falls back to V1,
+which stays fully functional.
+
+<Callout type="warn">
+V2 and the gateway's multi-range serving are one feature. A V2 URL is fetched
+with `Range: bytes=S1-E1,S2-E2,...`, and the gateway must answer
+`multipart/byteranges`. A concatenated body corrupts the download silently.
+Enabling V2 against a gateway that cannot frame multipart responses is the
+failure this pairing exists to prevent.
+</Callout>
+
+## Response shapes
+
+Xorb upload:
+
+```json
+{ "was_inserted": true }
+```
+
+Shard upload, where `0` is `Exists` and `1` is `SyncPerformed`:
+
+```json
+{ "result": 1 }
+```
+
+Chunk-dedup query, `GET /v1/chunks/{prefix}/{hash}`. The route authenticates the
+caller and then answers:
+
+```json
+{ "error": "not_found" }
+```
+
+with status `404`. Deduplication happens at the xorb level instead: insertion is
+keyed on the xorb hash, and `was_inserted` reports whether the body was new.
+
+## The xorb upload path parameter
+
+The route is `/v1/xorbs/{prefix}/{hash}`. Real `hf_xet` traffic sends `default`
+as `prefix`, which is a CAS pool name and not hash bytes, with the full 64-hex
+hash in the last segment. The CAS parses the last segment as the hash and also
+accepts the older split shape where the two parts concatenate into 64 hex
+characters.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Xorb body | 64 MiB plus 4096 bytes, enforced during the read |
+| Inline LFS object | 500 MiB |
+| Upload rate | 100 requests per minute per key |
+| Download rate | 100 requests per minute per key |
+
+## Conformance
+
+`conformance/` is a Rust harness that drives a running CAS with `xet_client` as
+a dev-dependency, never a runtime one, and round-trips fixtures from the
+`xet-team/xet-spec-reference-files` dataset. It is the check that the protocol
+implementation still matches real client behaviour. See
+[Testing](/docs/developers/testing).
+
+## Routes that are not implemented
+
+`HEAD /v1/xorbs/...` and `HEAD /v1/files/...` are absent: not in the OpenAPI
+spec, never called by the client. `/simulation/*`, `/v1/fetch_term`, and
+`/v1/get_xorb/...` are absent: they belong to `xet-core`'s own reference test
+server. There are no `DELETE` routes, because Xet CAS storage is append-only by
+design.

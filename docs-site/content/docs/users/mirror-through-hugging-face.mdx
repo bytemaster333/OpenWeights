@@ -1,0 +1,84 @@
+---
+title: Mirror through Hugging Face
+description: Keep your huggingface.co repositories while the file bytes land on Sia.
+---
+
+The [upload](/docs/users/upload-a-model) and
+[download](/docs/users/download-a-model) guides make OpenWeights the hub: your
+repository lives in your deployment and huggingface.co is not involved.
+
+There is a second path. You keep using your huggingface.co account and
+repositories for metadata, and only the large file bytes flow through
+OpenWeights onto Sia. `openweights-hf-proxy` is the piece that makes it work.
+
+## Why a proxy is needed
+
+`hf_xet` learns where to send file bytes from the `X-Xet-Cas-Url` response
+header that the Hub API returns. The client-side
+`HF_XET_DATA_DEFAULT_CAS_ENDPOINT` variable is only a fallback for when that
+header is absent, and on a Hugging Face-integrated upload it is always present.
+Setting that variable alone therefore does not redirect the bytes.
+
+`openweights-hf-proxy` sits between your client and huggingface.co. It forwards
+every request upstream unchanged and streams the response body through
+untouched. The one thing it changes is the `X-Xet-Cas-Url` response header,
+which it rewrites to your CAS URL whenever Hugging Face sends one.
+
+It rewrites nothing else: no request headers beyond the outbound `Host`, no
+response bodies, and no other response headers.
+
+## Configure it
+
+The proxy runs as part of the Compose stack on `http://localhost:28090`. It
+reads three variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENWEIGHTS_CAS_PUBLIC_URL` | required | The CAS URL as your **client machine** reaches it. Compose refuses to start without it. |
+| `HF_UPSTREAM_URL` | `https://huggingface.co` | Where requests are forwarded |
+| `LISTEN_ADDR` | `:28090` | Listen address inside the container |
+
+`OPENWEIGHTS_CAS_PUBLIC_URL` must be reachable from the machine running `hf`,
+not from inside the Compose network. Locally that is `http://localhost:8080`.
+
+## Use it
+
+Point `HF_ENDPOINT` at the proxy rather than at the CAS, keep your Hugging Face
+token, and pass your OpenWeights API key to `hf_xet` as a custom header:
+
+```bash
+HF_ENDPOINT=http://localhost:28090 \
+HF_TOKEN=<your-huggingface-token> \
+HF_XET_DATA_CUSTOM_HEADERS='{"Authorization":"Bearer <your-openweights-key>"}' \
+  hf upload <your-hf-user>/<repo> ./model-dir
+```
+
+Two different credentials are in play, and they are not interchangeable:
+
+- `HF_TOKEN` authenticates you to huggingface.co, which still handles the
+  repository, the commit, and all metadata.
+- The bearer token inside `HF_XET_DATA_CUSTOM_HEADERS` authenticates you to your
+  OpenWeights CAS, which receives the file bytes. `hf_xet` attaches it to every
+  CAS request. The proxy never sees or needs it.
+
+## Health
+
+```bash
+curl http://localhost:28090/health
+```
+
+Returns `{"status":"ok"}`. The probe is deliberately local: it reports the proxy
+is alive without checking huggingface.co, so an upstream outage surfaces as a
+`502` on a real request instead of a failed health check.
+
+## Which path to pick
+
+| | Standalone `HF_ENDPOINT` at the CAS | Through `openweights-hf-proxy` |
+| --- | --- | --- |
+| Repository and metadata | Your deployment | huggingface.co |
+| File bytes | Sia | Sia |
+| Credentials | One OpenWeights API key | HF token plus an OpenWeights API key |
+| Works offline from huggingface.co | Yes | No |
+
+Start with the standalone path. Reach for the proxy when you specifically want
+your repositories to stay on huggingface.co.

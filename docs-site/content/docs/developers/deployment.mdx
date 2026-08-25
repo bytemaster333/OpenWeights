@@ -1,0 +1,233 @@
+---
+title: Deployment
+description: Compose overlays, Caddy, and the published images.
+---
+
+## Compose files
+
+The base file is `ops/docker-compose.yml`. Overlays stack on top of it, and the
+`-f` order is what decides precedence.
+
+| File | Purpose |
+| --- | --- |
+| `docker-compose.yml` | The stack: Postgres, Redis, CAS, gateway, console, hf-proxy |
+| `docker-compose.ci.yml` | Pins `V2_RECONSTRUCTION_ENABLED=true` and raises log verbosity |
+| `docker-compose.caddy.yml` | Adds a Caddy reverse proxy on `127.0.0.1:8090` for CI range-integrity testing |
+| `docker-compose.prod.yml` | Adds Caddy on `:80` and `:443` with automatic TLS, and un-publishes the CAS, gateway, console, Postgres, and Redis ports |
+| `docker-compose.mock.yml` | Wires the in-memory mock Sia adapter for local development |
+
+Compose auto-loads a `docker-compose.override.yml` only when you invoke it with
+no `-f` flag. Every Makefile target passes `-f ops/docker-compose.yml`, which
+turns that auto-loading off, so a local override file is **not** picked up by
+`make up` or `make deploy`. To apply one, name it explicitly:
+
+```bash
+docker compose -f ops/docker-compose.yml -f ops/docker-compose.override.yml \
+  --env-file .env up -d
+```
+
+The repository does not ship an override, and one you create stays out of git.
+
+## Ports
+
+From the base file, every binding is loopback.
+
+| Service | Host | Container |
+| --- | --- | --- |
+| `openweights-cas` | `127.0.0.1:8080` | `8080` |
+| `openweights-gateway` | `127.0.0.1:9090` | `8081` |
+| `openweights-console` | `127.0.0.1:5173` | `80` |
+| `openweights-hf-proxy` | `127.0.0.1:28090` | `28090` |
+| Postgres | `127.0.0.1:5432` | `5432` |
+| Redis | `127.0.0.1:6379` | `6379` |
+
+The production overlay resets the CAS, gateway, console, Postgres, and Redis to
+`expose:`, so of those only Caddy is reachable from outside the Compose network.
+It does not change `openweights-hf-proxy`, which keeps its loopback publish on
+`127.0.0.1:28090`. Neither service's metrics port is ever published.
+
+## Published images
+
+`.github/workflows/release.yml` builds and pushes on a `v*` tag:
+
+- `ghcr.io/bytemaster333/openweights-cas`
+- `ghcr.io/bytemaster333/openweights-gateway`
+- `ghcr.io/bytemaster333/openweights-console`
+- `ghcr.io/bytemaster333/openweights-hf-proxy`
+
+Each is pushed under the tag name and re-tagged `latest`. `OPENWEIGHTS_VERSION`
+selects the tag and defaults to `latest`.
+
+```bash
+docker compose -f ops/docker-compose.yml --env-file .env pull
+make up
+```
+
+The console image is deployment-agnostic: its URLs come from the runtime
+`/config.js`, not from the build-time defaults, so the same image serves any
+deployment.
+
+## Production
+
+```bash
+make deploy
+```
+
+That is `docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml
+--env-file .env`, running `pull`, then `build`, then `up -d`, then waiting for
+every service to report healthy.
+
+It checks its preconditions first and fails with a clear message if `.env`,
+`ops/Caddyfile`, or `ops/docker-compose.prod.yml` is missing. It is never
+invoked from CI.
+
+Before running it:
+
+- `.env` exists at `0600`, populated from `ops/.env.example` and
+  `ops/.env.prod.example`
+- DNS A records for both hostnames point at the host
+- Ports 80 and 443 are reachable from the internet, for the ACME challenge
+- `OPENWEIGHTS_ACME_EMAIL` is set, which the overlay marks required
+
+Then verify:
+
+```bash
+make deploy-smoke
+```
+
+which runs `ops/smoke.sh` against `$OPENWEIGHTS_DOMAIN`, defaulting to
+`openweights.app`. It needs `curl`, `openssl`, and `jq`, and sources `./.env`
+when present. It exits `0` when every check passes, `1` on a failure, and `2`
+when a precondition is missing.
+
+It runs five checks, and the last three read extra variables:
+
+| Check | What it asserts | Extra input |
+| --- | --- | --- |
+| 1 | The console answers and the CAS reports healthy | none |
+| 2 | One certificate covers both `$DOMAIN` and `cas.$DOMAIN` | none |
+| 3 | A reconstruction returns the expected JSON shape | `OPENWEIGHTS_FIXTURE_FILE_ID` and `OPENWEIGHTS_PUBLIC_READ_KEY` |
+| 4 | An `hf` download succeeds through the CAS | `OPENWEIGHTS_PUBLIC_READ_KEY` and the `hf` CLI |
+| 5 | Single-range and multi-range responses survive Caddy | `OPENWEIGHTS_FIXTURE_XORB_HASH` or `OPENWEIGHTS_FIXTURE_SIGNED_URL_PATH` |
+
+Check 3 falls back to asserting an unauthenticated request is rejected when its
+inputs are absent. Checks 4 and 5 report a warning and move on rather than
+failing. To get all five running, add these to `.env` after seeding a fixture:
+
+```bash
+OPENWEIGHTS_PUBLIC_READ_KEY=<a read-scoped key>
+OPENWEIGHTS_FIXTURE_FILE_ID=<from preload-fixture>
+OPENWEIGHTS_FIXTURE_XORB_HASH=<a pinned xorb hash from /assets>
+```
+
+Only the first two appear in `ops/.env.prod.example`, so check 5 warns until you
+add a xorb hash yourself.
+
+## Seeding a fixture model
+
+`make preload-fixture` puts one known model into a fresh deployment, so there is
+something to look at and to smoke-test against. Run it once, after the first
+deploy and after minting a `write` key in the console.
+
+```bash
+OPENWEIGHTS_CAS_URL=https://cas.openweights.app \
+OPENWEIGHTS_WRITE_KEY=<your write-scoped key> \
+  make preload-fixture
+```
+
+Both variables are required and the script exits `2` without them. It also needs
+either `hf` or `huggingface-cli` on `PATH`, exiting `2` otherwise, and it reads
+`bench/bench.config.sh` by relative path, so run it from the repository root. Exit `0` means the fixture is uploaded or already there,
+and `1` means a step failed.
+
+It downloads the fixture named in `bench/bench.config.sh` straight from Hugging
+Face with OpenWeights routing unset, then re-uploads it through your CAS. The
+target repository defaults to `openweights-demo/<fixture basename>` and
+`OPENWEIGHTS_DEMO_REPO` overrides it.
+
+Re-running is cheap: uploads deduplicate by Merkle hash, so a second run stores
+nothing new.
+
+The script finishes by printing the fixture's `file_id`. Put it in `.env` as
+`OPENWEIGHTS_FIXTURE_FILE_ID` so the post-deploy smoke can exercise a real
+reconstruction rather than only asserting a `401`.
+
+## Caddy
+
+`ops/Caddyfile` serves two hostnames from a single site block, so Caddy issues
+one certificate covering both names in its subject alternative names. The domain
+is a single knob: set `OPENWEIGHTS_DOMAIN` in `.env` and both the Caddyfile
+(`{$OPENWEIGHTS_DOMAIN}`, `cas.{$OPENWEIGHTS_DOMAIN}`) and every public URL the
+prod overlay derives (`CONSOLE_BASE_URL`, `CAS_PUBLIC_URL`, `GATEWAY_BASE_URL`,
+the OAuth callback, and the console's runtime URLs) follow. A prod operator sets
+only `OPENWEIGHTS_DOMAIN` + `OPENWEIGHTS_ACME_EMAIL` (plus DNS for both names and
+the secrets) — do NOT set the per-URL variables individually.
+
+| Host | Path | Upstream |
+| --- | --- | --- |
+| `<domain>` | everything | `openweights-console:80` |
+| `cas.<domain>` | `/gateway/*` | `openweights-gateway:8081`, prefix stripped |
+| `cas.<domain>` | `/metrics` | `404`, explicitly |
+| `cas.<domain>` | everything else | `openweights-cas:8080` |
+
+Both reverse-proxy blocks set `flush_interval -1`, which disables response
+buffering.
+
+<Callout type="warn">
+`flush_interval -1` on the gateway route is load-bearing. Buffering can
+recompose a `multipart/byteranges` body and destroy the range boundaries, which
+corrupts `xet-core` downloads silently. The same setting on the CAS route keeps
+large `/v1/xorbs` uploads streaming.
+</Callout>
+
+The Caddyfile also disables the remote admin API, sets HSTS and
+`X-Content-Type-Options: nosniff`, removes the `Server` header, caps HTTP/2
+concurrent streams at 256, and logs JSON to stdout.
+
+The gateway path prefix and `GATEWAY_BASE_URL` must agree. The production
+overlay derives `GATEWAY_BASE_URL=https://cas.${OPENWEIGHTS_DOMAIN}/gateway` on
+both the CAS and the gateway, which matches Caddy's `handle_path /gateway/*`
+strip.
+
+### CI variant
+
+`ops/Caddyfile.ci` is HTTP-only h2c on `:8090` with automatic HTTPS off, routing
+`/cas/*` to the CAS, `/gateway/*` to the gateway, and everything else to the
+console. It exists so pull requests exercise the same reverse-proxy code path as
+production. The two files coexist on purpose; edit them separately.
+
+## Health
+
+`scripts/wait-for-stack-healthy.sh` polls Docker Compose health state rather
+than raw HTTP, so services with internal probes are respected as the Compose
+file defines them. It exits `0` when everything is healthy and `1` on the first
+timeout, with per-service budgets.
+
+Each service also answers `/health` directly.
+
+## Certificate validation before issuance
+
+`ops/Caddyfile` carries a commented `acme_ca` line pointing at the Let's Encrypt
+staging directory. Uncomment it, deploy, confirm the certificate covers both
+names, then comment it back out and redeploy for a real certificate:
+
+```bash
+openssl s_client -connect openweights.app:443 -servername openweights.app </dev/null \
+  | openssl x509 -noout -ext subjectAltName
+```
+
+The overlay persists `caddy-data` and `caddy-config` volumes so ACME account
+state and issued certificates survive restarts. Without them Let's Encrypt
+re-issues on every deploy and the weekly rate limit arrives quickly.
+
+## Updating
+
+```bash
+git pull
+docker compose -f ops/docker-compose.yml --env-file .env pull
+make up
+```
+
+The CAS applies any new migrations at boot. Every service in the production
+overlay carries `restart: unless-stopped`, so the stack survives a reboot with
+no systemd unit.

@@ -1,0 +1,67 @@
+---
+title: Use an existing deployment
+description: Someone runs OpenWeights and gave you access — upload and download with the hf CLI.
+---
+
+You are not running the stack yourself. An operator gave you a deployment URL
+and an API key. All you need is the standard Hugging Face client — no fork, no
+patched wheel.
+
+## Steps
+
+**1. Install the client.**
+
+```bash
+pip install "huggingface_hub[hf_xet]"
+```
+
+**2. Point `hf` at the deployment.**
+
+Set two variables: the deployment URL your operator gave you (as `HF_ENDPOINT`)
+and your API key (as `HF_TOKEN`).
+
+```bash
+export HF_ENDPOINT=https://cas.example-deployment.com
+export HF_TOKEN=<your-key>
+```
+
+**3. Upload.**
+
+```bash
+hf upload me/my-model ./model-dir
+```
+
+**4. Download.**
+
+```bash
+hf download me/my-model --local-dir ./out
+```
+
+The bytes come back byte-for-byte identical. If a download 404s right after an
+upload, the first pin is still forming on Sia — wait and retry.
+
+<Callout>
+A **read + write** key (the console default) does both upload and download. If
+your operator gave you a single-scope key, a `write` key uploads and a `read`
+key downloads.
+</Callout>
+
+## More detail
+
+<Cards>
+  <Card
+    title="Upload a model"
+    href="/docs/users/upload-a-model"
+    description="Options, repository naming, and what happens under the hood."
+  />
+  <Card
+    title="Download a model"
+    href="/docs/users/download-a-model"
+    description="Fresh-cache downloads and the reconstruction path."
+  />
+  <Card
+    title="API keys"
+    href="/docs/users/api-keys"
+    description="Scopes, and how the CLI presents your token."
+  />
+</Cards>
