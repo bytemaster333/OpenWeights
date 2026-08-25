@@ -1,24 +1,22 @@
-# ops/docker-compose.prod.yml — Production overlay for the hosted demo.
-#. Compose with:
-# docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
-# --env-file.env up -d
+# ops/docker-compose.prod.yml — Production overlay for a hosted deployment.
+# Compose with:
+#   docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
+#     --env-file .env up -d
+#
 # Differences from the base (dev/CI) compose:
-# 1. Adds a `caddy` service bound to 0.0.0.0:80 + 0.0.0.0:443 (ONLY public ports).
+# 1. Adds a `caddy` service bound to 0.0.0.0:80 + 0.0.0.0:443 (ONLY public ports)
+#    with automatic HTTPS.
 # 2. Drops the base file's `127.0.0.1:<x>:<y>` port mappings to `expose:` so
-# CAS/gateway/console/Postgres/Redis/indexd(app)/indexd(admin) are reachable
-# only on the Compose network — Caddy proxies CAS + gateway + console, and
-# Postgres/Redis/indexd are internal dependencies of the openweights-* services.
-# 3. Pins `V2_RECONSTRUCTION_ENABLED=true` ( default anyway; belt-and-
-# suspenders for in production).
-# 4. Sets `GATEWAY_BASE_URL=https://cas.openweights.app/gateway` so signed URLs
-# minted by CAS reach the gateway via Caddy.
-# 5. Defaults `SIA_NETWORK=mainnet`. Owner flips back to `zen` in.env for a
-# testnet demo.
-# 6. `restart: unless-stopped` on every service — reboot-resilient without
-# requiring a systemd unit.
-# indexd image pinning: `INDEXD_IMAGE` in.env MUST be a digest-pinned ref
-# (e.g. ghcr.io/siafoundation/indexd@sha256:...) rather than `:latest`.
-# close produced the canonical digest; the.env.prod.example file lists it.
+#    CAS/gateway/console/Postgres/Redis are reachable only on the Compose
+#    network — Caddy proxies CAS + gateway + console; Postgres/Redis are internal.
+# 3. Derives every public URL from a SINGLE knob, OPENWEIGHTS_DOMAIN (e.g.
+#    openweights.app), so a different domain needs only that one .env value (plus
+#    DNS + OPENWEIGHTS_ACME_EMAIL). The console lives on the apex, the CAS +
+#    gateway on cas.<domain>.
+# 4. `restart: unless-stopped` on every service — reboot-resilient.
+#
+# There is no bundled indexer: OPENWEIGHTS_INDEXER_URL points at an external one
+# (https://sia.storage or your own indexd), same as the base compose.
 
 services:
 
@@ -42,37 +40,56 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     environment:
+      # The one domain knob. Caddy serves <domain> (console) + cas.<domain>
+      # (CAS + gateway) on one dual-SAN cert. Must have DNS pointing here.
+      OPENWEIGHTS_DOMAIN: ${OPENWEIGHTS_DOMAIN:?must be set in .env (e.g. openweights.app)}
       OPENWEIGHTS_ACME_EMAIL: ${OPENWEIGHTS_ACME_EMAIL:?must be set in .env for Let's Encrypt}
     restart: unless-stopped
 
-  # ─── openweights-cas: drop 127.0.0.1 publish; only internally exposed ────────────
+  # ─── openweights-cas: internal-only; public URLs derived from the domain ─────
   openweights-cas:
     ports: !reset []
     expose:
       - "8080"
     environment:
-      # V2 flip explicit in prod (CAS emits multipart-aware signed URLs).
       V2_RECONSTRUCTION_ENABLED: "true"
-      # Signed URLs minted here land at https://cas.openweights.app/gateway/<path>
-      # after Caddy's handle_path strip.
-      GATEWAY_BASE_URL: https://cas.openweights.app/gateway
+      # All public URLs derive from OPENWEIGHTS_DOMAIN so one knob configures prod.
+      CONSOLE_BASE_URL: https://${OPENWEIGHTS_DOMAIN:-openweights.app}
+      CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
+      OPENWEIGHTS_CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
+      GATEWAY_BASE_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/gateway
+      GITHUB_OAUTH_CALLBACK_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/auth/github/callback
     restart: unless-stopped
 
-  # ─── openweights-gateway: drop 127.0.0.1 publish; only internally exposed ────────
+  # ─── openweights-gateway: internal-only; base URL must match the CAS ─────────
   openweights-gateway:
     ports: !reset []
     expose:
       - "8081"
     environment:
-      # Gateway verifies URLs minted with this base; must match CAS.
-      GATEWAY_BASE_URL: https://cas.openweights.app/gateway
+      GATEWAY_BASE_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/gateway
     restart: unless-stopped
 
-  # ─── openweights-console: drop 127.0.0.1 publish; only internally exposed ────────
+  # ─── openweights-console: internal-only; runtime config points at the domain ─
   openweights-console:
     ports: !reset []
     expose:
       - "80"
+    environment:
+      # Baked into /config.js at container start so the browser talks to the
+      # public CAS/gateway origins (not localhost).
+      OPENWEIGHTS_CONSOLE_CAS_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
+      OPENWEIGHTS_CONSOLE_GATEWAY_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/gateway
+      OPENWEIGHTS_CONSOLE_HF_PROXY_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
+    restart: unless-stopped
+
+  # ─── hf-proxy: internal-only; rewrites X-Xet-Cas-Url to the public CAS ───────
+  openweights-hf-proxy:
+    ports: !reset []
+    expose:
+      - "28090"
+    environment:
+      OPENWEIGHTS_CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
     restart: unless-stopped
 
   # ─── Postgres: loopback-only in prod (Caddy has no reason to reach it) ─────

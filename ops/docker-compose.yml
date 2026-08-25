@@ -150,7 +150,7 @@ services:
       # HF-API-compat (migration 0008): HS256 signing key + client-visible
       # CAS URL for xet-write-token responses.
       XET_JWT_SIGNING_KEY: ${XET_JWT_SIGNING_KEY:-}
-      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-http://localhost:28080}
+      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-http://localhost:8080}
       # Password sign-in for single-operator self-hosting. Set a password to
       # skip GitHub OAuth entirely; leave empty to disable password auth.
       OPENWEIGHTS_ADMIN_PASSWORD: ${OPENWEIGHTS_ADMIN_PASSWORD:-}
@@ -231,7 +231,7 @@ services:
       # CLIENT-reachable CAS URL. Not indexd:9982, not cas:8080 — whatever
       # the hf_xet process connects to from the host. Local dev:
       # http://localhost:28080. Prod: https://cas.openweights.app.
-      OPENWEIGHTS_CAS_PUBLIC_URL: ${OPENWEIGHTS_CAS_PUBLIC_URL:?OPENWEIGHTS_CAS_PUBLIC_URL must be set in .env}
+      OPENWEIGHTS_CAS_PUBLIC_URL: ${OPENWEIGHTS_CAS_PUBLIC_URL:-http://localhost:8080}
     ports:
       - "127.0.0.1:28090:28090"
     healthcheck:
