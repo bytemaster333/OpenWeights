@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-CAS="${CAS_URL:-http://localhost:28080}"
+CAS="${CAS_URL:-http://localhost:8080}"
 TOKEN="${OPENWEIGHTS_API_KEY:?OPENWEIGHTS_API_KEY required (mint via scripts/issue-test-key.sh; needs upload+download scope)}"
 HF_CLI="${HF_CLI:-hf}"
 REPO="${REPO:-openweights-e2e/roundtrip-$$}"
