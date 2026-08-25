@@ -39,9 +39,10 @@
 }
 
 # ─── Single site block, two SANs, one cert ─────────────────────────────────────
-# Caddy treats "openweights.app, cas.openweights.app" as a single site and issues one
-# dual-SAN cert covering both names. HSTS + HTTP/2 tuning apply to both.
-openweights.app, cas.openweights.app {
+# Domain comes from OPENWEIGHTS_DOMAIN (set in .env → docker-compose.prod.yml).
+# Caddy treats "<domain>, cas.<domain>" as a single site and issues one dual-SAN
+# cert covering both names. HSTS + HTTP/2 tuning apply to both.
+{$OPENWEIGHTS_DOMAIN}, cas.{$OPENWEIGHTS_DOMAIN} {
  encode zstd gzip
 
  # HTTP/2 tuning — mitigation. `max_concurrent_streams 256` gives xet-core
@@ -56,7 +57,7 @@ openweights.app, cas.openweights.app {
 
  # openweights.app → console (shadcn/TanStack Router/Query SPA served as static
  # assets by the console's nginx inside the container).
- @console host openweights.app
+ @console host {$OPENWEIGHTS_DOMAIN}
  handle @console {
  reverse_proxy http://openweights-console:80
  }
@@ -64,7 +65,7 @@ openweights.app, cas.openweights.app {
  # cas.openweights.app → CAS + gateway (path-split). Gateway lives under /gateway/*
  # so Caddy can apply `flush_interval -1` specifically to the streaming
  # multipart/byteranges path ( load-bearing).
- @cas host cas.openweights.app
+ @cas host cas.{$OPENWEIGHTS_DOMAIN}
  handle @cas {
  # Gateway: signed-URL range serving. `handle_path` strips the prefix
  # before proxying so the gateway sees its canonical URL paths. This

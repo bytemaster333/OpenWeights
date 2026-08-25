@@ -10,11 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  type SubsystemStatus,
-  usePlatformSia,
-  useSetupStatus,
-} from "@/hooks/useSetupStatus"
+import { type SubsystemStatus, usePlatformSia, useSetupStatus } from "@/hooks/useSetupStatus"
 import { CAS_URL } from "@/lib/api"
 import { formatBytes, formatHastingsToSC } from "@/lib/format"
 
@@ -29,13 +25,19 @@ import { formatBytes, formatHastingsToSC } from "@/lib/format"
 
 function StatusIcon({ s }: { s: SubsystemStatus["status"] }) {
   if (s === "ok") return <CheckCircle weight="fill" className="size-4 text-primary" />
+  if (s === "external")
+    return <CloudCheckIcon weight="light" className="size-4 text-foreground/70" />
   if (s === "degraded") return <Warning weight="fill" className="size-4 text-foreground/70" />
   return <WarningCircle weight="fill" className="size-4 text-destructive" />
 }
 
 function StatusBadge({ s }: { s: SubsystemStatus }) {
   const variant =
-    s.status === "ok" ? "default" : s.status === "degraded" ? "secondary" : "destructive"
+    s.status === "ok"
+      ? "default"
+      : s.status === "degraded" || s.status === "external"
+        ? "secondary"
+        : "destructive"
   return (
     <Badge variant={variant} data-testid="setup-status-badge" data-status={s.status}>
       <StatusIcon s={s.status} />
@@ -56,18 +58,10 @@ export function SetupPage() {
     <main className="mx-auto max-w-5xl space-y-6 px-6 py-8" data-testid="setup-page">
       <header>
         <div className="flex items-center gap-3">
-          <HeartbeatIcon
-            size={22}
-            weight="light"
-            className="text-muted-foreground"
-          />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Platform status
-          </h1>
+          <HeartbeatIcon size={22} weight="light" className="text-muted-foreground" />
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">Platform status</h1>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Live health of OpenWeights subsystems.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Live health of OpenWeights subsystems.</p>
       </header>
 
       {isPending && (
@@ -126,24 +120,33 @@ export function SetupPage() {
                 <StatusBadge s={data.indexd} />
               </CardHeader>
               <CardContent className="space-y-1 text-xs text-muted-foreground">
-                <div>
-                  Chain synced:{" "}
-                  <span
-                    className="font-mono"
-                    data-testid="setup-indexd-synced"
-                    data-synced={data.indexd.synced ? "true" : "false"}
-                  >
-                    {data.indexd.synced ? "yes" : "no"}
-                  </span>
-                </div>
-                <div>
-                  Round-trip latency:{" "}
-                  <span className="font-mono">{latencyText(data.indexd.latency_ms)}</span>
-                </div>
-                <p className="pt-1 text-[0.7rem]">
-                  Self-hosted <code className="font-mono">indexd</code> node
-                  tracking the Sia chain.
-                </p>
+                {data.indexd.status === "external" ? (
+                  <p className="pt-1 text-[0.7rem]">
+                    Using a hosted indexer (e.g. <code className="font-mono">sia.storage</code>).
+                    There is no local node to probe — uploads and downloads still flow through it.
+                  </p>
+                ) : (
+                  <>
+                    <div>
+                      Chain synced:{" "}
+                      <span
+                        className="font-mono"
+                        data-testid="setup-indexd-synced"
+                        data-synced={data.indexd.synced ? "true" : "false"}
+                      >
+                        {data.indexd.synced ? "yes" : "no"}
+                      </span>
+                    </div>
+                    <div>
+                      Round-trip latency:{" "}
+                      <span className="font-mono">{latencyText(data.indexd.latency_ms)}</span>
+                    </div>
+                    <p className="pt-1 text-[0.7rem]">
+                      Self-hosted <code className="font-mono">indexd</code> node tracking the Sia
+                      chain.
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -151,18 +154,13 @@ export function SetupPage() {
           {/* On-Sia network panel — proof we're actually pinning bytes
               on the Sia network. Every link below opens siascan.com. */}
           {sia && (
-            <section
-              className="rounded border bg-muted/10 p-4"
-              data-testid="setup-tile-sia"
-            >
+            <section className="rounded border bg-muted/10 p-4" data-testid="setup-tile-sia">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <CloudCheckIcon size={14} weight="light" /> On Sia network
                 </h2>
                 {sia.indexd_synced != null && (
-                  <Badge
-                    variant={sia.indexd_synced ? "default" : "secondary"}
-                  >
+                  <Badge variant={sia.indexd_synced ? "default" : "secondary"}>
                     {sia.indexd_synced ? "synced" : "syncing"}
                   </Badge>
                 )}
@@ -171,18 +169,15 @@ export function SetupPage() {
               {/* KPIs */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div>
-                  <div className="text-[0.7rem] uppercase text-muted-foreground">
-                    Renter wallet
-                  </div>
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">Renter wallet</div>
                   <div className="font-mono text-xs">
                     {formatHastingsToSC(sia.wallet_spendable_hastings)}
                   </div>
-                  {sia.wallet_immature_hastings &&
-                    sia.wallet_immature_hastings !== "0" && (
-                      <div className="text-[0.65rem] text-muted-foreground">
-                        +{formatHastingsToSC(sia.wallet_immature_hastings)} immature
-                      </div>
-                    )}
+                  {sia.wallet_immature_hastings && sia.wallet_immature_hastings !== "0" && (
+                    <div className="text-[0.65rem] text-muted-foreground">
+                      +{formatHastingsToSC(sia.wallet_immature_hastings)} immature
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-[0.7rem] uppercase text-muted-foreground">
@@ -194,14 +189,10 @@ export function SetupPage() {
                   <div className="text-[0.7rem] uppercase text-muted-foreground">
                     Distinct hosts
                   </div>
-                  <div className="font-mono text-sm">
-                    {sia.distinct_host_count}
-                  </div>
+                  <div className="font-mono text-sm">{sia.distinct_host_count}</div>
                 </div>
                 <div>
-                  <div className="text-[0.7rem] uppercase text-muted-foreground">
-                    Network
-                  </div>
+                  <div className="text-[0.7rem] uppercase text-muted-foreground">Network</div>
                   <div className="font-mono text-sm">
                     {sia.siascan_base.includes("zen") ? "Zen testnet" : "Mainnet"}
                   </div>
@@ -215,9 +206,7 @@ export function SetupPage() {
                     Renter address
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <code className="break-all font-mono text-xs">
-                      {sia.wallet_address}
-                    </code>
+                    <code className="break-all font-mono text-xs">{sia.wallet_address}</code>
                     <a
                       href={`${sia.siascan_base}/address/${sia.wallet_address}`}
                       target="_blank"
@@ -241,23 +230,14 @@ export function SetupPage() {
                     <table className="w-full text-xs">
                       <thead className="bg-muted/40">
                         <tr>
-                          <th className="px-2 py-1 text-left font-medium">
-                            Contract
-                          </th>
-                          <th className="px-2 py-1 text-left font-medium">
-                            Host
-                          </th>
-                          <th className="px-2 py-1 text-right font-medium">
-                            Stored
-                          </th>
+                          <th className="px-2 py-1 text-left font-medium">Contract</th>
+                          <th className="px-2 py-1 text-left font-medium">Host</th>
+                          <th className="px-2 py-1 text-right font-medium">Stored</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sia.contracts.map((c) => (
-                          <tr
-                            key={c.id}
-                            className="border-t border-border/60"
-                          >
+                          <tr key={c.id} className="border-t border-border/60">
                             <td className="px-2 py-1 font-mono">
                               <a
                                 href={`${sia.siascan_base}/contract/${c.id}`}

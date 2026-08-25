@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import { type ApiError, casFetch } from "@/lib/api"
+import { CAS_URL } from "@/lib/config"
 
 /**
  * One row in `GET /api/models`. Matches `ModelListItem` in
@@ -80,16 +81,13 @@ export type ModelTrendPoint = {
   bytes: number
 }
 
-export function useModelTrend(
-  owner: string | undefined,
-  repo: string | undefined,
-) {
+export function useModelTrend(owner: string | undefined, repo: string | undefined) {
   return useQuery<ModelTrendPoint[], ApiError>({
     queryKey: ["models", owner, repo, "trend"],
     queryFn: () =>
-      casFetch<{ days: ModelTrendPoint[] }>(
-        `/api/models/${owner}/${repo}/downloads/trend`,
-      ).then((r) => r.days),
+      casFetch<{ days: ModelTrendPoint[] }>(`/api/models/${owner}/${repo}/downloads/trend`).then(
+        (r) => r.days,
+      ),
     enabled: Boolean(owner && repo),
     staleTime: 30_000,
   })
@@ -122,16 +120,13 @@ export type ModelObject = {
   files: string[]
 }
 
-export function useModelObjects(
-  owner: string | undefined,
-  repo: string | undefined,
-) {
+export function useModelObjects(owner: string | undefined, repo: string | undefined) {
   return useQuery<ModelObject[], ApiError>({
     queryKey: ["models", owner, repo, "objects"],
     queryFn: () =>
-      casFetch<{ objects: ModelObject[] }>(
-        `/api/models/${owner}/${repo}/objects`,
-      ).then((r) => r.objects),
+      casFetch<{ objects: ModelObject[] }>(`/api/models/${owner}/${repo}/objects`).then(
+        (r) => r.objects,
+      ),
     enabled: Boolean(owner && repo),
     staleTime: 10_000,
   })
@@ -147,7 +142,7 @@ export function useModelReadme(owner: string | undefined, repo: string | undefin
     queryKey: ["models", owner, repo, "README.md"],
     queryFn: async () => {
       if (!owner || !repo) return null
-      const base = import.meta.env.VITE_CAS_URL ?? "http://localhost:8080"
+      const base = CAS_URL
       const res = await fetch(`${base}/${owner}/${repo}/resolve/main/README.md`, {
         redirect: "follow",
       })

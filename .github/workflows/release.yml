@@ -1,0 +1,56 @@
+name: release
+
+# Publish the service images to GHCR on a version tag (e.g. v1.0.0). Operators
+# then run the stack from prebuilt images (docker compose pull && up -d) with no
+# source checkout or local build. The console image is deployment-agnostic: its
+# URLs come from runtime config (/config.js), not the baked build-time defaults.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    env:
+      OPENWEIGHTS_VERSION: ${{ github.ref_name }}
+      # Dummy values so compose can interpolate the file at build time. These are
+      # NOT baked into the images — they are `environment:` applied at run time
+      # from the operator's .env.
+      POSTGRES_SUPERUSER_PASSWORD: build
+      OPENWEIGHTS_POSTGRES_PASSWORD: build
+      OPENWEIGHTS_GW_POSTGRES_PASSWORD: build
+      REDIS_PASSWORD: build
+      OPENWEIGHTS_CAS_PUBLIC_URL: http://localhost:28080
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build images
+        run: >
+          docker compose -f ops/docker-compose.yml build
+          openweights-cas openweights-gateway openweights-console openweights-hf-proxy
+
+      - name: push :${{ github.ref_name }}
+        run: >
+          docker compose -f ops/docker-compose.yml push
+          openweights-cas openweights-gateway openweights-console openweights-hf-proxy
+
+      - name: tag + push :latest
+        run: |
+          for svc in cas gateway console hf-proxy; do
+            src="ghcr.io/bytemaster333/openweights-$svc:${OPENWEIGHTS_VERSION}"
+            docker tag "$src" "ghcr.io/bytemaster333/openweights-$svc:latest"
+            docker push "ghcr.io/bytemaster333/openweights-$svc:latest"
+          done

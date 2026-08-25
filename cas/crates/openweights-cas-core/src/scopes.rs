@@ -16,6 +16,11 @@ pub const SCOPE_UPLOAD: u8 = 0;
 pub const SCOPE_DOWNLOAD: u8 = 1;
 /// Scope = `admin` — may hit `/admin/*` routes.
 pub const SCOPE_ADMIN: u8 = 2;
+/// Sentinel for `AuthScoped` — "any authenticated key, no specific scope".
+/// Used by identity probes like `whoami-v2` that the hf CLI calls before both
+/// uploads and downloads, so gating them on a single scope would 403 a
+/// legitimately-scoped key. Not a real DB scope (never stored).
+pub const SCOPE_ANY: u8 = 255;
 
 /// Postgres `api_key_scope` enum mirror.
 #[derive(Type, Debug, Clone, Copy, PartialEq, Eq)]

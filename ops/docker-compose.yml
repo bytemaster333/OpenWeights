@@ -1,7 +1,7 @@
 # ops/docker-compose.yml
-# Compose stack — indexd + postgres + redis (no openweights-cas / gateway / console yet).
-# See §9 for design notes.
-# the indexd healthcheck binary ships from PLAN 05; bind-mount path is contractual.
+# Compose stack — postgres + redis + openweights-cas / gateway / console / hf-proxy.
+# No indexd: the operator points OPENWEIGHTS_INDEXER_URL at an external indexer
+# (https://sia.storage by default, or their own indexd URL).
 
 services:
 
@@ -12,13 +12,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD must be set in .env}
       POSTGRES_DB: postgres
       # Passed through to init.sql via the psql-injected psql environment variables.
-      INDEXD_PASSWORD: ${INDEXD_POSTGRES_PASSWORD:?INDEXD_POSTGRES_PASSWORD must be set in .env}
       OPENWEIGHTS_PASSWORD: ${OPENWEIGHTS_POSTGRES_PASSWORD:?OPENWEIGHTS_POSTGRES_PASSWORD must be set in .env}
-      # : openweights_gw role is created at first-boot by indexd-postgres-init.sql.
+      # openweights_gw role is created at first-boot by postgres-init.sql.
       OPENWEIGHTS_GW_PASSWORD: ${OPENWEIGHTS_GW_POSTGRES_PASSWORD:?OPENWEIGHTS_GW_POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./indexd-postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
@@ -50,36 +49,9 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  indexd:
-    # Pin to digest at close:
-    # docker pull ghcr.io/siafoundation/indexd:latest
-    # docker inspect --format='{{index.RepoDigests 0}}' ghcr.io/siafoundation/indexd:latest
-    image: ${INDEXD_IMAGE:-ghcr.io/siafoundation/indexd:latest}
-    container_name: openweights-indexd
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - indexd-data:/data
-      - ./indexd.yml:/data/indexd.yml:ro
-      - ../bench/compose-smoke/readiness/bin/readiness:/usr/local/bin/openweights-readiness:ro
-    environment:
-      INDEXD_DATA_DIR: /data
-      INDEXD_CONFIG_FILE: /data/indexd.yml
-    # Normal p2p sync (--instant removed while diagnosing Zen checkpoint-peer unreachability).
-    # command: ["--instant"]
-    ports:
-      - "127.0.0.1:9980:9980"   # admin API (loopback only)
-      - "9981:9981"              # p2p syncer (must be network-reachable)
-      - "127.0.0.1:9982:9982"   # app API (loopback only; openweights-cas talks via internal network)
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/openweights-readiness"]
-      # 60 retries * 30s = 30 min max sync wait; start_period gives indexd headroom.
-      interval: 30s
-      timeout: 10s
-      retries: 60
-      start_period: 300s
-    restart: unless-stopped
+  # NOTE: OpenWeights does NOT bundle an indexd. The operator supplies an
+  # indexer via OPENWEIGHTS_INDEXER_URL — the hosted https://sia.storage
+  # (default; 50 GB free tier, no wallet funding) or their own indexd URL.
 
   # openweights-gateway — Go gateway. Plans.. own this service.
   # Wave 1 scaffold: serves `/health` + stub `/xorb/{hash}` (501). Real range
@@ -88,11 +60,13 @@ services:
     build:
       context: ../gateway
       dockerfile: Dockerfile
+    # Prebuilt image published to GHCR on each release tag. `docker compose
+    # pull` fetches it (no local build); `docker compose build` re-tags it.
+    image: ghcr.io/bytemaster333/openweights-gateway:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-gateway
     depends_on:
       postgres:    { condition: service_healthy }
       redis:       { condition: service_healthy }
-      indexd:      { condition: service_healthy }
       openweights-cas:  { condition: service_healthy }
     environment:
       GATEWAY_ADDR: ":8081"
@@ -109,12 +83,18 @@ services:
       # URL). If OPENWEIGHTS_GW_POSTGRES_PASSWORD is unset, the gateway fails
       # fast on boot instead of silently connecting as the wrong role.
       POSTGRES_URL: ${GATEWAY_POSTGRES_URL:-postgres://openweights_gw:${OPENWEIGHTS_GW_POSTGRES_PASSWORD}@postgres:5432/openweights?application_name=openweights-gateway}
-      OPENWEIGHTS_INDEXER_URL: http://indexd:9982
+      # Indexer URL — operator-supplied. Default is the hosted https://sia.storage
+      # (50 GB free tier, no wallet funding); set OPENWEIGHTS_INDEXER_URL in .env
+      # to point the whole stack at your own indexd instead.
+      OPENWEIGHTS_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-https://sia.storage}
       OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
+      # The gateway accepts the SAME value the CAS uses (base64 of the 32-byte
+      # seed): parseAppKey expands it to the 64-byte ed25519 key so both derive
+      # the identical object-encryption key.
       OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Back-compat aliases — accepted by config.go's firstNonEmpty resolver.
       # Remove once the downstream consumers migrate to the OPENWEIGHTS_* names.
-      SIA_INDEXER_URL: http://indexd:9982
+      SIA_INDEXER_URL: ${OPENWEIGHTS_INDEXER_URL:-https://sia.storage}
       APP_KEY: ${OPENWEIGHTS_APP_KEY}
       # Whole-xorb disk LRU ( / 03-06). 100 GiB default. GATEWAY_CACHE_*
       # are the canonical env var names; CACHE_DIR / CACHE_SIZE_BYTES remain
@@ -142,26 +122,55 @@ services:
     build:
       context: ..
       dockerfile: cas/Dockerfile
+    image: ghcr.io/bytemaster333/openweights-cas:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-cas
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
-      indexd:   { condition: service_healthy }
     environment:
       DATABASE_URL: postgres://openweights:${OPENWEIGHTS_POSTGRES_PASSWORD}@postgres:5432/openweights
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      INDEXD_URL: http://indexd:9982
+      INDEXD_URL: ${OPENWEIGHTS_INDEXER_URL:-https://sia.storage}
       OPENWEIGHTS_APP_ID: ${OPENWEIGHTS_APP_ID}
       OPENWEIGHTS_APP_KEY: ${OPENWEIGHTS_APP_KEY}
       GATEWAY_URL_SIGNING_KEY: ${GATEWAY_URL_SIGNING_KEY}
       GATEWAY_URL_SIGNING_KEY_PREV: ${GATEWAY_URL_SIGNING_KEY_PREV:-}
       GATEWAY_URL_TTL_SECS: ${GATEWAY_URL_TTL_SECS:-7200}
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://127.0.0.1:9090}
-      V2_RECONSTRUCTION_ENABLED: ${V2_RECONSTRUCTION_ENABLED:-false}
+      # Downloads flow through the Go gateway (proposal-faithful) by default: the
+      # CAS advertises the Xet reconstruction path so hf_xet fetches xorbs from
+      # the gateway. Set false to fall back to the CAS-serves-reads path.
+      OPENWEIGHTS_GATEWAY_READS: ${OPENWEIGHTS_GATEWAY_READS:-true}
+      V2_RECONSTRUCTION_ENABLED: ${V2_RECONSTRUCTION_ENABLED:-true}
+      # First mainnet pin = on-chain contract formation across many hosts, which
+      # exceeds the default per-op budgets. Handler accepts-pending fast; the
+      # reconciler finishes the slow pin. Tune for local vs. mainnet indexers.
+      OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS: ${OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS:-20}
+      OPENWEIGHTS_SIA_OP_TIMEOUT_SECS: ${OPENWEIGHTS_SIA_OP_TIMEOUT_SECS:-3600}
       # HF-API-compat (migration 0008): HS256 signing key + client-visible
       # CAS URL for xet-write-token responses.
       XET_JWT_SIGNING_KEY: ${XET_JWT_SIGNING_KEY:-}
-      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-http://localhost:28080}
+      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-http://localhost:8080}
+      # Password sign-in for single-operator self-hosting. Set a password to
+      # skip GitHub OAuth entirely; leave empty to disable password auth.
+      OPENWEIGHTS_ADMIN_PASSWORD: ${OPENWEIGHTS_ADMIN_PASSWORD:-}
+      OPENWEIGHTS_ADMIN_USERNAME: ${OPENWEIGHTS_ADMIN_USERNAME:-admin}
+      # Console origin — drives BOTH the CORS allow-origin and the post-OAuth
+      # redirect. MUST be the browser-facing console URL. Base compose serves
+      # the console on localhost:5173; prod sets the real domain in .env.
+      # (Read here in the base file so it reaches the CAS in prod too, where the
+      # dev override is not merged.)
+      CONSOLE_BASE_URL: ${CONSOLE_BASE_URL:-http://localhost:5173}
+      # GitHub OAuth — optional (password sign-in works without it). Set all
+      # three in .env to also offer "Continue with GitHub". Callback must match
+      # the GitHub OAuth App registration.
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CALLBACK_URL: ${GITHUB_OAUTH_CALLBACK_URL:-http://localhost:8080/auth/github/callback}
+      # Self-hosted indexd admin API (optional) — powers the console Map + Setup
+      # "on Sia network" panels. Empty with a hosted indexer (no admin API).
+      INDEXD_ADMIN_URL: ${INDEXD_ADMIN_URL:-}
+      INDEXD_ADMIN_PASSWORD: ${INDEXD_ADMIN_PASSWORD:-}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "127.0.0.1:8080:8080"
@@ -185,7 +194,15 @@ services:
         VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:9090}
         VITE_HF_PROXY_URL: ${VITE_HF_PROXY_URL:-http://localhost:28090}
         VITE_CONFORMANCE_BADGE_URL: ${VITE_CONFORMANCE_BADGE_URL:-}
+    image: ghcr.io/bytemaster333/openweights-console:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-console
+    environment:
+      # Runtime config written into /config.js at container start (see console
+      # Dockerfile) so the prebuilt image targets any deployment. Defaults match
+      # the build-time VITE_* for dev consistency; prod sets real URLs.
+      OPENWEIGHTS_CONSOLE_CAS_URL: ${VITE_CAS_URL:-http://localhost:8080}
+      OPENWEIGHTS_CONSOLE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:9090}
+      OPENWEIGHTS_CONSOLE_HF_PROXY_URL: ${VITE_HF_PROXY_URL:-http://localhost:28090}
     depends_on:
       openweights-cas: { condition: service_healthy }
     ports:
@@ -206,6 +223,7 @@ services:
     build:
       context: ..
       dockerfile: hf-proxy/Dockerfile
+    image: ghcr.io/bytemaster333/openweights-hf-proxy:${OPENWEIGHTS_VERSION:-latest}
     container_name: openweights-hf-proxy
     environment:
       LISTEN_ADDR: ":28090"
@@ -213,11 +231,12 @@ services:
       # CLIENT-reachable CAS URL. Not indexd:9982, not cas:8080 — whatever
       # the hf_xet process connects to from the host. Local dev:
       # http://localhost:28080. Prod: https://cas.openweights.app.
-      OPENWEIGHTS_CAS_PUBLIC_URL: ${OPENWEIGHTS_CAS_PUBLIC_URL:?OPENWEIGHTS_CAS_PUBLIC_URL must be set in .env}
+      OPENWEIGHTS_CAS_PUBLIC_URL: ${OPENWEIGHTS_CAS_PUBLIC_URL:-http://localhost:8080}
     ports:
       - "127.0.0.1:28090:28090"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:28090/health"]
+      # distroless image has no shell/wget — probe via the binary's own subcommand.
+      test: ["CMD", "/usr/local/bin/openweights-hf-proxy", "healthcheck"]
       interval: 10s
       retries: 3
       start_period: 5s
@@ -226,7 +245,5 @@ services:
 volumes:
   postgres-data:
     name: openweights-postgres-data
-  indexd-data:
-    name: openweights-indexd-data
   gateway-cache:
     name: openweights-gateway-cache

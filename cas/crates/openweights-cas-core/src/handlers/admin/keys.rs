@@ -50,23 +50,37 @@ use crate::session::Session;
 pub enum ConsoleScope {
     Read,
     Write,
+    /// Upload AND download — one key for a full `hf upload` + `hf download`
+    /// round-trip (HF tooling uses a single token for both).
+    ReadWrite,
     Admin,
 }
 
 impl ConsoleScope {
-    fn to_db(self) -> DbApiKeyScope {
+    /// DB scopes this console scope grants. `ReadWrite` grants both so a single
+    /// key round-trips; the others are single-scope.
+    fn to_db_scopes(self) -> Vec<DbApiKeyScope> {
         match self {
-            Self::Read => DbApiKeyScope::Download,
-            Self::Write => DbApiKeyScope::Upload,
-            Self::Admin => DbApiKeyScope::Admin,
+            Self::Read => vec![DbApiKeyScope::Download],
+            Self::Write => vec![DbApiKeyScope::Upload],
+            Self::ReadWrite => vec![DbApiKeyScope::Download, DbApiKeyScope::Upload],
+            Self::Admin => vec![DbApiKeyScope::Admin],
         }
     }
 
-    fn from_db(s: DbApiKeyScope) -> Self {
-        match s {
-            DbApiKeyScope::Download => Self::Read,
-            DbApiKeyScope::Upload => Self::Write,
-            DbApiKeyScope::Admin => Self::Admin,
+    /// Collapse a stored scope array back to a console scope. A key holding both
+    /// upload and download surfaces as `ReadWrite`.
+    fn from_db_scopes(scopes: &[DbApiKeyScope]) -> Self {
+        let has_up = scopes.contains(&DbApiKeyScope::Upload);
+        let has_down = scopes.contains(&DbApiKeyScope::Download);
+        if scopes.contains(&DbApiKeyScope::Admin) {
+            Self::Admin
+        } else if has_up && has_down {
+            Self::ReadWrite
+        } else if has_up {
+            Self::Write
+        } else {
+            Self::Read
         }
     }
 }
@@ -137,17 +151,18 @@ pub async fn create_key<S: AuthStateRef>(
     // (8 chars of 43-char base64url leave ~2^192 guessing entropy).
     let masked_prefix = format!("{}...", &plaintext[..8]);
 
-    let db_scope = req.scope.to_db();
+    let db_scopes = req.scope.to_db_scopes();
 
-    // INSERT key — PK gen_random_uuid in migration 0001.
+    // INSERT key — PK gen_random_uuid in migration 0001. `scopes` is an array
+    // so a ReadWrite key stores both upload + download.
     let row: (Uuid, DateTime<Utc>) = sqlx::query_as(
         "INSERT INTO api_keys (user_id, key_hash, scopes, label, masked_prefix) \
-         VALUES ($1, $2, ARRAY[$3::api_key_scope], $4, $5) \
+         VALUES ($1, $2, $3::api_key_scope[], $4, $5) \
          RETURNING id, created_at",
     )
     .bind(user.id)
     .bind(&key_hash[..])
-    .bind(db_scope)
+    .bind(&db_scopes)
     .bind(&name)
     .bind(&masked_prefix)
     .fetch_one(st.pool())
@@ -196,14 +211,9 @@ pub async fn list_keys<S: AuthStateRef>(
         .into_iter()
         .map(
             |(id, label, scopes, masked_prefix, created_at, last_used_at)| {
-                // Take the first scope — v1 always creates single-scope keys;
-                // a legacy row with multiple scopes surfaces the first one
-                // (console won't see these in practice).
-                let scope = scopes
-                    .first()
-                    .copied()
-                    .map(ConsoleScope::from_db)
-                    .unwrap_or(ConsoleScope::Read);
+                // Collapse the stored scope array — a key with both upload +
+                // download surfaces as ReadWrite.
+                let scope = ConsoleScope::from_db_scopes(&scopes);
                 KeyListItem {
                     id,
                     name: label,
@@ -256,25 +266,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scope_maps_read_to_download() {
-        assert_eq!(ConsoleScope::Read.to_db(), DbApiKeyScope::Download);
-        assert_eq!(ConsoleScope::Write.to_db(), DbApiKeyScope::Upload);
-        assert_eq!(ConsoleScope::Admin.to_db(), DbApiKeyScope::Admin);
+    fn scope_maps_to_db_scopes() {
+        assert_eq!(ConsoleScope::Read.to_db_scopes(), vec![DbApiKeyScope::Download]);
+        assert_eq!(ConsoleScope::Write.to_db_scopes(), vec![DbApiKeyScope::Upload]);
+        assert_eq!(ConsoleScope::Admin.to_db_scopes(), vec![DbApiKeyScope::Admin]);
+        // ReadWrite grants both so one key round-trips.
+        assert_eq!(
+            ConsoleScope::ReadWrite.to_db_scopes(),
+            vec![DbApiKeyScope::Download, DbApiKeyScope::Upload]
+        );
     }
 
     #[test]
-    fn scope_round_trips_db_to_console() {
+    fn scope_collapses_db_array_to_console() {
         assert_eq!(
-            ConsoleScope::from_db(DbApiKeyScope::Download),
+            ConsoleScope::from_db_scopes(&[DbApiKeyScope::Download]),
             ConsoleScope::Read
         );
         assert_eq!(
-            ConsoleScope::from_db(DbApiKeyScope::Upload),
+            ConsoleScope::from_db_scopes(&[DbApiKeyScope::Upload]),
             ConsoleScope::Write
         );
         assert_eq!(
-            ConsoleScope::from_db(DbApiKeyScope::Admin),
+            ConsoleScope::from_db_scopes(&[DbApiKeyScope::Admin]),
             ConsoleScope::Admin
+        );
+        // both scopes → ReadWrite (order-independent)
+        assert_eq!(
+            ConsoleScope::from_db_scopes(&[DbApiKeyScope::Upload, DbApiKeyScope::Download]),
+            ConsoleScope::ReadWrite
+        );
+        assert_eq!(
+            ConsoleScope::from_db_scopes(&[DbApiKeyScope::Download, DbApiKeyScope::Upload]),
+            ConsoleScope::ReadWrite
         );
     }
 
@@ -284,5 +308,7 @@ mod tests {
         assert_eq!(s, "\"read\"");
         let r: ConsoleScope = serde_json::from_str("\"write\"").unwrap();
         assert_eq!(r, ConsoleScope::Write);
+        let rw: ConsoleScope = serde_json::from_str("\"readwrite\"").unwrap();
+        assert_eq!(rw, ConsoleScope::ReadWrite);
     }
 }

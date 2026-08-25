@@ -46,6 +46,11 @@ RUN printf '%s\n' \
   '  location / { try_files $uri $uri/ /index.html; }' \
   '}' > /etc/nginx/conf.d/default.conf
 
+# Runtime config: nginx:alpine runs /docker-entrypoint.d/*.sh before starting.
+# This regenerates /config.js from the operator's env on every container start,
+# so a single prebuilt image can be pointed at any deployment.
+COPY --chmod=0755 40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+
 EXPOSE 80
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
   CMD wget -q --spider http://127.0.0.1/health || exit 1

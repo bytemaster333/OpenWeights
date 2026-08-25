@@ -19,12 +19,16 @@ afterEach(() => cleanup())
 
 describe("OneTimeKeyModal", () => {
   it("renders the plaintext when open", () => {
-    render(<OneTimeKeyModal open={true} plaintext="sia_secret_abc123" onAck={() => {}} />)
+    render(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={() => {}} />,
+    )
     expect(screen.getByTestId("one-time-key-plaintext")).toHaveTextContent("sia_secret_abc123")
   })
 
   it("does NOT render the plaintext when closed", () => {
-    render(<OneTimeKeyModal open={false} plaintext="sia_secret_abc123" onAck={() => {}} />)
+    render(
+      <OneTimeKeyModal open={false} plaintext="sia_secret_abc123" scope="write" onAck={() => {}} />,
+    )
     // Dialog is not portaled/rendered when closed.
     expect(screen.queryByTestId("one-time-key-plaintext")).toBeNull()
     expect(document.body.textContent).not.toContain("sia_secret_abc123")
@@ -37,7 +41,9 @@ describe("OneTimeKeyModal", () => {
       value: { writeText },
     })
 
-    render(<OneTimeKeyModal open={true} plaintext="sia_secret_abc123" onAck={() => {}} />)
+    render(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={() => {}} />,
+    )
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("one-time-key-copy"))
@@ -50,7 +56,9 @@ describe("OneTimeKeyModal", () => {
 
   it("does NOT invoke onAck when dialog close is attempted before acknowledgment", () => {
     const onAck = vi.fn()
-    render(<OneTimeKeyModal open={true} plaintext="sia_secret_abc123" onAck={onAck} />)
+    render(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={onAck} />,
+    )
 
     // Press Escape on the dialog content — radix routes this through
     // `onOpenChange(false)`, which our component blocks pre-ack.
@@ -63,7 +71,9 @@ describe("OneTimeKeyModal", () => {
 
   it("invokes onAck when 'I've saved it' is clicked", () => {
     const onAck = vi.fn()
-    render(<OneTimeKeyModal open={true} plaintext="sia_secret_abc123" onAck={onAck} />)
+    render(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={onAck} />,
+    )
 
     fireEvent.click(screen.getByTestId("one-time-key-ack"))
     expect(onAck).toHaveBeenCalledOnce()
@@ -74,7 +84,7 @@ describe("OneTimeKeyModal", () => {
     const removeSpy = vi.spyOn(window, "removeEventListener")
 
     const { unmount } = render(
-      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" onAck={() => {}} />,
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={() => {}} />,
     )
 
     const beforeUnloadAdds = addSpy.mock.calls.filter(([event]) => event === "beforeunload")
@@ -86,9 +96,29 @@ describe("OneTimeKeyModal", () => {
     expect(beforeUnloadRemoves.length).toBeGreaterThanOrEqual(1)
   })
 
+  it("labels the capability line by the key's actual scope", () => {
+    // regression: the modal used to hardcode "write scope" for every key,
+    // mislabeling read (download-only) keys.
+    const { rerender } = render(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="read" onAck={() => {}} />,
+    )
+    const modal = () => screen.getByTestId("one-time-key-modal")
+    expect(modal()).toHaveTextContent(/read\s+scope/)
+    expect(modal()).toHaveTextContent(/download/)
+    expect(modal().textContent).not.toContain("upload new xorbs")
+
+    rerender(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={() => {}} />,
+    )
+    expect(modal()).toHaveTextContent(/write\s+scope/)
+    expect(modal()).toHaveTextContent(/upload new xorbs/)
+  })
+
   it("does NOT persist the plaintext to localStorage or sessionStorage", () => {
     const localSet = vi.spyOn(Storage.prototype, "setItem")
-    render(<OneTimeKeyModal open={true} plaintext="sia_secret_abc123" onAck={() => {}} />)
+    render(
+      <OneTimeKeyModal open={true} plaintext="sia_secret_abc123" scope="write" onAck={() => {}} />,
+    )
 
     // ThemeProvider may have written the theme key; that's fine. What we
     // care about is that NO call includes the plaintext as a value or key.

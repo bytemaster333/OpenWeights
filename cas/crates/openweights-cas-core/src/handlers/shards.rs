@@ -39,6 +39,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use openweights_cas_db::queries::shards as shard_q;
+use openweights_cas_db::queries::xorbs as xorb_q;
 use openweights_cas_db::types::XorbPinState;
 use openweights_cas_proto::merklehash::MerkleHash;
 use openweights_cas_storage::{SiaAdapter, SiaAdapterError};
@@ -131,7 +132,7 @@ where
     // bytes, and insert the shard row with an empty reconstruction. The
     // download path cannot serve these shards until revisits the
     // version matrix — tracked as a TODO in.
-    let parsed = match shard_parse::parse_and_validate(&collected) {
+    let mut parsed = match shard_parse::parse_and_validate(&collected) {
         Ok(p) => p,
         Err(shard_parse::ShardParseError::HeaderVersion(v))
         | Err(shard_parse::ShardParseError::FooterVersion(v)) => {
@@ -176,6 +177,37 @@ where
         .collect();
     if !missing.is_empty() {
         return Err(AppError::ShardMissingXorbs { missing });
+    }
+
+    // (6a) Correct each term's xorb byte range to the PHYSICAL serialized range.
+    // The shard only carries unpacked chunk offsets (they omit the 8-byte
+    // CASChunkHeader before every chunk), so `shard_parse` produced byte ranges
+    // that are short by (num_chunks * 8). Rewrite them from the boundaries the
+    // xorb upload recorded (migration 0014) so the gateway serves the exact
+    // bytes hf_xet's chunk deserializer expects. Xorbs without stored
+    // boundaries (pre-0014 or footer-absent) keep the shard-derived range.
+    let boundaries = xorb_q::get_chunk_boundaries(pool, &parsed.referenced_xorb_hashes).await?;
+    for term in &mut parsed.terms {
+        let Some(bounds) = boundaries.get(&term.xorb_hash) else {
+            continue;
+        };
+        // term.xorb_start/xorb_end are END-EXCLUSIVE chunk indices; bounds[i] is
+        // the END-EXCLUSIVE physical byte offset of chunk i.
+        let start_idx = term.xorb_start;
+        let end_idx = term.xorb_end;
+        if start_idx < 0 || end_idx <= start_idx || (end_idx as usize) > bounds.len() {
+            continue; // inconsistent — leave the shard-derived range untouched
+        }
+        let phys_start = if start_idx == 0 {
+            0
+        } else {
+            bounds[(start_idx - 1) as usize]
+        };
+        let phys_end = bounds[(end_idx - 1) as usize];
+        if phys_start < phys_end {
+            term.xorb_byte_start = phys_start;
+            term.xorb_byte_end = phys_end;
+        }
     }
 
     // (6) Rate limit — after parse + so a malformed shard doesn't burn
@@ -228,7 +260,7 @@ where
     // (9) Sia upload+pin. : tx has already committed, so reconstruction
     // data is DURABLE even if this fails — reconciler retries.
     let upload_res = with_timeout(
-        Duration::from_secs(300),
+        sia_upload_budget(),
         st.sia().upload_and_pin(&collected),
     )
     .await;
@@ -266,13 +298,33 @@ where
             Err(AppError::Other(e))
         }
         Err(_timeout) => {
+            // Same carve-out as the Unavailable branch + the xorb handler:
+            // reconstruction data is already durable from the committed tx, so
+            // accept pending (SyncPerformed) and let the reconciler finish the
+            // pin with its larger budget rather than 503-stalling hf_xet against
+            // a slow/hosted indexer.
             let _ = shard_q::set_pin_state(pool, &shard_hash, XorbPinState::Pinning, None).await;
-            Err(AppError::SiaUnavailable(Box::new(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "sia upload+pin exceeded 300s budget",
-            ))))
+            tracing::warn!(
+                "sia upload+pin exceeded {:?} synchronous budget — accepted pending (reconciler will finish the pin)",
+                sia_upload_budget()
+            );
+            Ok(Json(UploadShardResponse {
+                result: UploadShardResponseType::SyncPerformed,
+            }))
         }
     }
+}
+
+/// Synchronous Sia upload+pin budget for the shard request path. Mirror of
+/// `handlers::xorbs::sia_upload_budget`; env-tunable via
+/// `OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS` (default 300).
+fn sia_upload_budget() -> Duration {
+    let secs = std::env::var("OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(300);
+    Duration::from_secs(secs)
 }
 
 /// Map shard-parse errors onto the `AppError` taxonomy AND bump the P19

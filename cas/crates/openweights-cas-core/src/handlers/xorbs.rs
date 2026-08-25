@@ -30,7 +30,7 @@ use openweights_cas_db::queries::xorbs as xorb_q;
 use openweights_cas_db::types::XorbPinState;
 use openweights_cas_proto::{
     merklehash::{MerkleHash, xorb_hash},
-    xorb_object::XorbObject,
+    xorb_object::{XORB_CHUNK_HEADER_LENGTH, XorbObject, parse_chunk_header},
 };
 use openweights_cas_storage::{SiaAdapter, SiaAdapterError};
 
@@ -114,11 +114,16 @@ where
     // round-trip integrity: xet-core re-hashes every chunk against its hash on
     // DOWNLOAD, so a corrupted-upload-under-a-valid-hash fails reconstruction
     // rather than serving wrong bytes to the client.
-    match compute_xorb_hash_from_footer(&collected) {
-        Ok(actual) => {
+    // Physical chunk boundary offsets, recovered from the xorb when it
+    // deserializes (footer present); empty when the footer is absent
+    // (URL-hash-trust path).
+    let mut chunk_boundaries: Vec<i64> = Vec::new();
+    match compute_xorb_hash_and_boundaries(&collected) {
+        Ok((actual, boundaries)) => {
             if actual != expected {
                 return Err(AppError::HashMismatch { expected, actual });
             }
+            chunk_boundaries = boundaries;
         }
         Err(_) => {
             tracing::warn!(
@@ -127,6 +132,14 @@ where
                 "xorb footer absent — accepting under URL-hash trust; integrity re-verified by xet-core on download"
             );
         }
+    }
+    // The current hf_xet wire format uploads a bare chunk stream with NO
+    // XorbObject footer, so the deserialize above yields no boundaries. Recover
+    // the physical chunk boundaries by walking the CASChunkHeader stream — this
+    // is what lets reconstruction map a term's chunk range to the exact byte
+    // range the gateway must serve (headers included).
+    if chunk_boundaries.is_empty() {
+        chunk_boundaries = walk_chunk_boundaries(&collected);
     }
 
     // (5) Rate limit — AFTER merkle verify (cheap refused uploads don't count
@@ -146,8 +159,15 @@ where
     let hash_bytes: [u8; 32] = <[u8; 32]>::from(expected);
     let size_bytes = collected.len() as i64;
     let pool = st.pool();
-    let was_inserted =
-        xorb_q::insert_pending(pool, &hash_bytes, size_bytes, ctx.user_id, ctx.api_key_id).await?;
+    let was_inserted = xorb_q::insert_pending(
+        pool,
+        &hash_bytes,
+        size_bytes,
+        ctx.user_id,
+        ctx.api_key_id,
+        &chunk_boundaries,
+    )
+    .await?;
 
     if !was_inserted {
         // Dedup path — no Sia call, no state transition. idempotent.
@@ -175,7 +195,7 @@ where
     // (7) Sia upload + pin. SiaAdapter::upload_and_pin is the ONLY path that
     // actually writes to Sia — is enforced by the early return above.
     let upload_res = with_timeout(
-        Duration::from_secs(300),
+        sia_upload_budget(),
         st.sia().upload_and_pin(&collected),
     )
     .await;
@@ -223,19 +243,83 @@ where
             Err(AppError::Other(e))
         }
         Err(_timeout) => {
-            // Upload timed out — treat as unavailable. Reconciler retries.
+            // Upload didn't finish inside the (short) synchronous budget. Same
+            // demo-mode carve-out as the Unavailable branch: the body is durable
+            // in `xorb_bodies` and the row stays 'pinning', so accept the xorb
+            // (200) and let the reconciler complete the pin in the background
+            // with its own, larger budget. Returning 503 here would stall
+            // hf_xet in a retry loop against a slow/hosted indexer whose first
+            // upload (on-chain contract formation) legitimately exceeds the
+            // synchronous budget.
             let _ = xorb_q::set_pin_state(pool, &hash_bytes, XorbPinState::Pinning, None).await;
-            Err(AppError::SiaUnavailable(Box::new(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "sia upload+pin exceeded 300s budget",
-            ))))
+            tracing::warn!(
+                "sia upload+pin exceeded {:?} synchronous budget — accepted pending (reconciler will finish the pin)",
+                sia_upload_budget()
+            );
+            crate::metering::log_on_err(
+                "usage_log insert (xorb_upload, sia-pending) failed",
+                crate::metering::record_xorb_upload(pool, &ctx, &hash_bytes, size_bytes).await,
+            );
+            Ok(Json(UploadXorbResponse { was_inserted: true }))
         }
     }
 }
 
-/// Deserialize the xorb footer in `bytes` and return the recomputed aggregated
-/// merkle hash. Never touches the Sia SDK — invoked in the <10 ms window.
-fn compute_xorb_hash_from_footer(bytes: &[u8]) -> Result<MerkleHash, AppError> {
+/// Synchronous Sia upload+pin budget for the request path. Kept short so a slow
+/// or hosted indexer doesn't block hf_xet past its client timeout — on expiry
+/// the handler accepts the xorb pending and the reconciler finishes the pin.
+/// Env-tunable via `OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS` (default 300).
+fn sia_upload_budget() -> Duration {
+    let secs = std::env::var("OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(300);
+    Duration::from_secs(secs)
+}
+
+/// Walk the raw chunk stream and return the PHYSICAL end-exclusive byte offset
+/// of each chunk (`8-byte CASChunkHeader + compressed_length`, accumulated).
+///
+/// The uploaded xorb body is a bare sequence of `[CASChunkHeader][compressed
+/// data]` blocks with no XorbObject footer, so this is the only way to recover
+/// the serialized chunk boundaries the gateway range-fetch needs. Returns an
+/// empty vec if the stream does not tile `[0, bytes.len())` exactly (ragged
+/// tail / trailing footer / malformed header) — the caller then falls back to
+/// the shard-derived (unpacked) range rather than storing a wrong one.
+fn walk_chunk_boundaries(bytes: &[u8]) -> Vec<i64> {
+    let mut offset = 0usize;
+    let mut boundaries = Vec::new();
+    while offset < bytes.len() {
+        if offset + XORB_CHUNK_HEADER_LENGTH > bytes.len() {
+            return Vec::new();
+        }
+        let hdr_bytes: [u8; XORB_CHUNK_HEADER_LENGTH] =
+            match bytes[offset..offset + XORB_CHUNK_HEADER_LENGTH].try_into() {
+                Ok(b) => b,
+                Err(_) => return Vec::new(),
+            };
+        let hdr = match parse_chunk_header(hdr_bytes) {
+            Ok(h) => h,
+            Err(_) => return Vec::new(),
+        };
+        offset += XORB_CHUNK_HEADER_LENGTH + hdr.get_compressed_length() as usize;
+        if offset > bytes.len() {
+            return Vec::new();
+        }
+        boundaries.push(offset as i64);
+    }
+    boundaries
+}
+
+/// Deserialize the xorb in `bytes` and return the recomputed aggregated merkle
+/// hash together with the PHYSICAL chunk boundary offsets (end-exclusive byte
+/// offset of each chunk in the serialized xorb, `chunk_boundary_offsets`).
+/// The boundaries are persisted so reconstruction can map a term's chunk-index
+/// range to the exact byte range the gateway must serve (the shard's own
+/// offsets are unpacked and omit the per-chunk headers). Never touches the Sia
+/// SDK — invoked in the <10 ms window.
+fn compute_xorb_hash_and_boundaries(bytes: &[u8]) -> Result<(MerkleHash, Vec<i64>), AppError> {
     let mut cursor = Cursor::new(bytes);
     let xorb = XorbObject::deserialize(&mut cursor)
         .map_err(|_| AppError::BadRequest("malformed_xorb"))?;
@@ -244,10 +328,12 @@ fn compute_xorb_hash_from_footer(bytes: &[u8]) -> Result<MerkleHash, AppError> {
     if num_chunks == 0 {
         // Empty xorb: xorb_hash(&[]) -> MerkleHash::default — a valid but
         // degenerate case. Accept if it matches path, reject otherwise.
-        return Ok(xorb_hash(&[]));
+        return Ok((xorb_hash(&[]), Vec::new()));
     }
-    if xorb.info.unpacked_chunk_offsets.len() != num_chunks {
-        // Malformed footer — boundary/hash arrays disagree.
+    if xorb.info.unpacked_chunk_offsets.len() != num_chunks
+        || xorb.info.chunk_boundary_offsets.len() != num_chunks
+    {
+        // Malformed — boundary/hash arrays disagree.
         return Err(AppError::BadRequest("malformed_xorb"));
     }
 
@@ -263,7 +349,17 @@ fn compute_xorb_hash_from_footer(bytes: &[u8]) -> Result<MerkleHash, AppError> {
         prev_off = off;
     }
 
-    Ok(xorb_hash(&hashes_and_lens))
+    // Physical (serialized) end-exclusive byte offset of each chunk — includes
+    // the 8-byte CASChunkHeader per chunk. This is what the gateway range-fetch
+    // must cover.
+    let boundaries: Vec<i64> = xorb
+        .info
+        .chunk_boundary_offsets
+        .iter()
+        .map(|&o| o as i64)
+        .collect();
+
+    Ok((xorb_hash(&hashes_and_lens), boundaries))
 }
 
 /// Small wrapper used to bound the Sia upload+pin roundtrip. `tokio::time::timeout`
@@ -282,6 +378,33 @@ where
 #[cfg(test)]
 mod inline_tests {
     use super::*;
+
+    /// walk_chunk_boundaries recovers the PHYSICAL end-exclusive byte offset of
+    /// each chunk from a bare (footerless) chunk stream, and rejects a stream
+    /// that does not tile exactly.
+    #[test]
+    fn walk_boundaries_tiles_chunk_stream() {
+        // 8-byte CASChunkHeader: version(1) + compressed_len(3 LE) + scheme(1) +
+        // uncompressed_len(3 LE). scheme 0 = none, so uncompressed == compressed.
+        fn hdr(comp: u32) -> [u8; XORB_CHUNK_HEADER_LENGTH] {
+            let c = comp.to_le_bytes();
+            [0, c[0], c[1], c[2], 0, c[0], c[1], c[2]]
+        }
+        let mut body = Vec::new();
+        body.extend_from_slice(&hdr(10));
+        body.extend_from_slice(&[7u8; 10]); // chunk0 physical end = 8+10 = 18
+        body.extend_from_slice(&hdr(5));
+        body.extend_from_slice(&[9u8; 5]); //  chunk1 physical end = 18+8+5 = 31
+        assert_eq!(walk_chunk_boundaries(&body), vec![18_i64, 31]);
+
+        // ragged trailing byte → not a clean tiling → empty (fall back).
+        let mut ragged = body.clone();
+        ragged.push(0xff);
+        assert!(walk_chunk_boundaries(&ragged).is_empty());
+
+        // empty body → no chunks.
+        assert!(walk_chunk_boundaries(&[]).is_empty());
+    }
 
     /// canary — reference xorb hash round-trip through the merklehash crate.
     ///.md §1 gotcha: NEVER hand-roll hex. Assert the crate's codec

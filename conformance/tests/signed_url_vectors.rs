@@ -28,6 +28,10 @@ struct Vector {
     kid: String,
     #[serde(default)]
     range: Option<RangeVec>,
+    /// Multi-segment grant (mutually exclusive with `range`); canonical `r`
+    /// field is the comma-joined `s1-e1,s2-e2,...` form.
+    #[serde(default)]
+    ranges: Option<Vec<RangeVec>>,
     #[allow(dead_code)]
     signed_by: String, // "current" | "prev" — informational; tests exercise both paths manually
     signing_key_b64: String,
@@ -38,6 +42,41 @@ struct Vector {
 struct RangeVec {
     start: u64,
     end_inclusive: u64,
+}
+
+impl Vector {
+    /// All grant segments as `(start, end_inclusive)` tuples.
+    fn segments(&self) -> Vec<(u64, u64)> {
+        if let Some(rs) = &self.ranges {
+            rs.iter().map(|r| (r.start, r.end_inclusive)).collect()
+        } else {
+            self.range
+                .as_ref()
+                .map(|r| (r.start, r.end_inclusive))
+                .into_iter()
+                .collect()
+        }
+    }
+
+    /// The exact `r` querystring field the minter serializes (empty = no grant).
+    fn r_field(&self) -> String {
+        self.segments()
+            .iter()
+            .map(|(s, e)| format!("{s}-{e}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+}
+
+/// Mint a URL for a vector, choosing the single- vs multi-range minter to match
+/// the grant shape.
+fn mint_for(signer: &UrlSigner, hash: &MerkleHash, v: &Vector, kid: Uuid, now: u64) -> String {
+    let segs = v.segments();
+    if v.ranges.is_some() {
+        signer.mint_v1_multi_range(hash, &segs, kid, now)
+    } else {
+        signer.mint_v1(hash, segs.first().copied(), kid, now)
+    }
 }
 
 fn load_vectors() -> Vec<Vector> {
@@ -77,8 +116,9 @@ fn canonical_string_agrees_with_openweights_cas_core_builder() {
     let vectors = load_vectors();
     for v in &vectors {
         let kid = Uuid::parse_str(&v.kid).expect("kid parses");
-        let range = v.range.as_ref().map(|r| (r.start, r.end_inclusive));
-        let got = UrlSigner::canonical_string("v1", &v.xorb_hash_hex, v.exp, range, kid);
+        // Built from the raw `r` field so single- and multi-segment vectors
+        // share one path (byte-identical to the minter).
+        let got = UrlSigner::canonical_string_raw("v1", &v.xorb_hash_hex, v.exp, &v.r_field(), kid);
         assert_eq!(got, v.canonical_string, "vector {}", v.name);
     }
 }
@@ -102,11 +142,10 @@ fn minter_produces_expected_signature() {
         let signer = UrlSigner::new(&v.signing_key_b64, None, base, 1).expect("signer");
         let hash = MerkleHash::from_hex(&v.xorb_hash_hex).unwrap();
         let kid = Uuid::parse_str(&v.kid).unwrap();
-        let range = v.range.as_ref().map(|r| (r.start, r.end_inclusive));
         // Reverse-engineer `now_unix` so `exp = now + 1 = vector.exp`.
         let now = v.exp - 1;
 
-        let url_str = signer.mint_v1(&hash, range, kid, now);
+        let url_str = mint_for(&signer, &hash, v, kid, now);
         let url = url::Url::parse(&url_str).unwrap();
         let sig = url
             .query_pairs()
@@ -136,14 +175,13 @@ fn verify_accepts_vector_signatures() {
         let signer_current = UrlSigner::new(&v.signing_key_b64, None, base.clone(), 1).unwrap();
         let hash = MerkleHash::from_hex(&v.xorb_hash_hex).unwrap();
         let kid = Uuid::parse_str(&v.kid).unwrap();
-        let range = v.range.as_ref().map(|r| (r.start, r.end_inclusive));
         let now = v.exp - 1;
-        let url = signer_current.mint_v1(&hash, range, kid, now);
+        let url = mint_for(&signer_current, &hash, v, kid, now);
 
         let verified = signer_current.verify(&url, now).expect("verify ok");
         assert_eq!(verified.exp, v.exp);
         assert_eq!(verified.kid, kid);
-        assert_eq!(verified.range, range);
+        assert_eq!(verified.ranges, v.segments());
         assert!(!verified.accepted_by_prev_key);
 
         // 2. Build a DIFFERENT current key + put VEC's key in prev. Verify

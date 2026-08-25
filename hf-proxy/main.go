@@ -167,6 +167,26 @@ func newProxy(c *config) http.Handler {
 // upstream here; if HF is down the proxy is still alive and the right
 // error for the operator is a 502 when an actual request flows through,
 // not a failed healthcheck.
+// runHealthcheck GETs /health on the configured listen port. Returns 0 if the
+// server answers 200, else 1. Keeps the probe inside the distroless image.
+func runHealthcheck() int {
+	addr := getEnv("LISTEN_ADDR", ":28090")
+	// LISTEN_ADDR may be ":28090" — dial loopback on that port.
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://" + addr + "/health")
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return 0
+	}
+	return 1
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -174,6 +194,13 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// `healthcheck` subcommand — used by the Docker healthcheck. The runtime
+	// image is distroless (no shell/wget), so the probe runs this binary
+	// instead: GET /health on our own listen port, exit 0 on 200 else 1.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})))

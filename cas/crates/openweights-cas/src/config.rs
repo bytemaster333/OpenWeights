@@ -44,6 +44,16 @@ pub struct Config {
     pub github_oauth_client_id: String,
     #[serde(default)]
     pub github_oauth_client_secret: String,
+
+    /// Password sign-in for self-hosted, single-operator setups. When set,
+    /// the console shows a password box and the operator can run OpenWeights
+    /// without registering a GitHub OAuth app. Empty ⇒ password auth off.
+    /// Lives only here (env), never in the DB or logs.
+    #[serde(default)]
+    pub openweights_admin_password: String,
+    /// Display login for the synthetic password-admin user (`users.id = -1`).
+    #[serde(default = "default_admin_username")]
+    pub openweights_admin_username: String,
     #[serde(default = "default_github_callback_url")]
     pub github_oauth_callback_url: String,
     /// Where to redirect the browser after a successful OAuth callback.
@@ -57,12 +67,13 @@ pub struct Config {
     #[serde(default)]
     pub indexd_admin_password: String,
 
-    /// Admin-API base URL (no trailing `/`). Distinct from `indexd_url`
-    /// because the app API (`:9982`) is protocol-signed against
-    /// `advertiseURL` while the admin API (`:9980`) is plain HTTP Basic.
-    /// Map + setup probes talk to admin; SDK handshake talks to app.
-    /// Defaults to compose-internal DNS name; host-side callers override.
-    #[serde(default = "default_indexd_admin_url")]
+    /// Admin-API base URL (no trailing `/`) of a SELF-HOSTED indexd, e.g.
+    /// `http://indexd:9980`. Distinct from `indexd_url` (the app API, the
+    /// storage data path). The console Map + Setup "on Sia network" panels
+    /// read this admin API. Empty by default: a hosted indexer
+    /// (https://sia.storage) has no admin API, so those panels degrade to
+    /// empty. Operators running their own indexd set INDEXD_ADMIN_URL.
+    #[serde(default)]
     pub indexd_admin_url: String,
 
     /// HS256 signing secret for OpenWeights-issued Xet JWTs (migration 0008).
@@ -82,10 +93,6 @@ pub struct Config {
     /// `https://cas.openweights.app`.
     #[serde(default = "default_cas_public_url")]
     pub cas_public_url: String,
-}
-
-fn default_indexd_admin_url() -> String {
-    "http://indexd:9980".to_string()
 }
 
 fn default_bind() -> String {
@@ -108,15 +115,19 @@ fn default_github_callback_url() -> String {
     // (or equivalent). Must match the GitHub OAuth App registration.
     "http://localhost:8080/auth/github/callback".to_string()
 }
+fn default_admin_username() -> String {
+    "admin".to_string()
+}
 fn default_console_base_url() -> String {
     // Vite dev server origin by default; production overrides via
     // `CONSOLE_BASE_URL=https://openweights.app` in `.env`.
     "http://localhost:5173".to_string()
 }
 fn default_cas_public_url() -> String {
-    // Matches the host-visible CAS port in docker-compose.override.yml
-    // (127.0.0.1:28080 -> openweights-cas:8080).
-    "http://localhost:28080".to_string()
+    // Matches the base compose host-visible CAS port (127.0.0.1:8080). Compose
+    // always sets CAS_PUBLIC_URL explicitly; this default only applies to a bare
+    // `cargo run`. The dev override remaps to 28080 and sets it via .env.
+    "http://localhost:8080".to_string()
 }
 
 impl Config {

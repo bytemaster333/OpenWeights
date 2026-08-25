@@ -43,7 +43,12 @@ struct Vector {
     name: String,
     xorb_hash_hex: String,
     exp: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     range: Option<RangeSpec>,
+    /// Multi-segment grant (mutually exclusive with `range`). Canonical `r`
+    /// field is the comma-joined `s1-e1,s2-e2,...` form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ranges: Option<Vec<RangeSpec>>,
     kid: String,
     signing_key_b64: String,
     #[serde(default)]
@@ -78,10 +83,23 @@ fn main() -> ExitCode {
     };
 
     for v in vectors.iter_mut() {
-        let range = v
-            .range
-            .as_ref()
-            .map(|r| (r.start, r.end_inclusive));
+        if v.range.is_some() && v.ranges.is_some() {
+            eprintln!("vector {}: set either `range` or `ranges`, not both", v.name);
+            return ExitCode::from(2);
+        }
+        // Serialize the `r` field from whichever grant form is present. Both
+        // flow through `canonical_string_raw` so single- and multi-segment
+        // vectors share one signing path (byte-identical to the minter).
+        let r_field: String = if let Some(rs) = &v.ranges {
+            rs.iter()
+                .map(|r| format!("{}-{}", r.start, r.end_inclusive))
+                .collect::<Vec<_>>()
+                .join(",")
+        } else if let Some(r) = &v.range {
+            format!("{}-{}", r.start, r.end_inclusive)
+        } else {
+            String::new()
+        };
         let kid = match Uuid::parse_str(&v.kid) {
             Ok(u) => u,
             Err(e) => {
@@ -90,7 +108,7 @@ fn main() -> ExitCode {
             }
         };
         let canonical =
-            UrlSigner::canonical_string(CANONICAL_VERSION, &v.xorb_hash_hex, v.exp, range, kid);
+            UrlSigner::canonical_string_raw(CANONICAL_VERSION, &v.xorb_hash_hex, v.exp, &r_field, kid);
 
         let key_bytes = match B64_STD.decode(v.signing_key_b64.as_bytes()) {
             Ok(b) if b.len() == 32 => b,

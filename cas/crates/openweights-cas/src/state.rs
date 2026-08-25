@@ -5,6 +5,7 @@ use openweights_cas_core::auth::{AuthStateRef, KeyCache};
 use openweights_cas_core::handlers::admin::map::MapState;
 use openweights_cas_core::handlers::admin::setup::SetupState;
 use openweights_cas_core::handlers::auth::github::GithubOAuthState;
+use openweights_cas_core::handlers::auth::password::PasswordAuthState;
 use openweights_cas_core::handlers::health::HealthState;
 use openweights_cas_core::handlers::hfapi::HfApiState;
 use openweights_cas_core::handlers::reconstruction::ReconstructionState;
@@ -181,6 +182,25 @@ impl SetupState for AppState {
 impl HfApiState for AppState {
     fn cas_public_url(&self) -> &str {
         &self.cfg.cas_public_url
+    }
+    fn sia(&self) -> Arc<dyn SiaAdapter> {
+        self.sia.clone()
+    }
+}
+
+impl PasswordAuthState for AppState {
+    fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+    fn admin_password(&self) -> &str {
+        &self.cfg.openweights_admin_password
+    }
+    fn admin_username(&self) -> &str {
+        &self.cfg.openweights_admin_username
+    }
+    fn github_oauth_configured(&self) -> bool {
+        !self.cfg.github_oauth_client_id.is_empty()
+            && !self.cfg.github_oauth_client_secret.is_empty()
     }
 }
 

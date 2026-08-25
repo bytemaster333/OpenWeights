@@ -123,11 +123,7 @@ export function StatsPage() {
                 ? `${(data.cache_hit_rate * 100).toFixed(1)}%`
                 : "—"
             }
-            subtext={
-              data && data.cache_hit_rate === null
-                ? "no downloads yet"
-                : "of downloads"
-            }
+            subtext={data && data.cache_hit_rate === null ? "no downloads yet" : "of downloads"}
           />
           <StatsTile
             label="Keys with usage"
@@ -143,11 +139,7 @@ export function StatsPage() {
         <header className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="font-heading text-sm font-semibold">Per-key usage</h2>
           {idleCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowIdle((v) => !v)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setShowIdle((v) => !v)}>
               {showIdle
                 ? `Hide ${idleCount} idle key${idleCount === 1 ? "" : "s"}`
                 : `Show ${idleCount} idle key${idleCount === 1 ? "" : "s"}`}
@@ -176,9 +168,7 @@ export function StatsPage() {
               )}
               {visibleKeys.map((r) => (
                 <TableRow key={r.key_id}>
-                  <TableCell className="font-medium">
-                    {keyLabel(r.key_id)}
-                  </TableCell>
+                  <TableCell className="font-medium">{keyLabel(r.key_id)}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatBytes(r.bytes_stored)}
                   </TableCell>
@@ -249,13 +239,7 @@ export function StatsPage() {
                   </TableCell>
                   <TableCell className="text-right text-xs">
                     {eventHasCacheSemantics(a.event) && a.cache_hit !== null ? (
-                      <span
-                        className={
-                          a.cache_hit
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        }
-                      >
+                      <span className={a.cache_hit ? "text-primary" : "text-muted-foreground"}>
                         {a.cache_hit ? "✓ hit" : "✗ miss"}
                       </span>
                     ) : (

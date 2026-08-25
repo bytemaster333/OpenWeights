@@ -174,17 +174,20 @@ func (h *Handlers) ServeXorb(w http.ResponseWriter, r *http.Request) {
 		ranges = rs
 	}
 
-	// 4. Enforce signed-URL-bound range if the URL granted a partial region.
-	if vok.Range != nil {
-		bound := Range{Start: vok.Range[0], End: vok.Range[1]}
-		// A client-supplied Range *must* sit inside the signed bound. If the
-		// client supplied NO Range but the URL is bounded, the "full object"
-		// they are asking for is actually the bound — tighten accordingly so
-		// a bounded URL never spills the whole xorb. This also keeps the
-		// response body byte-identical whether the client asked explicitly.
+	// 4. Enforce signed-URL-bound ranges if the URL granted partial regions.
+	if len(vok.Ranges) > 0 {
+		grants := make([]Range, len(vok.Ranges))
+		for i, g := range vok.Ranges {
+			grants[i] = Range{Start: g[0], End: g[1]}
+		}
+		// A client-supplied Range *must* sit inside one of the signed segments.
+		// If the client supplied NO Range but the URL is bounded, the "full
+		// object" they are asking for is actually the granted segments — serve
+		// exactly those (a multi-segment grant then yields a multipart body
+		// below) so a bounded URL never spills the whole xorb.
 		if len(ranges) == 0 {
-			ranges = []Range{bound}
-		} else if !allRangesWithin(ranges, bound) {
+			ranges = grants
+		} else if !allRangesWithinAny(ranges, grants) {
 			rl.Status = h.respondError(w, r, http.StatusForbidden, "forbidden", "range outside signed grant")
 			return
 		}
@@ -210,6 +213,7 @@ func (h *Handlers) ServeXorb(w http.ResponseWriter, r *http.Request) {
 			rl.Status = 499
 			return
 		}
+		slog.ErrorContext(ctx, "sia fetch failed", "hash", hash, "err", err.Error())
 		rl.Status = h.respondError(w, r, http.StatusBadGateway, "bad gateway", err.Error())
 		return
 	}

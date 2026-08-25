@@ -22,10 +22,13 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -84,11 +87,10 @@ func NewSiaAdapter(cfg *Config, reg prometheus.Registerer) (*SiaAdapter, error) 
 	if err := appID.UnmarshalText([]byte(cfg.AppID)); err != nil {
 		return nil, fmt.Errorf("parse OPENWEIGHTS_APP_ID as 32-byte hex: %w", err)
 	}
-	keyBytes, err := hex.DecodeString(cfg.AppKey)
+	appKey, err := parseAppKey(cfg.AppKey)
 	if err != nil {
-		return nil, fmt.Errorf("decode OPENWEIGHTS_APP_KEY hex: %w", err)
+		return nil, err
 	}
-	appKey := types.PrivateKey(keyBytes)
 
 	// Builder + SDK bootstrap matches the bench/thesis call pattern. Name /
 	// Description are purely cosmetic (logged by indexd for operator UX);
@@ -196,6 +198,36 @@ func (s *SiaAdapter) Download(
 	offset, length uint64,
 ) error {
 	return s.DownloadRange(ctx, w, siaObjectID, offset, length)
+}
+
+// parseAppKey decodes OPENWEIGHTS_APP_KEY into a 64-byte ed25519 private key,
+// accepting the EXACT same value the CAS consumes so an operator sets one env
+// var for both services. The CAS stores it as base64 of a 32-byte seed
+// (`AppKey::import` -> `from_seed` -> seed||pubkey), so the gateway expands that
+// seed identically (Go `ed25519.NewKeyFromSeed` == Rust `from_seed`). A raw
+// 64-byte key (base64 or hex) and a hex 32-byte seed are also accepted. Both
+// SDKs derive the object-encryption key from these 64 bytes, so they MUST match
+// byte-for-byte or gateway reads fail to decrypt.
+func parseAppKey(s string) (types.PrivateKey, error) {
+	s = strings.TrimSpace(s)
+	// base64 is the CAS's on-disk format; try it first, then hex.
+	for _, decode := range []func(string) ([]byte, error){
+		func(x string) ([]byte, error) { return base64.StdEncoding.DecodeString(x) },
+		hex.DecodeString,
+	} {
+		b, err := decode(s)
+		if err != nil {
+			continue
+		}
+		switch len(b) {
+		case ed25519.SeedSize: // 32-byte seed -> expand to seed||pubkey
+			return types.PrivateKey(ed25519.NewKeyFromSeed(b)), nil
+		case ed25519.PrivateKeySize: // already a 64-byte seed||pubkey key
+			return types.PrivateKey(b), nil
+		}
+	}
+	return nil, errors.New(
+		"decode OPENWEIGHTS_APP_KEY: expected base64 or hex of a 32-byte seed or 64-byte ed25519 key")
 }
 
 // siaObjectIDFromHex parses the 64-char hex form the Postgres `LookupXorb`

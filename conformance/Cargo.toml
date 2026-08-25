@@ -27,12 +27,13 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 [dev-dependencies]
 # handoff (CONFORMANCE-AUDIT.md + CONTEXT ): xet-client + xet-core-structures
-# pinned exactly at 1.5.1 so the conformance harness drives the protocol using
-# the official client — the only check that catches mismatches like the
-# `/shards` vs `/v1/shards` gotcha (.md ) before production.
-# Any bump requires a deliberate planning step (T-02-10-04).
-xet-client          = "=1.5.1"
-xet-core-structures = "=1.5.1"
+# pinned exactly so the conformance harness drives the protocol using the
+# official client — the only check that catches mismatches like the
+# `/shards` vs `/v1/shards` gotcha before production. Kept in lockstep with the
+# cas workspace (cas/Cargo.toml → =1.5.2); a divergent pin makes this crate
+# unbuildable because it path-depends on openweights-cas-proto.
+xet-client          = "=1.5.2"
+xet-core-structures = "=1.5.2"
 
 # Container orchestration for round-trip tests. Spins Postgres in
 # Docker; the CAS image is built separately via `make cas-image` and loaded

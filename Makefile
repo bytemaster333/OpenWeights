@@ -3,8 +3,8 @@
 # Targets whose recipes depend on code from later plans emit a clear
 # "not-yet-implemented" message and exit 2 (distinct from failure exit 1).
 
-.PHONY: bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
- build-readiness-probe help a3-verify \
+.PHONY: setup bootstrap bootstrap-reset up down thesis smoke compose-smoke verify test-unit clean \
+ help \
  cas-build cas-check cas-clippy cas-run cas-image cas-up \
  gateway-build gateway-check gateway-vet gateway-run gateway-test gateway-image gateway-up \
  console-install console-dev console-build console-check console-test console-image console-up \
@@ -23,11 +23,11 @@ BENCH := cd bench &&
 help:
 	@echo "OpenWeights Makefile targets:"
 	@echo " make bootstrap From-zero-to-running wizard (first-time setup)"
-	@echo " make bootstrap-reset Remove .env + ops/indexd.yml for a clean re-bootstrap"
+	@echo " make bootstrap-reset Remove .env for a clean re-bootstrap"
 	@echo " make up docker compose up -d"
 	@echo " make down docker compose down"
 	@echo " make thesis Sia range-download thesis measurement ( gate)"
-	@echo " make smoke 1 MiB round-trip test against live indexd"
+	@echo " make smoke 1 MiB round-trip test against the external indexer"
 	@echo " make compose-smoke Verify Compose healthchecks pass end-to-end"
 	@echo " make verify Full suite: unit + thesis + smoke + compose-smoke"
 	@echo " make test-unit Fast Go unit tests (no network)"
@@ -52,8 +52,14 @@ help:
 	@echo " make deploy-smoke Post-deploy objective smoke (ops/smoke.sh; /)"
 	@echo " make preload-fixture Seed the hosted demo with the pinned fixture model "
 
-bootstrap: bench/compose-smoke/readiness/bin/readiness
-	@echo "bootstrap: running wizard (renders ops/indexd.yml + brings up stack + funds wallet + smoke)..."
+setup:
+	@echo "setup: interactive .env wizard (prompts for indexer + admin password + recovery phrase, generates the rest)..."
+	@mkdir -p bin
+	$(BENCH) $(GO) build -o "$(CURDIR)/bin/bootstrap" ./bootstrap
+	./bin/bootstrap -env-only
+
+bootstrap:
+	@echo "bootstrap: running wizard (writes .env, brings up the stack, registers the app on the indexer, smoke-tests)..."
 	@mkdir -p bin
 	$(BENCH) $(GO) build -o "$(CURDIR)/bin/bootstrap" ./bootstrap
 	./bin/bootstrap
@@ -68,9 +74,8 @@ down:
 # measurement targets
 # -----------------------------------------------------------------------------
 
-thesis: bench/compose-smoke/readiness/bin/readiness
-	$(COMPOSE) up -d postgres indexd redis
-	@echo "thesis: running measurement (PASS=0, FAIL=3 informational per )..."
+thesis:
+	@echo "thesis: running measurement against external indexer (PASS=0, FAIL=3 informational per )..."
 	@set +e; $(BENCH) $(GO) run ./thesis; rc=$$?; \
 	 if [ $$rc -eq 0 ]; then echo "thesis: PASS"; exit 0; \
 	 elif [ $$rc -eq 3 ]; then echo "thesis: FAIL (informational — see bench/thesis/REPORT.md + CONTEXT )"; exit 0; \
@@ -80,7 +85,7 @@ thesis: bench/compose-smoke/readiness/bin/readiness
 smoke:
 	$(BENCH) $(GO) run ./smoke
 
-compose-smoke: bench/compose-smoke/readiness/bin/readiness
+compose-smoke:
 	@echo "compose-smoke: exercising full stack healthcheck gating..."
 	$(BENCH) $(GO) test -tags=integration -timeout=35m ./compose-smoke/...
 
@@ -94,41 +99,14 @@ test-unit:
 	$(BENCH) $(GO) test -short ./...
 
 # -----------------------------------------------------------------------------
-# Readiness probe — static Linux binary bind-mounted into the indexd
-# container as its healthcheck. See RESEARCH §5.
-# -----------------------------------------------------------------------------
-
-build-readiness-probe: bench/compose-smoke/readiness/bin/readiness
-
-bench/compose-smoke/readiness/bin/readiness: bench/compose-smoke/readiness/main.go
-	@mkdir -p bench/compose-smoke/readiness/bin
-	$(BENCH) GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build \
-		-tags netgo -ldflags '-s -w' \
-		-o compose-smoke/readiness/bin/readiness \
-		./compose-smoke/readiness
-
-# -----------------------------------------------------------------------------
 # bootstrap-reset — remove wizard-generated local state for a clean re-bootstrap.
 # Keeps Compose volumes intact (xorbs stay pinned on Sia; run `make clean` for
 # a truly destructive tear-down).
 # -----------------------------------------------------------------------------
 
 bootstrap-reset:
-	rm -f .env ops/indexd.yml
-	@echo "bootstrap-reset: .env + ops/indexd.yml removed; run 'make bootstrap' to redo."
-
-# -----------------------------------------------------------------------------
-# A3 Verification — resolves RESEARCH §3 Assumption A3 before PLAN 07 implements
-# the bootstrap wizard. Writes 
-# -----------------------------------------------------------------------------
-
-a3-verify: bench/compose-smoke/readiness/bin/readiness
-	$(COMPOSE) up -d postgres indexd redis
-	@echo "a3-verify: waiting for indexd readiness..."
-	@until $(COMPOSE) ps --format json | grep -q '"Health":"healthy"'; do sleep 10; echo " waiting..."; done
-	@echo "a3-verify: running probe (timeout 30s for approval)..."
-	$(BENCH) $(GO) run -tags=a3probe ./bootstrap
-	@echo "a3-verify: see "
+	rm -f .env
+	@echo "bootstrap-reset: .env removed; run 'make bootstrap' to redo."
 
 # -----------------------------------------------------------------------------
 # Destructive
@@ -136,7 +114,7 @@ a3-verify: bench/compose-smoke/readiness/bin/readiness
 
 clean:
 	$(COMPOSE) down -v
-	rm -rf bench/*/runs bench/compose-smoke/readiness/bin ops/indexd.yml
+	rm -rf bench/*/runs
 
 # -----------------------------------------------------------------------------
 # : openweights-cas
@@ -248,9 +226,9 @@ conformance-clippy:
 conformance: conformance-fixtures
 	cd conformance && cargo test --release
 
-# — mirror what the GH Actions `conformance` workflow runs. Brings
-# up the Compose stack with the CI overlay (V2_RECONSTRUCTION_ENABLED=true),
-# waits for every service to report healthy, pre-tags `openweights-cas:conformance`
+# — run the conformance crate against a live Compose stack with the CI overlay
+# (V2_RECONSTRUCTION_ENABLED=true), waiting for every service to report healthy,
+# pre-tagging `openweights-cas:conformance`
 # for the testcontainers harness, runs the conformance crate, then writes
 # console/public/conformance-badge.json via the same script CI uses. Tear
 # the stack down with `make down` when you're finished.
@@ -294,9 +272,8 @@ benchmark-dry-run:
 
 # -----------------------------------------------------------------------------
 # : HF byte-identical round-trip integration test (Gate #2).
-#. Mirrors.github/workflows/hf-roundtrip.yml locally so an
-# operator can validate the Caddy-fronted stack end-to-end before pushing
-# to main. Expects.env present (run `make bootstrap` first) AND a fresh
+# Validates the Caddy-fronted stack end-to-end. Expects .env present
+# (run `make bootstrap` first) AND a fresh
 # Postgres with `openweights` schema — the helper mints a test API key via
 # direct psql INSERT (scripts/issue-test-key.sh).
 #
@@ -320,7 +297,6 @@ integration-hf-roundtrip-dry-run:
 	@echo "integration-hf-roundtrip-dry-run: validating 3-way compose overlay merge..."
 	@POSTGRES_SUPERUSER_PASSWORD=dry \
 	 OPENWEIGHTS_POSTGRES_PASSWORD=dry \
-	 INDEXD_POSTGRES_PASSWORD=dry \
 	 OPENWEIGHTS_GW_POSTGRES_PASSWORD=dry \
 	 REDIS_PASSWORD=dry \
 	 docker compose -f ops/docker-compose.yml -f ops/docker-compose.ci.yml -f ops/docker-compose.caddy.yml config >/dev/null \
@@ -357,7 +333,7 @@ integration-hf-roundtrip-down:
 # while SSH'd into the owner's server AFTER `git pull` brings the repo to the
 # desired HEAD. See for the
 # full 10-step runbook (DNS →.env → staging cert validation → prod deploy →
-# indexd wallet funding → first API key → fixture preload → smoke).
+# wallet funding → first API key → fixture preload → smoke).
 #
 # The existing `smoke` target ( Sia range-download smoke) is NOT
 # overwritten — hosted-demo smoke is `deploy-smoke` to avoid breaking the
@@ -386,7 +362,7 @@ deploy:
 	$(PROD_COMPOSE) build
 	@echo "deploy: bringing stack up (detached)..."
 	$(PROD_COMPOSE) up -d
-	@echo "deploy: waiting for stack healthy (indexd cold sync can take 5-15 min)..."
+	@echo "deploy: waiting for stack healthy..."
 	bash scripts/wait-for-stack-healthy.sh
 	@echo "deploy: stack healthy. Run 'make deploy-smoke' to verify end-to-end reachability."
 

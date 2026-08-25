@@ -49,15 +49,9 @@ export function DashboardPage() {
   // convention we use for ownership in ModelDetail.tsx.
   const myModelsAll = (models ?? []).filter((m) => m.author === user.login)
   const myModels = myModelsAll.slice(0, MY_MODELS_LIMIT)
-  const myDownloadsTotal = myModelsAll.reduce(
-    (n, m) => n + (m.downloadsTotal ?? 0),
-    0,
-  )
+  const myDownloadsTotal = myModelsAll.reduce((n, m) => n + (m.downloadsTotal ?? 0), 0)
 
-  const recentActivity = (stats?.recent_activity ?? []).slice(
-    0,
-    RECENT_ACTIVITY_LIMIT,
-  )
+  const recentActivity = (stats?.recent_activity ?? []).slice(0, RECENT_ACTIVITY_LIMIT)
 
   // "All models" widget — top N by recency across the platform. `useModels`
   // already returns rows ORDER BY r.updated_at DESC; we just slice.
@@ -91,14 +85,18 @@ export function DashboardPage() {
             loading={platformPending}
             value={platform ? String(platform.total_models) : "—"}
             subtext={
-              platform ? `${platform.total_users} contributor${platform.total_users === 1 ? "" : "s"}` : ""
+              platform
+                ? `${platform.total_users} contributor${platform.total_users === 1 ? "" : "s"}`
+                : ""
             }
           />
           <StatsTile
             label="Stored"
             loading={platformPending}
             value={platform ? formatBytes(platform.total_size_bytes) : "—"}
-            subtext={platform ? `${platform.total_files} file${platform.total_files === 1 ? "" : "s"}` : ""}
+            subtext={
+              platform ? `${platform.total_files} file${platform.total_files === 1 ? "" : "s"}` : ""
+            }
           />
           <StatsTile
             label="Downloads"
@@ -109,18 +107,13 @@ export function DashboardPage() {
           {/* "On Sia" — the load-bearing demo number: bytes really pinned on
               Sia hosts (vs the durable Postgres cache). Click-through to
               /setup which has the explorer drilldown. */}
-          <Link
-            to="/setup"
-            className="rounded transition-colors hover:bg-muted/30"
-          >
+          <Link to="/setup" className="rounded transition-colors hover:bg-muted/30">
             <StatsTile
               label="On Sia"
               loading={platformPending}
               value={platform ? formatBytes(platform.bytes_on_sia) : "—"}
               subtext={
-                platform
-                  ? `${platform.xorbs_pinned}/${platform.xorbs_total} xorbs pinned`
-                  : ""
+                platform ? `${platform.xorbs_pinned}/${platform.xorbs_total} xorbs pinned` : ""
               }
             />
           </Link>
@@ -151,11 +144,7 @@ export function DashboardPage() {
             value={String(myModels.length)}
             subtext={`${models?.length ?? 0} total`}
           />
-          <StatsTile
-            label="API keys"
-            value={String(keys?.length ?? 0)}
-            subtext="active"
-          />
+          <StatsTile label="API keys" value={String(keys?.length ?? 0)} subtext="active" />
         </div>
       </section>
 
@@ -166,10 +155,7 @@ export function DashboardPage() {
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <CubeIcon size={16} weight="light" /> Your models
             </h2>
-            <Link
-              to="/models"
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
+            <Link to="/models" className="text-xs text-muted-foreground hover:text-foreground">
               See all →
             </Link>
           </div>
@@ -216,10 +202,7 @@ export function DashboardPage() {
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <ClockIcon size={16} weight="light" /> Recent activity
             </h2>
-            <Link
-              to="/stats"
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
+            <Link to="/stats" className="text-xs text-muted-foreground hover:text-foreground">
               Full stats →
             </Link>
           </div>
@@ -232,9 +215,7 @@ export function DashboardPage() {
           )}
 
           {!statsPending && recentActivity.length === 0 && (
-            <div className="py-6 text-center text-xs text-muted-foreground">
-              No activity yet.
-            </div>
+            <div className="py-6 text-center text-xs text-muted-foreground">No activity yet.</div>
           )}
 
           {!statsPending && recentActivity.length > 0 && (
@@ -258,12 +239,11 @@ export function DashboardPage() {
                   </span>
                   <span className="flex items-baseline gap-3 text-muted-foreground">
                     {a.bytes !== null && <span>{formatBytes(a.bytes)}</span>}
-                    {eventHasCacheSemantics(a.event) &&
-                      a.cache_hit !== null && (
-                        <span className={a.cache_hit ? "text-primary" : ""}>
-                          {a.cache_hit ? "✓ hit" : "✗ miss"}
-                        </span>
-                      )}
+                    {eventHasCacheSemantics(a.event) && a.cache_hit !== null && (
+                      <span className={a.cache_hit ? "text-primary" : ""}>
+                        {a.cache_hit ? "✓ hit" : "✗ miss"}
+                      </span>
+                    )}
                     <span>{formatRelative(a.ts)}</span>
                   </span>
                 </li>
@@ -279,10 +259,7 @@ export function DashboardPage() {
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <GlobeIcon size={16} weight="light" /> All models
           </h2>
-          <Link
-            to="/models"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
+          <Link to="/models" className="text-xs text-muted-foreground hover:text-foreground">
             See all →
           </Link>
         </div>
@@ -290,7 +267,7 @@ export function DashboardPage() {
         {modelsPending && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full" />
+              <Skeleton key={`model-skeleton-${i.toString()}`} className="h-20 w-full" />
             ))}
           </div>
         )}
@@ -315,9 +292,7 @@ export function DashboardPage() {
                   <div className="truncate font-medium" title={m.id}>
                     {name}
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                    @{owner}
-                  </div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">@{owner}</div>
                   <div className="mt-2 flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
                     <span>{formatBytes(m.size)}</span>
                     <span>

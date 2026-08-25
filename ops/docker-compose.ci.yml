@@ -5,12 +5,10 @@
 # (a) Assert V2_RECONSTRUCTION_ENABLED=true at the service level ( CI
 # half — even if.env ever drifts to `false`, the CI overlay pins
 # true).
-# (b) Tighten indexd's CI profile — conformance tests use testcontainers
-# for the CAS+Postgres they actually hit, so the live compose stack
-# exists mainly to prove on a fresh host. No need to wait
-# for a mainnet consensus sync; Zen testnet + short bootstrap timeout.
-# (c) Raise logging verbosity on the Rust + Go services so CI failure
-# mode diagnosis has enough signal.
+# (b) Raise logging verbosity on the Rust + Go services so CI failure
+# mode diagnosis has enough signal. The indexer is external
+# (OPENWEIGHTS_INDEXER_URL); conformance tests use testcontainers for the
+# CAS+Postgres they actually hit.
 
 services:
   openweights-cas:
@@ -26,11 +24,3 @@ services:
   openweights-console:
     environment:
       VITE_V2_RECONSTRUCTION_ENABLED: "true"
-
-  indexd:
-    # CI is NOT funding a real contract — fast boot profile. Zen testnet
-    # + permissive bootstrap timeout so the healthcheck probe has a realistic
-    # shot at readiness inside the 10 min wait budget.
-    environment:
-      INDEXD_NETWORK: zen
-      INDEXD_BOOTSTRAP_TIMEOUT: "120s"

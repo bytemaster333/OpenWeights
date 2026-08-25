@@ -8,7 +8,9 @@ import { type ApiError, casFetch } from "@/lib/api"
  * - `read` — download via gateway signed URLs only.
  * - `write` — full Xet protocol (xorb upload, shard upload, reconstruction).
  * - `admin` — issued by `/admin/setup` only; out of scope for onboarding.*/
-export type KeyScope = "read" | "write" | "admin"
+// "readwrite" = upload + download in one key, so a single HF_TOKEN completes a
+// full `hf upload` + `hf download` round-trip. "read"/"write" are single-scope.
+export type KeyScope = "read" | "write" | "readwrite" | "admin"
 
 /**
  * Shape returned by `POST /admin/keys`. `plaintext_key` is only present on

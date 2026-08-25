@@ -82,14 +82,24 @@ func NewDB(ctx context.Context, connStr string) (*DB, error) {
 		return nil, fmt.Errorf("dial pool: %w", err)
 	}
 
-	// Fail fast on unreachable Postgres. A 2s timeout is sane for the
-	// docker-compose internal network; longer deadlines are the caller's
-	// problem (they pass `ctx`).
-	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if err := pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("ping pool: %w", err)
+	// Retry the initial ping with backoff. On `docker compose up` Postgres may
+	// still be initializing (it briefly refuses connections / returns
+	// SQLSTATE 57P03 "the database system is starting up") when the gateway
+	// boots; a single failed ping used to leave the gateway permanently
+	// DB-less, 500ing every /xorb until a manual restart. Give it up to ~60s.
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		err := pool.Ping(pingCtx)
+		cancel()
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			pool.Close()
+			return nil, fmt.Errorf("ping pool (after retries): %w", err)
+		}
+		time.Sleep(2 * time.Second)
 	}
 
 	return &DB{pool: pool}, nil
@@ -171,29 +181,22 @@ func (d *DB) QueryXorbPinned(ctx context.Context, hashHex string) (siaObjectID s
 	return id.String(), nil
 }
 
-// decodeXorbHash validates the 64-char lowercase hex representation the
-// verifier hands us and returns the raw 32 bytes the BYTEA column stores.
-// Non-hex input is a 400-class error (malformed URL); the verifier itself
-// rejects malformed hashes with `VerifyErr.Kind == "malformed:xorb_hash_hex"`
-// before we ever reach the DB, so reaching here with garbage input is a
-// programmer error on the handler side.
+// decodeXorbHash converts the xet-core canonical MerkleHash hex the verifier
+// hands us into the raw 32 bytes the `xorb_merkle_hash` BYTEA column stores.
+// CRITICAL (gotcha #1): the hex is byte-reversed per 8-byte group, so it MUST
+// be decoded through the MerkleHash codec (`ParseMerkleHashHex`) and NOT a
+// straight hex decode — a straight decode yields byte-reversed bytes that never
+// match a pinned row, so every real download 404s at the gateway. The CAS
+// stores the raw digest (`MerkleHash::into::<[u8;32]>()`) and emits the reversed
+// hex (`MerkleHash::hex()`) in reconstruction URLs; this is the inverse.
+// Non-hex/length errors are 400-class; the verifier already rejects malformed
+// hashes before we reach the DB.
 func decodeXorbHash(hashHex string) ([]byte, error) {
-	if len(hashHex) != 64 {
-		return nil, fmt.Errorf("xorb hash must be 64 hex chars; got %d", len(hashHex))
+	digest, err := ParseMerkleHashHex(hashHex)
+	if err != nil {
+		return nil, err
 	}
-	buf := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		hi, err := hexNibble(hashHex[i*2])
-		if err != nil {
-			return nil, err
-		}
-		lo, err := hexNibble(hashHex[i*2+1])
-		if err != nil {
-			return nil, err
-		}
-		buf[i] = hi<<4 | lo
-	}
-	return buf, nil
+	return digest[:], nil
 }
 
 func hexNibble(c byte) (byte, error) {

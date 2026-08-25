@@ -35,10 +35,20 @@ import {
 export type OneTimeKeyModalProps = {
   open: boolean
   plaintext: string
+  scope: "read" | "write" | "readwrite" | "admin"
   onAck: () => void
 }
 
-export function OneTimeKeyModal({ open, plaintext, onAck }: OneTimeKeyModalProps) {
+// Human-readable capability line per scope, so the modal never mislabels a
+// key's power (a read key is download-only, not "write").
+const SCOPE_BLURB: Record<OneTimeKeyModalProps["scope"], string> = {
+  read: "it can download objects on your behalf",
+  write: "it can upload new xorbs and shards on your behalf",
+  readwrite: "it can upload and download on your behalf — enough for a full round-trip",
+  admin: "it has full admin access on your behalf",
+}
+
+export function OneTimeKeyModal({ open, plaintext, scope, onAck }: OneTimeKeyModalProps) {
   const [acknowledged, setAcknowledged] = useState(false)
 
   // Reset the ack state whenever the modal is re-opened with a new key.
@@ -107,8 +117,8 @@ export function OneTimeKeyModal({ open, plaintext, onAck }: OneTimeKeyModalProps
         </div>
 
         <p className="text-xs text-muted-foreground">
-          This key has <strong>write</strong> scope — it can upload new xorbs and shards on your
-          behalf. Treat it like a password.
+          This key has <strong>{scope}</strong> scope — {SCOPE_BLURB[scope]}. Treat it like a
+          password.
         </p>
 
         <DialogFooter className="gap-2">

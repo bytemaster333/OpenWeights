@@ -55,9 +55,22 @@ pub const MAX_PIN_ATTEMPTS: i32 = 5;
 
 /// Per-row Sia op timeout. Without it, a single hung upload/pin to a misbehaving
 /// host would freeze the reconciler indefinitely (every tick re-awaits the same
-/// future). 600 s = 10 min is the slowest 64 MiB xorb we observe on Zen testnet
-/// across 6 erasure shards. Shared by the xorb and shard reconcile paths.
-const SIA_OP_TIMEOUT: Duration = Duration::from_secs(600);
+/// future). Default 600 s = 10 min (the slowest 64 MiB xorb we observe on Zen
+/// across 6 erasure shards). Shared by the xorb and shard reconcile paths.
+///
+/// Env-tunable via `OPENWEIGHTS_SIA_OP_TIMEOUT_SECS`: a hosted/mainnet indexer
+/// forming fresh contracts on the FIRST upload (on-chain, ~minutes per contract
+/// × 12 hosts) can exceed 10 min, which would leave xorbs stuck `pinning`
+/// forever since every reconciler attempt re-hits the same cap. Operators
+/// pointing at such an indexer raise this (e.g. 3600) so the first pin can land.
+static SIA_OP_TIMEOUT: std::sync::LazyLock<Duration> = std::sync::LazyLock::new(|| {
+    let secs = std::env::var("OPENWEIGHTS_SIA_OP_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(600);
+    Duration::from_secs(secs)
+});
 
 /// Whether a Sia failure is transient (recoverable on a later sweep) rather than
 /// permanent. Transient errors must NOT count toward the orphan cap, otherwise a
@@ -250,7 +263,7 @@ where
     // shard path). Times out → bump attempts, move on, retry next sweep.
     match row.sia_object_id.as_deref() {
         Some(oid) => {
-            match tokio::time::timeout(SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
+            match tokio::time::timeout(*SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
                 Ok(Ok(())) => {
                     set_pinned_xorb(pool, &row.hash, oid).await?;
                     Ok(true)
@@ -260,7 +273,8 @@ where
                 }
                 Err(_) => {
                     let to = SiaAdapterError::Other(anyhow::anyhow!(
-                        "sia pin_only exceeded {SIA_OP_TIMEOUT:?} budget"
+                        "sia pin_only exceeded {:?} budget",
+                        *SIA_OP_TIMEOUT
                     ));
                     bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &to).await
                 }
@@ -268,7 +282,7 @@ where
         }
         None => match load_xorb_body(pool, &row.hash).await? {
             Some(bytes) => {
-                match tokio::time::timeout(SIA_OP_TIMEOUT, sia.upload_and_pin(&bytes)).await {
+                match tokio::time::timeout(*SIA_OP_TIMEOUT, sia.upload_and_pin(&bytes)).await {
                     Ok(Ok(sia_id)) => {
                         set_pinned_xorb(pool, &row.hash, &sia_id).await?;
                         Ok(true)
@@ -278,7 +292,8 @@ where
                     }
                     Err(_) => {
                         let to = SiaAdapterError::Other(anyhow::anyhow!(
-                            "sia upload_and_pin exceeded {SIA_OP_TIMEOUT:?} budget"
+                            "sia upload_and_pin exceeded {:?} budget",
+                            *SIA_OP_TIMEOUT
                         ));
                         bump_xorb_attempt(pool, &row.hash, row.pin_attempts, metrics, &to).await
                     }
@@ -323,7 +338,7 @@ where
         return Ok(true);
     }
     match row.sia_object_id.as_deref() {
-        Some(oid) => match tokio::time::timeout(SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
+        Some(oid) => match tokio::time::timeout(*SIA_OP_TIMEOUT, sia.pin_only(oid)).await {
             Ok(Ok(())) => {
                 set_pinned_shard(pool, &row.hash, oid).await?;
                 Ok(true)
@@ -335,7 +350,7 @@ where
                 // Hung host — treat as transient (do not freeze the loop, do not
                 // orphan). Retried next sweep.
                 let to = SiaAdapterError::Unavailable(
-                    format!("sia pin_only exceeded {SIA_OP_TIMEOUT:?} budget").into(),
+                    format!("sia pin_only exceeded {:?} budget", *SIA_OP_TIMEOUT).into(),
                 );
                 bump_shard_attempt(pool, &row.hash, row.pin_attempts, metrics, &to).await
             }

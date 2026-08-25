@@ -2,8 +2,12 @@
 FROM rust:1.85-bookworm AS builder
 WORKDIR /src
 
-# Copy workspace manifests first for cached dep layer.
-COPY cas/Cargo.toml cas/rust-toolchain.toml ./cas/
+# Copy workspace manifests first for cached dep layer. Cargo.lock is
+# REQUIRED here (with --locked below): without it cargo re-resolves the whole
+# graph from scratch inside the image and can pick a transitive version the
+# pinned crates don't compile against (e.g. xet-runtime newer than the
+# xet-core-structures pin expects). The committed lock is the reproducible graph.
+COPY cas/Cargo.toml cas/Cargo.lock cas/rust-toolchain.toml ./cas/
 COPY cas/crates ./cas/crates
 # Vendored sia_storage 0.7.0 (one-constant patch — see cas/Cargo.toml
 # [patch.crates-io]).
@@ -21,9 +25,15 @@ RUN mkdir -p ./cas/.sqlx
 # Empty.sqlx/ is harmless for because no `sqlx::query!` macro
 # invocation exists yet.
 ENV SQLX_OFFLINE=true
+# Optional cargo features for the CAS binary. Empty by default (production
+# build). The local mock-Sia dev/e2e stack passes CAS_FEATURES=sia-mock to
+# compile in the in-memory MockSiaAdapter (gated by OPENWEIGHTS_SIA_MOCK=true
+# at runtime). Never set this for a real deployment.
+ARG CAS_FEATURES=""
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/cas/target \
-    cd cas && cargo build --release --bin openweights-cas && \
+    cd cas && cargo build --release --locked --bin openweights-cas \
+      ${CAS_FEATURES:+--features "$CAS_FEATURES"} && \
     cp target/release/openweights-cas /openweights-cas
 
 FROM debian:bookworm-slim

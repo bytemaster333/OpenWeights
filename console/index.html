@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="A model hub with bytes on Sia. Point HF_ENDPOINT at a OpenWeights deployment and use the hf CLI as usual." />
     <title>openweights</title>
+    <!-- runtime deployment config (CAS/gateway URLs). loaded before the app so
+         a prebuilt image can be pointed at any deployment via the container's
+         env; falls back to build-time VITE_* when absent. -->
+    <script src="/config.js"></script>
   </head>
   <body>
     <div id="root"></div>

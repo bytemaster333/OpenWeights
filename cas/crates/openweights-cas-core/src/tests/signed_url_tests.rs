@@ -38,6 +38,10 @@ struct Vector {
     xorb_hash_hex: String,
     exp: u64,
     range: Option<RangeSpec>,
+    /// Multi-segment grant (mutually exclusive with `range`). Present for the
+    /// `v1_multi_range` vector; canonical `r` field is the comma-joined form.
+    #[serde(default)]
+    ranges: Option<Vec<RangeSpec>>,
     kid: String,
     signing_key_b64: String,
     canonical_string: String,
@@ -49,6 +53,30 @@ struct Vector {
 impl Vector {
     fn range_tuple(&self) -> Option<(u64, u64)> {
         self.range.as_ref().map(|r| (r.start, r.end_inclusive))
+    }
+
+    /// All grant segments as `(start, end_inclusive)` tuples: from `ranges` if
+    /// present, else the single `range`, else empty (whole-xorb grant).
+    fn segments(&self) -> Vec<(u64, u64)> {
+        if let Some(rs) = &self.ranges {
+            rs.iter().map(|r| (r.start, r.end_inclusive)).collect()
+        } else {
+            self.range_tuple().into_iter().collect()
+        }
+    }
+
+    /// The exact `r` querystring field the minter serializes (empty = no grant).
+    fn r_field(&self) -> String {
+        self.segments()
+            .iter()
+            .map(|(s, e)| format!("{s}-{e}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    /// Whether this vector carries any byte-range grant (single or multi).
+    fn has_range(&self) -> bool {
+        self.range.is_some() || self.ranges.is_some()
     }
 
     fn kid_uuid(&self) -> Uuid {
@@ -93,17 +121,23 @@ fn fixture_has_required_vectors() {
         names.contains(&"v1_zero_byte_range"),
         "missing v1_zero_byte_range"
     );
+    assert!(
+        names.contains(&"v1_multi_range"),
+        "missing v1_multi_range (V2 multi-segment grant coverage)"
+    );
     assert!(vectors.len() >= 3, "need at least 3 vectors");
 }
 
 #[test]
 fn canonical_string_matches_fixture_exactly() {
     for v in load_vectors() {
-        let computed = UrlSigner::canonical_string(
+        // Build from the raw `r` field so single- and multi-segment vectors
+        // share one path (byte-identical to the minter).
+        let computed = UrlSigner::canonical_string_raw(
             CANONICAL_VERSION,
             &v.xorb_hash_hex,
             v.exp,
-            v.range_tuple(),
+            &v.r_field(),
             v.kid_uuid(),
         );
         assert_eq!(
@@ -158,7 +192,13 @@ fn mint_v1_embeds_the_expected_signature() {
 
         let xorb = MerkleHash::from_hex(&v.xorb_hash_hex).expect("hash parses");
         let kid = v.kid_uuid();
-        let url_str = signer.mint_v1(&xorb, v.range_tuple(), kid, now);
+        // Multi-segment vectors mint through `mint_v1_multi_range`; single/none
+        // through `mint_v1`. Both must reproduce the fixture signature.
+        let url_str = if v.ranges.is_some() {
+            signer.mint_v1_multi_range(&xorb, &v.segments(), kid, now)
+        } else {
+            signer.mint_v1(&xorb, v.range_tuple(), kid, now)
+        };
 
         let url = Url::parse(&url_str).expect("mint output parses");
         assert_eq!(url.host_str(), Some("cas.openweights.app"));
@@ -184,7 +224,7 @@ fn mint_v1_embeds_the_expected_signature() {
             "kid".to_string(),
             "sig".to_string(),
         ];
-        if v.range.is_some() {
+        if v.has_range() {
             expected.push("r".to_string());
         }
         expected.sort();
@@ -204,14 +244,18 @@ fn verify_round_trips_every_current_key_vector() {
             .expect("signer builds");
 
         let xorb = MerkleHash::from_hex(&v.xorb_hash_hex).expect("hash parses");
-        let url_str = signer.mint_v1(&xorb, v.range_tuple(), v.kid_uuid(), now);
+        let url_str = if v.ranges.is_some() {
+            signer.mint_v1_multi_range(&xorb, &v.segments(), v.kid_uuid(), now)
+        } else {
+            signer.mint_v1(&xorb, v.range_tuple(), v.kid_uuid(), now)
+        };
 
         let ok = signer
             .verify(&url_str, v.exp - 1)
             .expect("verify succeeds just before exp");
         assert_eq!(ok.xorb_hash_hex, v.xorb_hash_hex);
         assert_eq!(ok.exp, v.exp);
-        assert_eq!(ok.range, v.range_tuple());
+        assert_eq!(ok.ranges, v.segments());
         assert_eq!(ok.kid, v.kid_uuid());
         assert!(!ok.accepted_by_prev_key, "current key should accept");
 
@@ -497,6 +541,57 @@ fn mint_v1_multi_range_panics_on_empty_segments() {
     .expect("hash");
     let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").expect("kid");
     let _ = signer.mint_v1_multi_range(&xorb, &[], kid, 1_700_000_000);
+}
+
+#[test]
+fn verify_round_trips_multi_range_mint() {
+    // Mint a genuine multi-segment URL and verify it back: the parsed grant
+    // must equal the exact segments, proving the comma-joined `r=` survives
+    // mint → URL → verify without drift.
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let xorb = MerkleHash::from_hex(
+        "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632",
+    )
+    .expect("hash");
+    let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").expect("kid");
+    let segments = [(1024u64, 8191u64), (12288u64, 16383u64)];
+
+    let url_str = signer.mint_v1_multi_range(&xorb, &segments, kid, 1_700_000_000);
+    let ok = signer
+        .verify(&url_str, 1_700_000_001)
+        .expect("multi-range URL verifies");
+    assert_eq!(ok.ranges, segments.to_vec());
+    assert!(!ok.accepted_by_prev_key);
+}
+
+#[test]
+fn verify_rejects_malformed_multi_range() {
+    // A grant with a trailing empty segment (`1-2,`) or a segment missing a
+    // bound (`1-2,3`) must classify as Malformed, not silently narrow the grant.
+    let signer = UrlSigner::new(
+        "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        None,
+        gateway_base(),
+        7200,
+    )
+    .expect("signer");
+    let hex = "eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632";
+    let kid = "01945edc-5f0a-71a3-9c82-3a0000000001";
+    for bad in ["1-2,", "1-2,3", ",1-2", "1-2,5-4"] {
+        let u = format!(
+            "https://cas.openweights.app/xorb/{hex}?exp=2&kid={kid}&sig=abc&r={bad}"
+        );
+        assert!(
+            matches!(signer.verify(&u, 0), Err(VerifyErr::Malformed(_))),
+            "expected Malformed for r={bad:?}"
+        );
+    }
 }
 
 #[test]

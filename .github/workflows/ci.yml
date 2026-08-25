@@ -12,9 +12,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# note: a console (ts) job is intentionally omitted for now. the console
-# currently has pre-existing biome + vitest failures unrelated to this workflow;
-# add the job once those are fixed.
 jobs:
   cas:
     name: openweights-cas (rust)
@@ -55,3 +52,30 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       - run: go test ./...
+
+  console:
+    name: openweights-console (ts)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v4
+      # pinned to the pnpm version in console/package.json packageManager so the
+      # frozen lockfile install is deterministic. action-setup runs at repo root,
+      # hence the explicit lockfile path for the node cache below.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: console/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: biome
+        run: pnpm biome check .
+      - name: typecheck
+        run: pnpm exec tsc --noEmit
+      - name: test
+        run: pnpm vitest run

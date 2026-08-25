@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, RawQuery, State},
 };
 use serde::{Deserialize, Serialize};
 
@@ -102,11 +102,21 @@ pub struct QueryReconstructionResponse {
 /// (validated at ).
 pub type BatchQueryReconstructionResponse = BTreeMap<String, QueryReconstructionResponse>;
 
-/// Query params for batch endpoint: repeated `file_id=<hex>` entries.
-#[derive(Debug, Deserialize)]
-pub struct BatchQueryParams {
-    #[serde(default)]
-    pub file_id: Vec<String>,
+/// Parse repeated `file_id=<hex>` values out of a raw query string.
+///
+/// axum's `Query` extractor is backed by `serde_urlencoded`, which cannot
+/// deserialize repeated keys into a `Vec` (it fails with "expected a
+/// sequence"). xet-core's `batch_get_reconstruction` sends exactly that shape
+/// (`?file_id=A&file_id=B`), so we parse the raw query by hand. file_ids are
+/// straight hex, so no percent-decoding is required; a comma-joined value is
+/// tolerated defensively.
+fn parse_file_id_query(raw: &str) -> Vec<String> {
+    raw.split('&')
+        .filter_map(|kv| kv.strip_prefix("file_id="))
+        .flat_map(|v| v.split(','))
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
 }
 
 // -------------------------------------------------------------------------
@@ -138,18 +148,40 @@ pub trait ReconstructionState: AuthStateRef {
 // Handlers
 // -------------------------------------------------------------------------
 
+/// Parse the start offset of a `Range: bytes=<start>-<end>` reconstruction
+/// request. xet-core fetches reconstruction in blocks (min 256 MB) and treats
+/// a `416` as "no more data" — so a request whose start is at/after the file's
+/// end MUST return 416 for the client to stop cleanly. A whole-file download
+/// sends `start=0` for the first block and `start=file_size` for the next,
+/// which is exactly the 416 boundary. Returns None when no Range header is
+/// present (serve the whole file). Only the start is needed: we always serve
+/// from `start` to the end of the file, which satisfies xet-core's min-fetch
+/// semantics (returning more than the requested block is allowed).
+pub(crate) fn reconstruction_range_start(headers: &axum::http::HeaderMap) -> Option<u64> {
+    let raw = headers.get(axum::http::header::RANGE)?.to_str().ok()?;
+    let spec = raw.trim().strip_prefix("bytes=")?;
+    let start = spec.split('-').next()?.trim();
+    start.parse::<u64>().ok()
+}
+
 /// `GET /v1/reconstructions/{file_id_hex}` —.
 pub async fn query_reconstruction_v1<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
     Path(file_id_hex): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<QueryReconstructionResponse>, AppError>
 where
     S: ReconstructionState,
 {
-    // (1) Parse hex → MerkleHash — (NEVER hand-roll hex).
-    let file_id = MerkleHash::from_hex(&file_id_hex)
-        .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
+    // (1) Decode the file_id. The per-file xet hash is stored (by the shard
+    // parser) and requested (by hf_xet, and by /xet/files) as a STRAIGHT hex
+    // string — its raw bytes are what the client sends, NOT the byte-reversed
+    // MerkleHash codec used for xorb hashes on the gateway URL path. Decoding
+    // it via MerkleHash::from_hex here silently reversed the bytes and never
+    // matched the stored reconstruction_files.file_id (404 on every download).
+    let file_id_bytes = decode_file_id_hex(&file_id_hex)
+        .ok_or(AppError::BadRequest("invalid_file_id"))?;
 
     // (2) Rate-limit (download class).
     crate::rate_limit::check(
@@ -163,10 +195,16 @@ where
     // (3) DB fetch — zero Sia I/O. Pinned-only JOIN filter excludes
     // non-pinned xorbs; if every term's xorb is non-pinned, this returns
     // None → 404.
-    let file_id_bytes: [u8; 32] = file_id.into();
     let row = recon_q::get_reconstruction(st.pool(), &file_id_bytes)
         .await?
         .ok_or(AppError::NotFound)?;
+
+    // (3a) A ranged request that starts at/after EOF → 416 so xet-core stops.
+    if let Some(start) = reconstruction_range_start(&headers) {
+        if start >= row.file.total_size.max(0) as u64 {
+            return Err(AppError::RangeNotSatisfiable);
+        }
+    }
 
     // (4) Build response body.
     let now_unix = unix_now();
@@ -189,20 +227,23 @@ where
 pub async fn query_reconstructions_batch_v1<S>(
     State(st): State<S>,
     AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
-    Query(params): Query<BatchQueryParams>,
+    RawQuery(raw): RawQuery,
 ) -> Result<Json<BatchQueryReconstructionResponse>, AppError>
 where
     S: ReconstructionState,
 {
     // (1) Parse every file_id hex — ANY parse failure → 400.
-    let mut file_ids: Vec<[u8; 32]> = Vec::with_capacity(params.file_id.len());
+    let file_id_params = parse_file_id_query(raw.as_deref().unwrap_or(""));
+    let mut file_ids: Vec<[u8; 32]> = Vec::with_capacity(file_id_params.len());
     let mut hex_for_id: BTreeMap<[u8; 32], String> = BTreeMap::new();
-    for fid_hex in &params.file_id {
-        let h = MerkleHash::from_hex(fid_hex)
-            .map_err(|_| AppError::BadRequest("invalid_file_id"))?;
-        let bytes: [u8; 32] = h.into();
+    for fid_hex in &file_id_params {
+        // Straight hex decode — see query_reconstruction_v1 for why file_id is
+        // NOT the byte-reversed MerkleHash codec. The response is keyed by the
+        // exact hex the client sent.
+        let bytes = decode_file_id_hex(fid_hex)
+            .ok_or(AppError::BadRequest("invalid_file_id"))?;
         file_ids.push(bytes);
-        hex_for_id.insert(bytes, h.hex());
+        hex_for_id.insert(bytes, fid_hex.clone());
     }
 
     // (2) Rate-limit (once per batch request, not per file_id — aligns with
@@ -389,9 +430,55 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
+/// Straight lowercase-hex decode of a 64-char per-file xet hash into its 32
+/// raw bytes. This is intentionally NOT `MerkleHash::from_hex`: the xet file_id
+/// is stored + transmitted as a plain hex string (the shard parser's raw bytes,
+/// and what hf_xet / `/xet/files` use), whereas `MerkleHash`'s codec reverses
+/// each 8-byte group — that codec is only for the xorb hashes that appear on
+/// the gateway URL path. Returns None on wrong length or a non-hex character.
+pub(crate) fn decode_file_id_hex(s: &str) -> Option<[u8; 32]> {
+    if s.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, pair) in s.as_bytes().chunks_exact(2).enumerate() {
+        let hi = (pair[0] as char).to_digit(16)?;
+        let lo = (pair[1] as char).to_digit(16)?;
+        out[i] = (hi * 16 + lo) as u8;
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod inline_tests {
     use super::*;
+
+    #[test]
+    fn decode_file_id_hex_is_straight_not_reversed() {
+        // The per-file xet hash is a plain hex string: straight decode, byte i
+        // is the i-th hex pair. Explicitly NOT the byte-reversed MerkleHash
+        // codec (which caused every /v1/reconstructions to 404).
+        let hex = "a031f461cfcb19630bdb71fc2a29f7d4922caac7c02bb608d307bb6231065508";
+        let bytes = decode_file_id_hex(hex).expect("valid 64-hex");
+        assert_eq!(bytes[0], 0xa0);
+        assert_eq!(bytes[1], 0x31);
+        assert_eq!(bytes[31], 0x08);
+        // Straight round-trip: re-encoding the raw bytes reproduces the input.
+        let round: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(round, hex);
+        // And it diverges from the reversed MerkleHash codec (proving the two
+        // are genuinely different and the bug was real).
+        let reversed: [u8; 32] = MerkleHash::from_hex(hex).unwrap().into();
+        assert_ne!(bytes, reversed, "file_id decode must not reverse bytes");
+    }
+
+    #[test]
+    fn decode_file_id_hex_rejects_bad_input() {
+        assert!(decode_file_id_hex("").is_none());
+        assert!(decode_file_id_hex("ab").is_none()); // too short
+        assert!(decode_file_id_hex(&"a".repeat(63)).is_none()); // odd/short
+        assert!(decode_file_id_hex(&"z".repeat(64)).is_none()); // non-hex
+    }
 
     #[test]
     fn wire_types_round_trip_serde_json() {

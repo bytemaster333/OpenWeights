@@ -221,8 +221,9 @@ describe("KeysPage", () => {
         path === "/admin/keys" && (init as RequestInit | undefined)?.method === "POST",
     )
     expect(postCall).toBeTruthy()
+    // default scope is read+write so one key round-trips.
     expect((postCall?.[1] as RequestInit).body).toBe(
-      JSON.stringify({ name: CREATED.name, scope: "write" }),
+      JSON.stringify({ name: CREATED.name, scope: "readwrite" }),
     )
 
     // OneTimeKeyModal renders plaintext.

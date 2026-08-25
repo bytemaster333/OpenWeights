@@ -1,12 +1,10 @@
-//go:build !a3probe
-// +build !a3probe
-
 package main
 
 import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -35,9 +33,33 @@ func loadEnv(path string) (map[string]string, error) {
 		if eq < 1 {
 			continue
 		}
-		kv[strings.TrimSpace(line[:eq])] = strings.TrimSpace(line[eq+1:])
+		kv[strings.TrimSpace(line[:eq])] = parseEnvValue(line[eq+1:])
 	}
 	return kv, nil
+}
+
+// parseEnvValue extracts the value after `=`, honoring the dotenv convention
+// that an inline comment starts at an unquoted ` #` (whitespace + hash). This
+// matters because ops/.env.example documents vars as `KEY= # description`;
+// without stripping, OPENWEIGHTS_APP_ID etc. would take the comment as value.
+// A quoted value ("...") is returned verbatim minus the surrounding quotes.
+func parseEnvValue(raw string) string {
+	v := strings.TrimSpace(raw)
+	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+		return v[1 : len(v)-1]
+	}
+	// A value that is nothing but a comment (e.g. `KEY= # description`) is empty.
+	if strings.HasPrefix(v, "#") {
+		return ""
+	}
+	// Strip a trailing inline comment: first ` #` (space/tab before hash).
+	for i := 1; i < len(v); i++ {
+		if v[i] == '#' && (v[i-1] == ' ' || v[i-1] == '\t') {
+			v = v[:i]
+			break
+		}
+	}
+	return strings.TrimSpace(v)
 }
 
 // writeEnv writes kv atomically (tmpfile + rename) with 0600 perms, sorted for determinism.
@@ -85,6 +107,14 @@ func generateRandomPassword() string {
 	return hex.EncodeToString(b[:])
 }
 
+// generateSigningKey produces a base64 (std) 32-byte key — the format the CAS
+// and gateway expect for GATEWAY_URL_SIGNING_KEY (openssl rand 32 | base64).
+func generateSigningKey() string {
+	var b [32]byte
+	_, _ = rand.Read(b[:])
+	return base64.StdEncoding.EncodeToString(b[:])
+}
+
 // sha256Prefix8 returns the first 8 hex chars of SHA-256(s). Used for
 // non-reversible log identifiers (recovery phrases, app keys).
 func sha256Prefix8(s string) string {
@@ -97,12 +127,10 @@ func sha256Prefix8(s string) string {
 func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 	required := []string{
 		"POSTGRES_SUPERUSER_PASSWORD",
-		"INDEXD_POSTGRES_PASSWORD",
 		"OPENWEIGHTS_POSTGRES_PASSWORD",
 		// : dedicated minimal-privilege role for openweights-gateway.
 		// See cas/migrations/0005_openweights_gw_role.sql.
 		"OPENWEIGHTS_GW_POSTGRES_PASSWORD",
-		"INDEXD_ADMIN_PASSWORD",
 		"REDIS_PASSWORD",
 	}
 	populated := []string{}
@@ -111,6 +139,19 @@ func fillMissing(logger *slog.Logger, kv map[string]string) []string {
 			kv[k] = generateRandomPassword()
 			populated = append(populated, k)
 			logger.Info("generated password", "key", k, "sha_prefix", sha256Prefix8(kv[k]))
+		}
+	}
+	// base64 keys the CAS/gateway need. Generated here so a fresh operator's
+	// stack boots and the HF round-trip works without hand-editing .env.
+	//   GATEWAY_URL_SIGNING_KEY — MANDATORY; gateway won't boot if empty.
+	//     shared by CAS (mints signed URLs) and gateway (verifies).
+	//   XET_JWT_SIGNING_KEY — without it the HF-compat token endpoints 503,
+	//     so `hf upload` / `hf download` fail.
+	for _, k := range []string{"GATEWAY_URL_SIGNING_KEY", "XET_JWT_SIGNING_KEY"} {
+		if kv[k] == "" {
+			kv[k] = generateSigningKey()
+			populated = append(populated, k)
+			logger.Info("generated signing key", "key", k, "sha_prefix", sha256Prefix8(kv[k]))
 		}
 	}
 	return populated

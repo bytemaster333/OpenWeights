@@ -245,11 +245,34 @@ func writeSingleRange(w http.ResponseWriter, r Range, totalSize int64, src io.Re
 }
 
 // allRangesWithin checks every r ∈ ranges satisfies `bound.Start <= r.Start`
-// AND `r.End <= bound.End`. Used by the handler to reject Range headers that
-// escape the signed-URL's `r=`.
+// AND `r.End <= bound.End`. Used to reject Range headers that escape a single
+// signed-URL segment. Retained for the single-segment fast path + tests;
+// `allRangesWithinAny` generalizes it to a multi-segment grant.
 func allRangesWithin(ranges []Range, bound Range) bool {
 	for _, r := range ranges {
 		if r.Start < bound.Start || r.End > bound.End {
+			return false
+		}
+	}
+	return true
+}
+
+// allRangesWithinAny reports whether every requested range sits entirely inside
+// at least one granted segment. A multi-segment signed URL (V2 reconstruction,
+// `r=s1-e1,s2-e2,...`) grants a set of disjoint segments; a request may live
+// inside any one of them but may NOT span the gap between two segments. This is
+// the multi-segment generalization of `allRangesWithin` the handler uses to
+// reject cross-grant escalations.
+func allRangesWithinAny(ranges, grants []Range) bool {
+	for _, r := range ranges {
+		ok := false
+		for _, g := range grants {
+			if r.Start >= g.Start && r.End <= g.End {
+				ok = true
+				break
+			}
+		}
+		if !ok {
 			return false
 		}
 	}
