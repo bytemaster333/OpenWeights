@@ -43,13 +43,13 @@ use crate::scopes::ApiKeyScope;
 /// issuers today:
 /// * `https://huggingface.co` — tokens minted by HF for hf_xet clients
 ///   that came through openweights-hf-proxy.
-/// * `https://hf.openweights.app` — tokens minted by THIS server when OpenWeights
+/// * `https://hf.example.com` — tokens minted by THIS server when OpenWeights
 ///   plays the HF-API-compat role (migration 0008). Locked-down issuer
 ///   matching: we validate by exact string comparison, not substring.
-const EXPECTED_ISSUERS: &[&str] = &["https://huggingface.co", "https://hf.openweights.app"];
+const EXPECTED_ISSUERS: &[&str] = &["https://huggingface.co", "https://hf.example.com"];
 
 /// The issuer openweights-cas writes into tokens it mints itself.
-pub const OPENWEIGHTS_ISSUER: &str = "https://hf.openweights.app";
+pub const OPENWEIGHTS_ISSUER: &str = "https://hf.example.com";
 
 /// Maximum clock-skew tolerance between HF and our host, in seconds. 60 s
 /// is generous; HF and our server should both track NTP.

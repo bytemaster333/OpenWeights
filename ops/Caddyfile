@@ -13,7 +13,7 @@
 # │ Owner-run staging validation BEFORE prod issuance (05-04 runbook §3): │
 # │ 1. Uncomment the `acme_ca` directive below. │
 # │ 2. `make deploy`. │
-# │ 3. `openssl s_client -connect openweights.app:443 -servername openweights.app` and │
+# │ 3. `openssl s_client -connect example.com:443 -servername example.com` and │
 # │ `openssl x509 -noout -ext subjectAltName` to confirm BOTH DNS names. │
 # │ 4. Comment `acme_ca` back out and redeploy for prod issuance. │
 # │ │
@@ -55,21 +55,21 @@
 
  # ─── Per-host routing via host matchers ─────────────────────────────────────
 
- # openweights.app → console (shadcn/TanStack Router/Query SPA served as static
+ # example.com → console (shadcn/TanStack Router/Query SPA served as static
  # assets by the console's nginx inside the container).
  @console host {$OPENWEIGHTS_DOMAIN}
  handle @console {
  reverse_proxy http://openweights-console:80
  }
 
- # cas.openweights.app → CAS + gateway (path-split). Gateway lives under /gateway/*
+ # cas.example.com → CAS + gateway (path-split). Gateway lives under /gateway/*
  # so Caddy can apply `flush_interval -1` specifically to the streaming
  # multipart/byteranges path ( load-bearing).
  @cas host cas.{$OPENWEIGHTS_DOMAIN}
  handle @cas {
  # Gateway: signed-URL range serving. `handle_path` strips the prefix
  # before proxying so the gateway sees its canonical URL paths. This
- # matches GATEWAY_BASE_URL=https://cas.openweights.app/gateway in .env.prod.
+ # matches GATEWAY_BASE_URL=https://cas.example.com/gateway in .env.prod.
  handle_path /gateway/* {
  reverse_proxy http://openweights-gateway:8081 {
  # : keep streaming + multipart/byteranges boundaries intact.

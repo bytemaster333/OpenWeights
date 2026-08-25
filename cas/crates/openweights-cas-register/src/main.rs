@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
         id: app_id,
         name: "OpenWeights CAS",
         description: "OpenWeights content-addressed storage service",
-        service_url: "https://openweights.app",
+        service_url: "https://example.com",
         logo_url: None,
         callback_url: None,
     };

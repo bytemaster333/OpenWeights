@@ -96,7 +96,7 @@ make deploy-smoke
 ```
 
 which runs `ops/smoke.sh` against `$OPENWEIGHTS_DOMAIN`, defaulting to
-`openweights.app`. It needs `curl`, `openssl`, and `jq`, and sources `./.env`
+`example.com`. It needs `curl`, `openssl`, and `jq`, and sources `./.env`
 when present. It exits `0` when every check passes, `1` on a failure, and `2`
 when a precondition is missing.
 
@@ -130,7 +130,7 @@ something to look at and to smoke-test against. Run it once, after the first
 deploy and after minting a `write` key in the console.
 
 ```bash
-OPENWEIGHTS_CAS_URL=https://cas.openweights.app \
+OPENWEIGHTS_CAS_URL=https://cas.example.com \
 OPENWEIGHTS_WRITE_KEY=<your write-scoped key> \
   make preload-fixture
 ```
@@ -212,7 +212,7 @@ staging directory. Uncomment it, deploy, confirm the certificate covers both
 names, then comment it back out and redeploy for a real certificate:
 
 ```bash
-openssl s_client -connect openweights.app:443 -servername openweights.app </dev/null \
+openssl s_client -connect example.com:443 -servername example.com </dev/null \
   | openssl x509 -noout -ext subjectAltName
 ```
 

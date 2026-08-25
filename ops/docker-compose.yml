@@ -105,7 +105,7 @@ services:
       CACHE_DIR: /var/cache/openweights
       CACHE_SIZE_BYTES: ${CACHE_SIZE_BYTES:-107374182400}
     ports:
-      # Public port. Caddy reverse-proxies `cas.openweights.app` here in.
+      # Public port. Caddy reverse-proxies `cas.example.com` here in.
       - "127.0.0.1:9090:8081"
       # Metrics deliberately NOT exposed —. Scrape via `docker compose exec`.
     volumes:
@@ -230,7 +230,7 @@ services:
       HF_UPSTREAM_URL: ${HF_UPSTREAM_URL:-https://huggingface.co}
       # CLIENT-reachable CAS URL. Not indexd:9982, not cas:8080 — whatever
       # the hf_xet process connects to from the host. Local dev:
-      # http://localhost:28080. Prod: https://cas.openweights.app.
+      # http://localhost:28080. Prod: https://cas.example.com.
       OPENWEIGHTS_CAS_PUBLIC_URL: ${OPENWEIGHTS_CAS_PUBLIC_URL:-http://localhost:8080}
     ports:
       - "127.0.0.1:28090:28090"

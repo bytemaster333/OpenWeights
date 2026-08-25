@@ -22,7 +22,7 @@ pub struct Config {
     #[serde(default = "default_url_ttl")]
     pub gateway_url_ttl_secs: u64, // default 7200 per
     /// Canonical URL base the minter stamps into signed URLs, e.g.
-    /// `https://cas.openweights.app` in production. Falls back to the local
+    /// `https://cas.example.com` in production. Falls back to the local
     /// loopback gateway port for tests + docker-local dev.
     #[serde(default = "default_gateway_base_url")]
     pub gateway_base_url: String,
@@ -58,7 +58,7 @@ pub struct Config {
     pub github_oauth_callback_url: String,
     /// Where to redirect the browser after a successful OAuth callback.
     /// Defaults to the Vite dev server origin for local dev; production
-    /// overrides to `https://openweights.app`.
+    /// overrides to `https://example.com`.
     #[serde(default = "default_console_base_url")]
     pub console_base_url: String,
     /// HTTP Basic auth password for indexd's admin endpoints. Same secret
@@ -90,7 +90,7 @@ pub struct Config {
     /// the value returned in `casUrl` of xet-write-token responses. Must
     /// be reachable from the *client* machine, not from inside the Compose
     /// network. Local dev: `http://localhost:28080`. Prod:
-    /// `https://cas.openweights.app`.
+    /// `https://cas.example.com`.
     #[serde(default = "default_cas_public_url")]
     pub cas_public_url: String,
 }
@@ -103,7 +103,7 @@ fn default_url_ttl() -> u64 {
 }
 fn default_gateway_base_url() -> String {
     // Loopback default — gateway binds here locally; production
-    // overrides via `GATEWAY_BASE_URL=https://cas.openweights.app` in `.env`.
+    // overrides via `GATEWAY_BASE_URL=https://cas.example.com` in `.env`.
     "http://127.0.0.1:9090".to_string()
 }
 fn default_pg_conn() -> u32 {
@@ -111,7 +111,7 @@ fn default_pg_conn() -> u32 {
 }
 fn default_github_callback_url() -> String {
     // Local-dev default; production overrides via
-    // `GITHUB_OAUTH_CALLBACK_URL=https://cas.openweights.app/auth/github/callback`
+    // `GITHUB_OAUTH_CALLBACK_URL=https://cas.example.com/auth/github/callback`
     // (or equivalent). Must match the GitHub OAuth App registration.
     "http://localhost:8080/auth/github/callback".to_string()
 }
@@ -120,7 +120,7 @@ fn default_admin_username() -> String {
 }
 fn default_console_base_url() -> String {
     // Vite dev server origin by default; production overrides via
-    // `CONSOLE_BASE_URL=https://openweights.app` in `.env`.
+    // `CONSOLE_BASE_URL=https://example.com` in `.env`.
     "http://localhost:5173".to_string()
 }
 fn default_cas_public_url() -> String {

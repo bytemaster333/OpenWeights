@@ -1,5 +1,5 @@
 //! HF-API-compat endpoints — migration 0008.
-//! Lets `hf upload` and `hf download` target `hf.openweights.app` directly,
+//! Lets `hf upload` and `hf download` target `hf.example.com` directly,
 //! no huggingface.co round-trip. The `hf_hub` Python client + the
 //! `hf_xet` Rust client call the endpoints in this module; we answer
 //! from our own `repos` / `repo_commits` / `repo_files` tables, mint

@@ -10,7 +10,7 @@
 #    CAS/gateway/console/Postgres/Redis are reachable only on the Compose
 #    network — Caddy proxies CAS + gateway + console; Postgres/Redis are internal.
 # 3. Derives every public URL from a SINGLE knob, OPENWEIGHTS_DOMAIN (e.g.
-#    openweights.app), so a different domain needs only that one .env value (plus
+#    example.com), so a different domain needs only that one .env value (plus
 #    DNS + OPENWEIGHTS_ACME_EMAIL). The console lives on the apex, the CAS +
 #    gateway on cas.<domain>.
 # 4. `restart: unless-stopped` on every service — reboot-resilient.
@@ -42,7 +42,7 @@ services:
     environment:
       # The one domain knob. Caddy serves <domain> (console) + cas.<domain>
       # (CAS + gateway) on one dual-SAN cert. Must have DNS pointing here.
-      OPENWEIGHTS_DOMAIN: ${OPENWEIGHTS_DOMAIN:?must be set in .env (e.g. openweights.app)}
+      OPENWEIGHTS_DOMAIN: ${OPENWEIGHTS_DOMAIN:?must be set in .env (e.g. example.com)}
       OPENWEIGHTS_ACME_EMAIL: ${OPENWEIGHTS_ACME_EMAIL:?must be set in .env for Let's Encrypt}
     restart: unless-stopped
 
@@ -54,11 +54,11 @@ services:
     environment:
       V2_RECONSTRUCTION_ENABLED: "true"
       # All public URLs derive from OPENWEIGHTS_DOMAIN so one knob configures prod.
-      CONSOLE_BASE_URL: https://${OPENWEIGHTS_DOMAIN:-openweights.app}
-      CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
-      OPENWEIGHTS_CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
-      GATEWAY_BASE_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/gateway
-      GITHUB_OAUTH_CALLBACK_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/auth/github/callback
+      CONSOLE_BASE_URL: https://${OPENWEIGHTS_DOMAIN:-example.com}
+      CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}
+      OPENWEIGHTS_CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}
+      GATEWAY_BASE_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}/gateway
+      GITHUB_OAUTH_CALLBACK_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}/auth/github/callback
     restart: unless-stopped
 
   # ─── openweights-gateway: internal-only; base URL must match the CAS ─────────
@@ -67,7 +67,7 @@ services:
     expose:
       - "8081"
     environment:
-      GATEWAY_BASE_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/gateway
+      GATEWAY_BASE_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}/gateway
     restart: unless-stopped
 
   # ─── openweights-console: internal-only; runtime config points at the domain ─
@@ -78,9 +78,9 @@ services:
     environment:
       # Baked into /config.js at container start so the browser talks to the
       # public CAS/gateway origins (not localhost).
-      OPENWEIGHTS_CONSOLE_CAS_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
-      OPENWEIGHTS_CONSOLE_GATEWAY_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}/gateway
-      OPENWEIGHTS_CONSOLE_HF_PROXY_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
+      OPENWEIGHTS_CONSOLE_CAS_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}
+      OPENWEIGHTS_CONSOLE_GATEWAY_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}/gateway
+      OPENWEIGHTS_CONSOLE_HF_PROXY_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}
     restart: unless-stopped
 
   # ─── hf-proxy: internal-only; rewrites X-Xet-Cas-Url to the public CAS ───────
@@ -89,7 +89,7 @@ services:
     expose:
       - "28090"
     environment:
-      OPENWEIGHTS_CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-openweights.app}
+      OPENWEIGHTS_CAS_PUBLIC_URL: https://cas.${OPENWEIGHTS_DOMAIN:-example.com}
     restart: unless-stopped
 
   # ─── Postgres: loopback-only in prod (Caddy has no reason to reach it) ─────

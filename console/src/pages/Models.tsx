@@ -76,7 +76,7 @@ export function ModelsPage() {
           <p className="mt-2 text-xs">
             Publish one with:{" "}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-              HF_ENDPOINT=https://hf.openweights.app hf upload &lt;owner&gt;/&lt;name&gt; ./files
+              HF_ENDPOINT=https://hf.example.com hf upload &lt;owner&gt;/&lt;name&gt; ./files
             </code>
           </p>
         </div>

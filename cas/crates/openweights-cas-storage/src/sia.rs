@@ -88,7 +88,7 @@ pub struct SiaAdapterConfig {
 /// `Hash256::new(hex_decoded_bytes)`.
 pub const DEFAULT_APP_META_NAME: &str = "OpenWeights CAS";
 pub const DEFAULT_APP_META_DESC: &str = "OpenWeights content-addressed storage service";
-pub const DEFAULT_APP_META_URL: &str = "https://openweights.app";
+pub const DEFAULT_APP_META_URL: &str = "https://example.com";
 
 /// Erasure-coding redundancy used on every upload. The SDK default is
 /// 10 data + 20 parity = 30 hosts per slab — production-grade but

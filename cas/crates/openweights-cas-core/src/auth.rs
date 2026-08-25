@@ -190,7 +190,7 @@ async fn authenticate_xet_jwt<const S: u8>(
     // * HF issued (`iss = https://huggingface.co`): `userId` is a
     // 24-hex HF object id, hashed into a synthetic i64. Upsert a
     // `users` row + a per-user synthetic api_key so FKs hold.
-    // * OpenWeights issued (`iss = https://hf.openweights.app`): `userId` is
+    // * OpenWeights issued (`iss = https://hf.example.com`): `userId` is
     // already a real `users.id` (we minted the token via the
     // HF-compat /xet-write-token endpoint on behalf of an
     // authenticated OpenWeights key). Use it directly; look up the

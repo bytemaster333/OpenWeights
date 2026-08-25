@@ -51,7 +51,7 @@ type config struct {
 	// Value to substitute into `X-Xet-Cas-Url` response headers.
 	// Must be the CAS URL reachable from the CLIENT side, not from inside
 	// the Compose network. Local dev: `http://localhost:28080`. Prod:
-	// `https://cas.openweights.app`.
+	// `https://cas.example.com`.
 	casPublicURL string
 }
 

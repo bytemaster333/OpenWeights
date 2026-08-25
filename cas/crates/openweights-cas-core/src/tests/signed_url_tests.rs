@@ -98,7 +98,7 @@ fn load_vectors() -> Vec<Vector> {
 }
 
 fn gateway_base() -> Url {
-    Url::parse("https://cas.openweights.app").expect("static base")
+    Url::parse("https://cas.example.com").expect("static base")
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ fn mint_v1_embeds_the_expected_signature() {
         };
 
         let url = Url::parse(&url_str).expect("mint output parses");
-        assert_eq!(url.host_str(), Some("cas.openweights.app"));
+        assert_eq!(url.host_str(), Some("cas.example.com"));
         assert_eq!(url.path(), format!("/xorb/{}", v.xorb_hash_hex));
 
         let sig = url
@@ -371,23 +371,23 @@ fn malformed_urls_are_rejected() {
     ));
     // Right shape, wrong path prefix.
     assert!(matches!(
-        signer.verify("https://cas.openweights.app/other/abc?sig=x&exp=1&kid=y", 0),
+        signer.verify("https://cas.example.com/other/abc?sig=x&exp=1&kid=y", 0),
         Err(VerifyErr::Malformed(_))
     ));
     // Missing `exp`.
-    let u = "https://cas.openweights.app/xorb/eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632?kid=01945edc-5f0a-71a3-9c82-3a0000000001&sig=abc";
+    let u = "https://cas.example.com/xorb/eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632?kid=01945edc-5f0a-71a3-9c82-3a0000000001&sig=abc";
     assert!(matches!(
         signer.verify(u, 0),
         Err(VerifyErr::Malformed(_))
     ));
     // Uppercase hex — canonical output is lowercase, so verify rejects this.
-    let u = "https://cas.openweights.app/xorb/EEA25D6EE393CCAE385820DAED127B96EF0EA034DFB7CF6DA3A950CE334B7632?exp=2&kid=01945edc-5f0a-71a3-9c82-3a0000000001&sig=abc";
+    let u = "https://cas.example.com/xorb/EEA25D6EE393CCAE385820DAED127B96EF0EA034DFB7CF6DA3A950CE334B7632?exp=2&kid=01945edc-5f0a-71a3-9c82-3a0000000001&sig=abc";
     assert!(matches!(
         signer.verify(u, 0),
         Err(VerifyErr::Malformed(_))
     ));
     // Bad range shape.
-    let u = "https://cas.openweights.app/xorb/eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632?exp=2&kid=01945edc-5f0a-71a3-9c82-3a0000000001&sig=abc&r=notarange";
+    let u = "https://cas.example.com/xorb/eea25d6ee393ccae385820daed127b96ef0ea034dfb7cf6da3a950ce334b7632?exp=2&kid=01945edc-5f0a-71a3-9c82-3a0000000001&sig=abc&r=notarange";
     assert!(matches!(
         signer.verify(u, 0),
         Err(VerifyErr::Malformed(_))
@@ -585,7 +585,7 @@ fn verify_rejects_malformed_multi_range() {
     let kid = "01945edc-5f0a-71a3-9c82-3a0000000001";
     for bad in ["1-2,", "1-2,3", ",1-2", "1-2,5-4"] {
         let u = format!(
-            "https://cas.openweights.app/xorb/{hex}?exp=2&kid={kid}&sig=abc&r={bad}"
+            "https://cas.example.com/xorb/{hex}?exp=2&kid={kid}&sig=abc&r={bad}"
         );
         assert!(
             matches!(signer.verify(&u, 0), Err(VerifyErr::Malformed(_))),
@@ -613,7 +613,7 @@ fn url_minter_trait_delegates_mint_v1_multi_range() {
     .unwrap();
     let kid = Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").unwrap();
     let url = minter.mint_v1_multi_range(&xorb, &[(0, 1023), (2048, 4095)], kid, 1_700_000_000);
-    assert!(url.starts_with("https://cas.openweights.app/xorb/"));
+    assert!(url.starts_with("https://cas.example.com/xorb/"));
     assert!(url.contains("r=0-1023%2C2048-4095") || url.contains("r=0-1023,2048-4095"));
 }
 
@@ -638,5 +638,5 @@ fn url_minter_trait_delegates() {
         Uuid::parse_str("01945edc-5f0a-71a3-9c82-3a0000000001").unwrap(),
         1_700_000_000,
     );
-    assert!(url.starts_with("https://cas.openweights.app/xorb/"));
+    assert!(url.starts_with("https://cas.example.com/xorb/"));
 }

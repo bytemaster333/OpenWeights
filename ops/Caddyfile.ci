@@ -14,8 +14,8 @@
 #     exercises the exact multi-range path production HTTPS/2 will carry.
 #
 # WHY NOT THE PROD Caddyfile:
-#   * Prod (05-04) = dual-SAN automatic Let's Encrypt TLS for `openweights.app` +
-#     `cas.openweights.app`. Neither domain is resolvable from the CI runner; ACME
+#   * Prod (05-04) = dual-SAN automatic Let's Encrypt TLS for `example.com` +
+#     `cas.example.com`. Neither domain is resolvable from the CI runner; ACME
 #     issuance would fail instantly and leak the staging email.
 #   * CI round-trip needs a single loopback port (`:8090`) with the same
 #     handler topology. Path-prefix-routing preserves the proxy code path

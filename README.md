@@ -95,5 +95,5 @@ fresh-cache download → sha compare) lives at
   background reconciler finishes the pin. a download before the pin lands
   returns 404 at reconstruction, so retry (the harness does).
 - **api** is on `http://localhost:8080`, **console** on `http://localhost:5173`,
-  docs at [docs.openweights.app](https://docs.openweights.app).
+  docs at [docs](https://bytemaster333.github.io/OpenWeights).
 - everything is driven through the root `Makefile` (`make help` lists targets).

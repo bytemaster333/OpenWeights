@@ -51,7 +51,7 @@ export function LandingPage() {
           <CardContent className="space-y-2 text-xs text-muted-foreground">
             <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
               {`HF_TOKEN=<your-key> \\
-HF_ENDPOINT=https://openweights.app \\
+HF_ENDPOINT=https://example.com \\
 hf upload <user>/<repo> ./model.safetensors`}
             </pre>
           </CardContent>
@@ -64,7 +64,7 @@ hf upload <user>/<repo> ./model.safetensors`}
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
             <pre className="overflow-x-auto rounded bg-muted p-3 text-[0.7rem] leading-relaxed text-foreground">
-              {`HF_ENDPOINT=https://openweights.app \\
+              {`HF_ENDPOINT=https://example.com \\
 hf download <user>/<repo>`}
             </pre>
           </CardContent>
@@ -77,7 +77,7 @@ hf download <user>/<repo>`}
             <Link to="/login">sign in</Link>
           </Button>
           <Button asChild variant="outline">
-            <a href="https://docs.openweights.app" target="_blank" rel="noreferrer">
+            <a href="https://bytemaster333.github.io/OpenWeights" target="_blank" rel="noreferrer">
               docs
               <ArrowRight data-icon="inline-end" weight="regular" />
             </a>

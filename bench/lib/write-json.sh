@@ -200,8 +200,8 @@ Environment variables the harness respects:
 
 | Var | Purpose |
 |-----|---------|
-| \`OPENWEIGHTS_CAS_URL\` | Full URL to your CAS (e.g. \`https://cas.openweights.app\`). Required for the OpenWeights cells. |
-| \`OPENWEIGHTS_API_KEY\` | Bearer token minted via \`openweights.app/admin/keys\` (write scope). Required for upload cell. |
+| \`OPENWEIGHTS_CAS_URL\` | Full URL to your CAS (e.g. \`https://cas.example.com\`). Required for the OpenWeights cells. |
+| \`OPENWEIGHTS_API_KEY\` | Bearer token minted via \`example.com/admin/keys\` (write scope). Required for upload cell. |
 | \`STACK\` | \`openweights\` \| \`hf-native\` \| \`both\` (default: \`both\`). |
 | \`BENCH_TRIALS\` | Override \`BENCH_TRIALS\` from \`bench/bench.config.sh\` (default: 3 per D-59). |
 

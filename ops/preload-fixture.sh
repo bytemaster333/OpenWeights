@@ -10,18 +10,18 @@
 # 2 pre-condition missing (env vars / CLI / bench config)
 # Pre-conditions:
 # - `make deploy` completed; stack healthy; Caddy has Let's Encrypt cert.
-# - A write-scoped API key minted via the /keys page of https://openweights.app.
+# - A write-scoped API key minted via the /keys page of https://example.com.
 # - `hf` (>= 0.27) or `huggingface-cli` on PATH.
 # - bench/bench.config.sh source-of-truth checked in.
 # Invocation:
-# OPENWEIGHTS_CAS_URL=https://cas.openweights.app \
+# OPENWEIGHTS_CAS_URL=https://cas.example.com \
 # OPENWEIGHTS_WRITE_KEY=hf_sia_... \
 # bash ops/preload-fixture.sh
 
 set -euo pipefail
 
 # ─── Pre-conditions ────────────────────────────────────────────────────────────
-: "${OPENWEIGHTS_CAS_URL:?must be set, e.g. https://cas.openweights.app}"
+: "${OPENWEIGHTS_CAS_URL:?must be set, e.g. https://cas.example.com}"
 : "${OPENWEIGHTS_WRITE_KEY:?write-scoped API key minted via the console}"
 
 if [[ ! -f bench/bench.config.sh ]]; then

@@ -1,7 +1,7 @@
 export const appName = "OpenWeights";
 export const appDescription =
   "A Hugging Face-compatible model hub that stores bytes on the Sia network.";
-export const siteUrl = "https://docs.openweights.app";
+export const siteUrl = "https://bytemaster333.github.io/OpenWeights";
 
 export const docsRoute = "/docs";
 export const docsImageRoute = "/og/docs";

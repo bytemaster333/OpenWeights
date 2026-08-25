@@ -2,7 +2,7 @@
 # ops/smoke.sh — Fresh-machine objective smoke for the hosted demo.
 #. Replaces the cut outside-tester <15-min criterion.
 # Run immediately post-deploy + whenever the owner wants reassurance:
-# bash ops/smoke.sh # default domain: openweights.app
+# bash ops/smoke.sh # default domain: example.com
 # bash ops/smoke.sh example.com # custom domain
 # Exit semantics:
 # 0 all checks passed
@@ -16,7 +16,7 @@
 set -uo pipefail
 
 # ─── Arguments ─────────────────────────────────────────────────────────────────
-DOMAIN="${1:-openweights.app}"
+DOMAIN="${1:-example.com}"
 CAS="https://cas.${DOMAIN}"
 CONSOLE="https://${DOMAIN}"
 

@@ -69,7 +69,7 @@ export function Header() {
             Status
           </Link>
           <a
-            href="https://docs.openweights.app"
+            href="https://bytemaster333.github.io/OpenWeights"
             target="_blank"
             rel="noreferrer"
             className="hover:text-foreground"
