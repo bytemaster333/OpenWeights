@@ -178,9 +178,12 @@ async fn authenticate_xet_jwt<const S: u8>(
     };
 
     let granted = claims.scopes();
-    let required = ApiKeyScope::from_u8(S).ok_or(AppError::Forbidden)?;
-    if !granted.contains(&required) {
-        return Err(AppError::Forbidden);
+    // SCOPE_ANY skips the check (identity probes accept any authenticated key).
+    if S != crate::scopes::SCOPE_ANY {
+        let required = ApiKeyScope::from_u8(S).ok_or(AppError::Forbidden)?;
+        if !granted.contains(&required) {
+            return Err(AppError::Forbidden);
+        }
     }
 
     // Two issuance sources, two user-resolution paths:
@@ -363,10 +366,13 @@ where
             };
 
             // (5) Scope check — 401 has already been decided above; any
-            // scope mismatch now is legitimately 403.
-            let required = ApiKeyScope::from_u8(S).ok_or(AppError::Forbidden)?;
-            if !key.scopes.contains(&required) {
-                return Err(AppError::Forbidden); // 403
+            // scope mismatch now is legitimately 403. SCOPE_ANY skips the
+            // check (identity probes accept any authenticated key).
+            if S != crate::scopes::SCOPE_ANY {
+                let required = ApiKeyScope::from_u8(S).ok_or(AppError::Forbidden)?;
+                if !key.scopes.contains(&required) {
+                    return Err(AppError::Forbidden); // 403
+                }
             }
 
             // (6) Fire-and-forget last_used_at update. Does NOT block the

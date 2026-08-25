@@ -226,9 +226,9 @@ conformance-clippy:
 conformance: conformance-fixtures
 	cd conformance && cargo test --release
 
-# — mirror what the GH Actions `conformance` workflow runs. Brings
-# up the Compose stack with the CI overlay (V2_RECONSTRUCTION_ENABLED=true),
-# waits for every service to report healthy, pre-tags `openweights-cas:conformance`
+# — run the conformance crate against a live Compose stack with the CI overlay
+# (V2_RECONSTRUCTION_ENABLED=true), waiting for every service to report healthy,
+# pre-tagging `openweights-cas:conformance`
 # for the testcontainers harness, runs the conformance crate, then writes
 # console/public/conformance-badge.json via the same script CI uses. Tear
 # the stack down with `make down` when you're finished.
@@ -272,9 +272,8 @@ benchmark-dry-run:
 
 # -----------------------------------------------------------------------------
 # : HF byte-identical round-trip integration test (Gate #2).
-#. Mirrors.github/workflows/hf-roundtrip.yml locally so an
-# operator can validate the Caddy-fronted stack end-to-end before pushing
-# to main. Expects.env present (run `make bootstrap` first) AND a fresh
+# Validates the Caddy-fronted stack end-to-end. Expects .env present
+# (run `make bootstrap` first) AND a fresh
 # Postgres with `openweights` schema — the helper mints a test API key via
 # direct psql INSERT (scripts/issue-test-key.sh).
 #

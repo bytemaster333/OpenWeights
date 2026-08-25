@@ -124,9 +124,10 @@ fn default_console_base_url() -> String {
     "http://localhost:5173".to_string()
 }
 fn default_cas_public_url() -> String {
-    // Matches the host-visible CAS port in docker-compose.override.yml
-    // (127.0.0.1:28080 -> openweights-cas:8080).
-    "http://localhost:28080".to_string()
+    // Matches the base compose host-visible CAS port (127.0.0.1:8080). Compose
+    // always sets CAS_PUBLIC_URL explicitly; this default only applies to a bare
+    // `cargo run`. The dev override remaps to 28080 and sets it via .env.
+    "http://localhost:8080".to_string()
 }
 
 impl Config {

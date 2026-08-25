@@ -40,7 +40,7 @@ use openweights_cas_storage::SiaAdapter;
 
 use crate::auth::{AuthContext, AuthScoped, AuthStateRef};
 use crate::errors::AppError;
-use crate::scopes::{SCOPE_DOWNLOAD, SCOPE_UPLOAD};
+use crate::scopes::{SCOPE_ANY, SCOPE_DOWNLOAD, SCOPE_UPLOAD};
 use crate::xet_jwt::{OpenWeightsAccess, mint_openweights_token};
 
 // sqlx row shapes, factored out to keep signatures readable (clippy::type_complexity).
@@ -131,7 +131,9 @@ pub async fn validate_yaml(Json(_req): Json<ValidateYamlReq>) -> Json<Value> {
 
 pub async fn whoami_v2<S: HfApiState>(
     State(st): State<S>,
-    AuthScoped(ctx): AuthScoped<{ SCOPE_DOWNLOAD }>,
+    // Identity probe — the hf CLI calls it before BOTH uploads and downloads,
+    // so accept any authenticated key rather than gating on one scope.
+    AuthScoped(ctx): AuthScoped<{ SCOPE_ANY }>,
 ) -> Result<Json<WhoAmI>, AppError> {
     let row: (String, Option<String>) = sqlx::query_as(
         "SELECT github_login, email FROM users WHERE id = $1",
