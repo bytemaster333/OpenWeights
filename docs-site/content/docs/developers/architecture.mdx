@@ -1,0 +1,122 @@
+---
+title: Architecture
+description: The services, what each owns, and how a request moves between them.
+---
+
+OpenWeights is four HTTP services over Postgres, Redis, and a Sia indexer. Two
+of them carry file bytes; the other two are the console and an optional proxy.
+
+## The shape of it
+
+<Mermaid chart={`
+flowchart LR
+  CLI["hf CLI + hf_xet"]
+  PROXY["openweights-hf-proxy<br/>(optional)"]
+  HF["huggingface.co"]
+  CAS["openweights-cas<br/>Rust + Axum"]
+  GW["openweights-gateway<br/>Go"]
+  CONSOLE["openweights-console<br/>React"]
+  PG[("Postgres")]
+  REDIS[("Redis")]
+  IDX["Sia indexer"]
+
+  CLI -->|"HF_ENDPOINT"| CAS
+  CLI -.->|"HF_ENDPOINT<br/>(mirror path)"| PROXY
+  PROXY --> HF
+  PROXY -.->|"rewrites<br/>X-Xet-Cas-Url"| CAS
+  CLI -->|"signed URL<br/>byte ranges"| GW
+  CONSOLE -->|"/admin/*, /auth/*"| CAS
+  CAS --> PG
+  CAS --> REDIS
+  CAS -->|"upload + pin<br/>(writes)"| IDX
+  GW --> PG
+  GW -->|"whole-xorb read<br/>(cache miss)"| IDX
+`} />
+
+## What each service owns
+
+### openweights-cas
+
+Rust, Axum, listening on `8080`. The control plane and **the only service that
+writes to Sia**.
+
+It serves the Hugging Face Hub API subset the `hf` CLI calls, the Xet protocol
+endpoints `hf_xet` calls, the console's `/admin/*` and `/auth/*` routes, and
+`/health` and `/metrics`. It holds the Sia App Key, validates every credential,
+erasure-codes and uploads xorbs, pins them, and mints the HMAC-signed URLs the
+gateway will honour.
+
+At boot it connects to Postgres, applies its embedded migrations, connects to
+Redis, performs the Sia handshake, constructs the URL signer, spawns the pin
+reconciler, and only then reports healthy. A configuration error exits `2`; any
+other boot failure exits `1`.
+
+### openweights-gateway
+
+Go, chi, listening on `8081` and published on host port `9090`. The data plane,
+and **read-only**.
+
+Its entire router is `GET /health` and `GET /xorb/{hash}`. It verifies the
+CAS-minted signature on every request, serves byte ranges from a whole-xorb disk
+LRU cache. On a cache miss it fetches the whole xorb from Sia, verifies its
+hash, and caches it, then serves the requested range from that local file.
+
+It has no write authority and no App Key write path. Postgres is reached through
+a dedicated `openweights_gw` role that can only `SELECT` on `xorbs` and `INSERT`
+into `usage_log`.
+
+Prometheus metrics live on a separate loopback listener, `127.0.0.1:9100` by
+default, so a reverse proxy has no route onto them.
+
+### openweights-console
+
+Vite, React 19, TanStack Router and Query, served as static files by nginx on
+port `80`, published on host port `5173`. It calls the CAS API from the browser
+with credentialed fetches, so the CAS allows exactly one cross-origin origin,
+the value of `CONSOLE_BASE_URL`.
+
+Its deployment URLs are read at runtime from a `/config.js` the container writes
+at start, falling back to build-time `VITE_*` values and then to localhost
+defaults. One published image therefore serves any deployment.
+
+### openweights-hf-proxy
+
+Go, listening on `28090`. Optional. A transparent reverse proxy in front of
+huggingface.co that rewrites exactly one response header. See
+[hf-proxy](/docs/developers/hf-proxy).
+
+## Supporting services
+
+| Service | Role |
+| --- | --- |
+| Postgres 17 | Catalog, Xet metadata, sessions, API keys, usage log |
+| Redis 7.4 | Token-bucket rate limits and request coalescing |
+| Sia indexer | The path to Sia storage contracts and hosts. Not bundled: you supply the URL |
+
+## Why the CAS and the gateway are separate
+
+This split is the system's primary protection.
+
+The CAS holds the App Key and is the only component that can write to Sia. The
+gateway holds no write credential and serves bytes only for URLs the CAS has
+signed with a shared HMAC key. Compromising the gateway yields the ability to
+serve bytes that were already going to be served, and nothing else.
+
+It is also why the signed-URL format has to match byte for byte across a Rust
+minter and a Go verifier. Cross-language test vectors in
+`conformance/fixtures/signed_url_vectors.json` pin that contract, and both
+implementations assert against them.
+
+## Two ways bytes reach OpenWeights
+
+**Standalone.** `HF_ENDPOINT` points at the CAS. OpenWeights is the hub: it owns
+the repository, the commit, and the bytes. huggingface.co is not involved.
+
+**Through the proxy.** `HF_ENDPOINT` points at `openweights-hf-proxy`.
+huggingface.co owns the repository and the commit; only file bytes are diverted
+to OpenWeights, by rewriting the `X-Xet-Cas-Url` response header.
+
+## Next
+
+Follow a request end to end: the [write path](/docs/developers/write-path) and
+the [read path](/docs/developers/read-path).

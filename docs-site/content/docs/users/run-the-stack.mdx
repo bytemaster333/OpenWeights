@@ -1,0 +1,160 @@
+---
+title: Run the stack
+description: Generate a .env, register the app with your indexer, and bring the services up.
+---
+
+Every operator task runs through the root `Makefile`, which wraps
+`docker compose -f ops/docker-compose.yml --env-file .env`. Run `make help` to
+list the targets.
+
+## 1. Generate `.env`
+
+```bash
+make setup
+```
+
+This builds `bench/bootstrap` and runs it with `-env-only`. On a terminal it
+asks you three questions, in this order:
+
+| Prompt | Press Enter to |
+| --- | --- |
+| Sia recovery phrase | Generate a fresh BIP-39 phrase |
+| Indexer URL | Use `https://sia.storage` |
+| Console admin password | Generate a 24-character password and print it once |
+
+It then generates any that are still empty:
+
+- The four infrastructure passwords — `POSTGRES_SUPERUSER_PASSWORD`,
+  `OPENWEIGHTS_POSTGRES_PASSWORD`, `OPENWEIGHTS_GW_POSTGRES_PASSWORD`,
+  `REDIS_PASSWORD` — each 32 random bytes hex-encoded.
+- The two signing keys — `GATEWAY_URL_SIGNING_KEY` and `XET_JWT_SIGNING_KEY` —
+  each 32 random bytes base64-encoded.
+
+It sets `OPENWEIGHTS_APP_ID` to the built-in application ID and the local
+`CAS_PUBLIC_URL` / `OPENWEIGHTS_CAS_PUBLIC_URL` defaults, then writes `.env`
+atomically with permissions `0600`.
+
+<Callout type="warn">
+Losing `OPENWEIGHTS_RECOVERY_PHRASE` permanently orphans every byte you have
+stored. It is the only input to your Sia App Key, it lives only in `.env`, and
+it is never written to the database or the logs. Back up `.env` before you
+upload anything.
+</Callout>
+
+Running without a terminal (CI, a script) requires `OPENWEIGHTS_RECOVERY_PHRASE`
+to already be set in `.env`; otherwise the wizard exits with status `2`.
+
+`make setup` rewrites `.env` from the key-value pairs it parsed, sorted, under a
+three-line header. Comments you added by hand are not preserved.
+
+## 2. What the wizard already set
+
+For a local deploy, `make setup` produces a complete `.env` — the phrase, the
+indexer, the admin password, the four infrastructure passwords, both signing
+keys (`GATEWAY_URL_SIGNING_KEY`, `XET_JWT_SIGNING_KEY`), the App ID, and the
+local `CAS_PUBLIC_URL` / `OPENWEIGHTS_CAS_PUBLIC_URL` (`http://localhost:8080`).
+The only thing still missing is `OPENWEIGHTS_APP_KEY`, which the next step writes.
+
+A couple of these are load-bearing to know about:
+
+- `GATEWAY_URL_SIGNING_KEY` — HMAC key the CAS signs gateway URLs with and the
+  gateway verifies. The gateway exits at boot if it is empty.
+- `XET_JWT_SIGNING_KEY` — HS256 secret for the Xet tokens the CAS mints. While
+  empty, the `xet-write-token` / `xet-read-token` endpoints return `500` and
+  every `hf upload` / `hf download` fails.
+- `CAS_PUBLIC_URL` / `OPENWEIGHTS_CAS_PUBLIC_URL` — the CAS URL as the **client
+  machine** reaches it (returned as `casUrl`, and what `openweights-hf-proxy`
+  substitutes into `X-Xet-Cas-Url`). For a remote server or a domain, override
+  these to the public URL.
+
+For a full list of every variable and its default, see the
+[configuration reference](/docs/developers/configuration).
+
+## 3. Register the app with your indexer
+
+The CAS reads `OPENWEIGHTS_APP_KEY` as base64 of 32 bytes. Produce it with the
+`openweights-cas-register` CLI, which runs the Sia Rust SDK connection
+handshake:
+
+```bash
+set -a && . ./.env && set +a
+cd cas && cargo run --bin openweights-cas-register
+```
+
+It prints an approval URL. Open it in a browser and approve the connection. The
+CLI then prints one line:
+
+```
+OPENWEIGHTS_APP_KEY=<base64>
+```
+
+Put that line in `.env`.
+
+<Callout>
+This manual `openweights-cas-register` run is the same step `make bootstrap`
+performs for you (it calls this CLI, then brings the stack up). Do it by hand
+only when you want to run the registration and stack bring-up separately.
+</Callout>
+
+## 4. Bring the services up
+
+```bash
+make up
+```
+
+That runs `docker compose up -d` and starts Postgres, Redis, `openweights-cas`,
+`openweights-gateway`, `openweights-console`, and `openweights-hf-proxy`.
+
+The CAS applies its database migrations at boot, connects to the indexer, and
+only then reports healthy on `/health`.
+
+## Ports
+
+The Compose file binds every port to loopback:
+
+| Service | URL |
+| --- | --- |
+| `openweights-cas` | `http://localhost:8080` |
+| `openweights-gateway` | `http://localhost:9090` |
+| `openweights-console` | `http://localhost:5173` |
+| `openweights-hf-proxy` | `http://localhost:28090` |
+| Postgres | `localhost:5432` |
+| Redis | `localhost:6379` |
+
+An `ops/docker-compose.override.yml` that you create locally is merged
+automatically by Compose and can remap any of these; the repository does not
+ship one.
+
+## Running from prebuilt images
+
+Each service image is published to GHCR when a `v*` tag is pushed:
+
+- `ghcr.io/bytemaster333/openweights-cas`
+- `ghcr.io/bytemaster333/openweights-gateway`
+- `ghcr.io/bytemaster333/openweights-console`
+- `ghcr.io/bytemaster333/openweights-hf-proxy`
+
+Set `OPENWEIGHTS_VERSION` to the tag you want (it defaults to `latest`) and pull
+instead of building:
+
+```bash
+docker compose -f ops/docker-compose.yml --env-file .env pull
+make up
+```
+
+The console image reads its URLs at container start from
+`OPENWEIGHTS_CONSOLE_CAS_URL`, `OPENWEIGHTS_CONSOLE_GATEWAY_URL`, and
+`OPENWEIGHTS_CONSOLE_HF_PROXY_URL`, so one published image serves any
+deployment.
+
+## Stopping
+
+```bash
+make down    # stop the containers, keep the volumes
+make clean   # stop and DELETE the Postgres data and gateway cache volumes
+```
+
+## Next
+
+[Sign in to the console](/docs/users/sign-in) and
+[mint an API key](/docs/users/api-keys).

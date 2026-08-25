@@ -1,0 +1,98 @@
+---
+title: hf-proxy
+description: The one-header rewrite that routes huggingface.co uploads to OpenWeights.
+---
+
+`openweights-hf-proxy` is a transparent reverse proxy in front of the Hugging
+Face Hub API. It exists so a client can keep using huggingface.co for
+repositories and metadata while the file bytes land on Sia.
+
+It is a single Go file, `hf-proxy/main.go`, listening on `:28090`.
+
+## The problem it solves
+
+`hf_xet` learns where to send file bytes from the `X-Xet-Cas-Url` **response
+header** returned by the Hub API. The client-side
+`HF_XET_DATA_DEFAULT_CAS_ENDPOINT` variable is only a fallback for when that
+header is absent, and on a Hugging Face-integrated upload it is always present.
+
+Setting that environment variable therefore does not redirect bytes on its own.
+Interposing a proxy that rewrites the header does.
+
+## What it does
+
+Every request is forwarded to `HF_UPSTREAM_URL` unchanged. The response body is
+streamed through untouched. Before the body is streamed, one header is examined:
+
+```go
+orig := resp.Header.Get("X-Xet-Cas-Url")
+if orig == "" {
+    return nil
+}
+resp.Header.Set("X-Xet-Cas-Url", c.casPublicURL)
+```
+
+If Hugging Face sent an `X-Xet-Cas-Url`, its value is replaced with
+`OPENWEIGHTS_CAS_PUBLIC_URL`, with any trailing slash stripped. If it did not,
+nothing changes.
+
+On the request side it calls `SetURL` to retarget the upstream and resets the
+outbound `Host` header so upstream TLS SNI and virtual hosting resolve to
+huggingface.co.
+
+## What it leaves alone
+
+- **Response bodies.** Headers only. Rewriting bodies risks corrupting Hub API
+  responses, and the proxy sees them compressed anyway.
+- **Every other header**, including `X-Xet-Access-Token`, `X-Xet-Token-Expiration`,
+  and `X-Xet-Refresh-Route`. `hf_xet` uses these against the rewritten URL,
+  which is fine because the CAS authenticates on `Authorization` instead.
+- **Authentication.** The proxy is stateless and never sees an OpenWeights API
+  key. The client attaches it directly through
+  `HF_XET_DATA_CUSTOM_HEADERS='{"Authorization":"Bearer <key>"}'`, which
+  `hf_xet` adds to every CAS request.
+- **TLS.** Caddy terminates TLS in front of it in production.
+
+## Routes
+
+| Method | Path | Behaviour |
+| --- | --- | --- |
+| `GET` | `/health` | `200` with `{"status":"ok"}` |
+| any | `/*` | Proxied to `HF_UPSTREAM_URL` |
+
+The health probe deliberately does not check upstream. The proxy being alive and
+huggingface.co being reachable are different facts, so an upstream outage
+surfaces as a `502` on a real request rather than as a failed container health
+check.
+
+## Configuration
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `OPENWEIGHTS_CAS_PUBLIC_URL` | required | The CAS URL as the **client** reaches it. Startup exits `2` if unset or unparseable |
+| `HF_UPSTREAM_URL` | `https://huggingface.co` | Must be absolute, with scheme and host |
+| `LISTEN_ADDR` | `:28090` | Listen address |
+
+`OPENWEIGHTS_CAS_PUBLIC_URL` must be reachable from the machine running `hf`,
+not from inside the Compose network. It is `http://localhost:8080` for a local
+stack. The Compose file marks it required, so the stack will not start without
+it.
+
+## Errors and lifecycle
+
+An unreachable upstream returns `502` with `{"error":"upstream_unreachable"}`.
+
+Transport timeouts are 10 seconds for the TLS handshake, 30 seconds for response
+headers, and 90 seconds for idle connections, with 50 idle connections overall
+and 10 per host. `ReadHeaderTimeout` on the server is 10 seconds.
+
+There is no read or write timeout on the server, because large uploads take as
+long as they take; the per-request deadlines live on the upstream transport.
+
+`SIGINT` and `SIGTERM` drain for up to 10 seconds. Logs are JSON on stdout, and
+every rewrite is logged with the path, the original value, and the replacement.
+
+## Using it
+
+See [Mirror through Hugging Face](/docs/users/mirror-through-hugging-face) for
+the client-side commands.

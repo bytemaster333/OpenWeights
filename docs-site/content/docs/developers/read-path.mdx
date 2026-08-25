@@ -1,0 +1,163 @@
+---
+title: Read path
+description: From hf download through reconstruction and signed URLs back to bytes.
+---
+
+## The request sequence
+
+<Mermaid chart={`
+sequenceDiagram
+    participant C as hf + hf_xet
+    participant CAS as openweights-cas
+    participant GW as openweights-gateway
+    participant SIA as Sia indexer
+
+    C->>CAS: GET /api/models/{o}/{r}
+    C->>CAS: GET /{o}/{r}/resolve/{rev}/{path}
+    CAS-->>C: 302 + X-Xet-Hash + X-Xet-Refresh-Route
+    C->>CAS: GET .../xet-read-token/{rev}
+    CAS-->>C: casUrl + Xet JWT
+    C->>CAS: GET /v2/reconstructions/{file_id}
+    CAS-->>C: terms[] + signed gateway URLs
+    loop each xorb
+        C->>GW: GET /xorb/{hash}?exp&kid&sig&r  (Range:)
+        GW->>GW: verify signature + range grant
+        alt cache hit
+            GW-->>C: 206 from disk
+        else cache miss
+            GW->>SIA: whole-xorb download
+            GW->>GW: hash-verify, cache
+            GW-->>C: 206
+        end
+    end
+`} />
+
+## Step by step
+
+### 1. Metadata
+
+`GET /api/models/{owner}/{repo}` returns the file list, sizes, hashes, and
+commit. Public and unlisted repositories answer without a credential; a private
+one needs a bearer token identifying its owner.
+
+### 2. Resolve
+
+`GET /{owner}/{repo}/resolve/{revision}/{path}` answers `302` with `Location`
+pointing at `/xet/files/{hash}` or `/lfs/objects/{oid}`, plus `x-linked-size`
+and `x-linked-etag`.
+
+When `OPENWEIGHTS_GATEWAY_READS` is `true` and the file is a Xet file, it also
+sets `X-Xet-Hash` and `X-Xet-Refresh-Route`. Those two headers are what make
+`hf_xet` take the reconstruction path instead of following the redirect. The
+redirect stays as the path for clients that do not read them.
+
+`hf_hub` resolves the head commit first and then requests files under
+`/resolve/<40-hex sha>/<path>`, so the CAS accepts both `main` and a commit
+SHA.
+
+### 3. Read token
+
+`X-Xet-Refresh-Route` points at
+`GET /api/models/{owner}/{repo}/xet-read-token/{revision}`, which returns
+`{casUrl, accessToken, exp}`. It requires the `read` scope.
+
+### 4. Reconstruction
+
+`hf_xet` asks the CAS how to rebuild the file. There are two shapes.
+
+**V1**, `GET /v1/reconstructions/{file_id}`:
+
+```json
+{
+  "offset_into_first_range": 0,
+  "terms": [
+    { "hash": "<xorb hash hex>", "unpacked_length": 65536, "range": { "start": 0, "end": 4 } }
+  ],
+  "fetch_info": {
+    "<xorb hash hex>": [
+      { "range": { "start": 0, "end": 4 },
+        "url": "<signed gateway URL>",
+        "url_range": { "start": 0, "end": 32767 } }
+    ]
+  }
+}
+```
+
+**V2**, `GET /v2/reconstructions/{file_id}`, differs only in the fetch map. It
+is keyed `xorbs`, holds one entry per xorb rather than per merged range, and
+each entry carries a single multi-range URL:
+
+```json
+{
+  "offset_into_first_range": 0,
+  "terms": [ ... ],
+  "xorbs": {
+    "<xorb hash hex>": [
+      { "url": "<signed multi-range gateway URL>",
+        "ranges": [ { "chunks": { "start": 0, "end": 4 },
+                      "bytes":  { "start": 0, "end": 32767 } } ] }
+    ]
+  }
+}
+```
+
+<Callout type="warn">
+Two range conventions coexist and mixing them corrupts downloads. `range` and
+`chunks` are **chunk indices, end-exclusive**. `url_range` and `bytes` are
+**byte offsets, end-inclusive**, matching HTTP `Range` semantics. `xet-core`
+walks the fetch map by matching `fetch.range.start == term.range.end`, which
+only works while the chunk ranges stay end-exclusive.
+</Callout>
+
+Map keys are emitted in sorted order so responses are deterministic.
+
+A batch form exists at `GET /v1/reconstructions` and `GET /reconstructions`,
+returning a map of file id to response, with missing ids omitted.
+
+Concurrent requests for the same file collapse onto one computation through
+Redis-backed coalescing.
+
+A range starting at or past the end of the file returns `416`, which `xet-core`
+treats as end-of-data and stops fetching.
+
+### 5. Byte fetch
+
+`hf_xet` requests the byte ranges from the gateway. The gateway verifies the
+signature, checks the requested `Range` sits inside the granted segments, and
+serves `206`, as `multipart/byteranges` when more than one range is requested.
+
+On a cache miss it fetches the whole xorb from Sia, hash-verifies it before
+writing it to the disk cache, and serves the requested range from that file.
+Concurrent misses for the same xorb collapse onto one Sia download.
+
+See [Gateway](/docs/developers/gateway) for the full contract.
+
+### 6. Reassembly
+
+`hf_xet` decompresses the chunks in term order and verifies the file against its
+content hash.
+
+## Signed-URL expiry
+
+URLs carry an expiry, `GATEWAY_URL_TTL_SECS`, default 7200. An expired URL
+returns `403`, and `xet-core` responds by asking the CAS for a fresh
+reconstruction. `403` specifically: `401` or `410` would not trigger the refresh
+path.
+
+## Reading without the gateway
+
+`OPENWEIGHTS_GATEWAY_READS` selects the path. Set to `true`, the Compose
+default, the CAS advertises reconstruction and the gateway serves bytes. Set to
+anything else, resolve omits the Xet headers, clients follow the `302`, and
+`GET /xet/files/{hash}` has the CAS reconstruct and serve the bytes itself.
+
+That handler joins the reconstruction terms in order, loads each xorb, slices
+the term's byte window, walks the chunk headers in that slice, and decompresses
+to the response.
+
+## A download can 404
+
+Reconstruction resolves against xorbs that are `pinned`. Before the pin lands it
+returns `404`. On a fresh indexer the first pin forms on-chain contracts and
+takes minutes. See
+[Choose an indexer](/docs/users/choose-an-indexer#the-first-pin-takes-time).

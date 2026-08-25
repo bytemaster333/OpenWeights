@@ -1,0 +1,26 @@
+{
+  "title": "Using OpenWeights",
+  "description": "Run the stack, and upload and download models with the hf CLI.",
+  "root": true,
+  "pages": [
+    "index",
+    "---Get started---",
+    "self-host",
+    "operate",
+    "use-a-deployment",
+    "---Setup reference---",
+    "prerequisites",
+    "run-the-stack",
+    "choose-an-indexer",
+    "sign-in",
+    "---Everyday tasks---",
+    "api-keys",
+    "upload-a-model",
+    "download-a-model",
+    "verify-a-round-trip",
+    "browse-the-console",
+    "mirror-through-hugging-face",
+    "---Keep it running---",
+    "troubleshooting"
+  ]
+}

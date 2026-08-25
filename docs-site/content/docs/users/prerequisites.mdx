@@ -1,0 +1,61 @@
+---
+title: Prerequisites
+description: What you need installed before running OpenWeights.
+---
+
+## To run the stack
+
+- **Docker** with the Compose plugin. Every service ships as a container and the
+  root `Makefile` drives `docker compose`.
+- **Go** to build the setup wizard. `make setup` and `make bootstrap` compile
+  `bench/bootstrap` from source. `bench/go.mod` declares `go 1.26.0`.
+- **Rust (cargo)** to register the app. `make bootstrap` shells out to the
+  `openweights-cas-register` CLI (`cargo run -p openweights-cas-register`), so a
+  Rust toolchain is required to run bootstrap even without changing code.
+  `cas/rust-toolchain.toml` pins the channel.
+- **`git`** to clone the repository.
+
+## To use the `hf` CLI
+
+Install the Hugging Face client and the Xet transfer engine:
+
+```bash
+pip install "huggingface_hub[hf_xet]"
+```
+
+This gives you the `hf` command. OpenWeights speaks the protocol these clients
+already use, so no fork or patched wheel is involved.
+
+To check the CLI is on your path:
+
+```bash
+hf version
+```
+
+## To build a service from source
+
+You only need these if you are changing code. Running the stack from the
+Compose file builds everything inside containers.
+
+| Service | Toolchain | Pinned by |
+| --- | --- | --- |
+| `openweights-cas` | Rust, channel `1.89` | `cas/rust-toolchain.toml` |
+| `openweights-gateway` | Go `1.26.0` | `gateway/go.mod` |
+| `openweights-hf-proxy` | Go `1.26.0` | `hf-proxy/go.mod` |
+| `openweights-console` | Node 22 or newer, pnpm `9.15.0` | `console/package.json` |
+
+`rustup` reads `cas/rust-toolchain.toml` automatically, so `cargo` commands run
+inside `cas/` pick up the right toolchain on their own. For the console, enable
+pnpm with `corepack enable`; the `packageManager` field pins the version.
+
+## A Sia indexer
+
+OpenWeights writes bytes to Sia through an indexer, and does not bundle one. The
+setup wizard defaults to the hosted `https://sia.storage`, and you can point at
+your own `indexd` instead. See
+[Choose an indexer](/docs/users/choose-an-indexer).
+
+## Next
+
+[Run the stack](/docs/users/run-the-stack), or pick a path under
+[Get started](/docs/users/self-host).

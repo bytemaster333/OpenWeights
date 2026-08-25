@@ -1,0 +1,72 @@
+---
+title: Operate for a team
+description: Run OpenWeights for other people, with GitHub sign-in and a real domain.
+---
+
+You are standing up OpenWeights for a team or an organization: other people sign
+in, and it lives on a real domain behind HTTPS. This builds on the
+[self-host path](/docs/users/self-host) and adds GitHub sign-in and a
+Caddy-fronted deployment.
+
+## Steps
+
+**1. Generate `.env` and register the app** exactly as in the
+[self-host path](/docs/users/self-host) — `make setup`, then `make bootstrap`.
+
+**2. Add GitHub sign-in (optional).**
+
+Register an OAuth App at [github.com/settings/developers](https://github.com/settings/developers)
+with the callback URL `https://cas.<your-domain>/auth/github/callback`, then set
+both values in `.env`:
+
+```bash
+GITHUB_OAUTH_CLIENT_ID=<from GitHub>
+GITHUB_OAUTH_CLIENT_SECRET=<from GitHub>
+```
+
+The console shows **Continue with GitHub** alongside the password box. Password
+sign-in keeps working for you as the operator.
+
+**3. Deploy behind a domain.**
+
+Point DNS for `<your-domain>` and `cas.<your-domain>` at the server, then set the
+one domain knob plus an ACME email in `.env`:
+
+```bash
+OPENWEIGHTS_DOMAIN=your-domain.com
+OPENWEIGHTS_ACME_EMAIL=you@your-domain.com
+```
+
+Bring the stack up with the production overlay — Caddy issues one dual-SAN
+Let's Encrypt certificate and every public URL is derived from
+`OPENWEIGHTS_DOMAIN`:
+
+```bash
+docker compose -f ops/docker-compose.yml -f ops/docker-compose.prod.yml \
+  --env-file .env up -d
+```
+
+**4. Hand out access.**
+
+Team members sign in with GitHub, mint their own **read + write** keys on the
+`/keys` page, and point `HF_ENDPOINT` at `https://cas.<your-domain>`.
+
+## More detail
+
+<Cards>
+  <Card
+    title="Sign-in"
+    href="/docs/users/sign-in"
+    description="Password vs. GitHub OAuth, and how the session works."
+  />
+  <Card
+    title="Deployment"
+    href="/docs/developers/deployment"
+    description="The Caddy front, the domain knob, and the prod overlay in full."
+  />
+  <Card
+    title="Configuration"
+    href="/docs/developers/configuration"
+    description="Every environment variable and its default."
+  />
+</Cards>

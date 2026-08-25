@@ -1,0 +1,110 @@
+---
+title: How OpenWeights works
+description: "The internals: services, protocol, API reference, and configuration."
+---
+
+This section is for people changing OpenWeights, integrating with it directly,
+or auditing what it does with their bytes. If you want to upload and download
+models, start with [Using OpenWeights](/docs/users).
+
+## Concepts
+
+<Cards>
+  <Card
+    title="Architecture"
+    href="/docs/developers/architecture"
+    description="The services, what each owns, and how a request moves between them."
+  />
+  <Card
+    title="Write path"
+    href="/docs/developers/write-path"
+    description="From hf upload to a pinned xorb on Sia, request by request."
+  />
+  <Card
+    title="Read path"
+    href="/docs/developers/read-path"
+    description="From hf download through reconstruction and signed URLs back to bytes."
+  />
+  <Card
+    title="Xet protocol"
+    href="/docs/developers/xet-protocol"
+    description="Chunks, xorbs, shards, hash encoding, and the dual-path routes."
+  />
+  <Card
+    title="Security model"
+    href="/docs/developers/security"
+    description="Why the CAS is the only writer, and what protects each boundary."
+  />
+</Cards>
+
+## Reference
+
+<Cards>
+  <Card
+    title="CAS HTTP API"
+    href="/docs/developers/cas-api"
+    description="Every route on openweights-cas, with auth, scope, and status codes."
+  />
+  <Card
+    title="Gateway"
+    href="/docs/developers/gateway"
+    description="Signed-URL verification, range serving, and the disk cache."
+  />
+  <Card
+    title="hf-proxy"
+    href="/docs/developers/hf-proxy"
+    description="The one-header rewrite that routes huggingface.co uploads to Sia."
+  />
+  <Card
+    title="Configuration"
+    href="/docs/developers/configuration"
+    description="Every environment variable each service reads, with defaults."
+  />
+  <Card
+    title="Database"
+    href="/docs/developers/database"
+    description="The Postgres schema, the two roles, and the migrations."
+  />
+</Cards>
+
+## Working on OpenWeights
+
+<Cards>
+  <Card
+    title="Local development"
+    href="/docs/developers/local-development"
+    description="Build and run each service from source."
+  />
+  <Card
+    title="Testing"
+    href="/docs/developers/testing"
+    description="The test suites, the conformance harness, and what CI runs."
+  />
+  <Card
+    title="Deployment"
+    href="/docs/developers/deployment"
+    description="Compose overlays, Caddy, and the published images."
+  />
+</Cards>
+
+## Repository layout
+
+The git root holds one directory per service plus the supporting harnesses.
+
+| Path | Contents |
+| --- | --- |
+| `cas/` | `openweights-cas`, a six-crate Rust Cargo workspace, plus `migrations/` |
+| `gateway/` | `openweights-gateway`, a single flat Go package |
+| `console/` | `openweights-console`, a Vite and React application |
+| `hf-proxy/` | `openweights-hf-proxy`, a single-file Go reverse proxy |
+| `conformance/` | The Rust Xet-protocol conformance harness |
+| `bench/` | Go module holding the setup wizard and the measurement harnesses |
+| `ops/` | Compose files, overlays, the Caddyfiles, and operator scripts |
+| `tests/hf-roundtrip/` | The end-to-end byte-identical round-trip harness |
+| `docs-site/` | This documentation site |
+
+The Rust workspace splits into `openweights-cas` (the Axum binary),
+`openweights-cas-core` (every handler), `openweights-cas-storage` (the Sia write
+path and reconciler), `openweights-cas-db` (sqlx queries and types),
+`openweights-cas-proto` (the only place `xet-core-structures` is re-exported),
+and `openweights-cas-register` (the one-shot indexer registration CLI).

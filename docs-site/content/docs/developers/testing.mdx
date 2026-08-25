@@ -1,0 +1,200 @@
+---
+title: Testing
+description: The test suites, the conformance harness, and what CI runs.
+---
+
+## Per-service suites
+
+```bash
+make cas-clippy      # cargo clippy --workspace --all-targets -- -D warnings
+cd cas && cargo test --workspace
+
+make gateway-vet     # go vet ./...
+make gateway-test    # go test ./...
+cd gateway && go test -race ./...
+
+make console-check   # biome check . && tsc --noEmit && vitest run
+```
+
+Some CAS tests bring up a throwaway Postgres through testcontainers, so Docker
+must be running.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on every pull request,
+as three parallel jobs.
+
+| Job | Runs |
+| --- | --- |
+| `openweights-cas (rust)` | Rust `1.97.1` with clippy: `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo test --workspace` |
+| `openweights-gateway (go)` | Go `1.26`: `go vet ./...`, `go build ./...`, `go test ./...` |
+| `openweights-console (ts)` | Node 22 and pnpm `9.15.0`: `pnpm biome check .`, `pnpm exec tsc --noEmit`, `pnpm vitest run` |
+
+Concurrency is grouped by ref with in-progress runs cancelled.
+
+`.github/workflows/release.yml` runs on a `v*` tag and publishes the four
+service images to GHCR.
+
+## Conformance
+
+`conformance/` is a Rust harness that drives a running CAS through
+`xet_client`, pinned as a dev-dependency and never a runtime one. It round-trips
+fixtures from the `xet-team/xet-spec-reference-files` dataset, which checks the
+protocol implementation against real client behaviour rather than against
+assumptions made while writing it.
+
+```bash
+make conformance-fixtures   # clone fixtures via git lfs, skipped if present
+make conformance-check      # cargo check --tests, never touches Docker
+make conformance-clippy     # cargo clippy --all-targets -- -D warnings
+make conformance            # fetch fixtures, then cargo test --release
+```
+
+Individual tests print a skip and pass when their preconditions are absent, so
+`make conformance` does not fail on a fresh clone.
+
+The full local run brings the stack up and tags the image the harness expects:
+
+```bash
+make conformance-local
+```
+
+That builds and tags `openweights-cas:conformance`, brings the stack up with the
+CI overlay (which pins `V2_RECONSTRUCTION_ENABLED=true`), waits for every service
+to report healthy, runs the crate, and writes
+`console/public/conformance-badge.json`. The stack stays up; tear it down with
+`make down`.
+
+Building the CAS image first is a precondition:
+
+```bash
+make cas-image
+```
+
+### Signed-URL vectors
+
+`conformance/fixtures/signed_url_vectors.json` pins the canonical string and
+signature for a set of inputs. The Rust minter and the Go verifier both assert
+against it, which is what stops the two implementations drifting apart. Drift
+here is a silent-corruption bug, not a test failure you would notice in
+production.
+
+## End-to-end round-trip
+
+The claim under test is that an upload followed by a cold-cache download returns
+identical bytes.
+
+```bash
+OPENWEIGHTS_API_KEY=<read+write key> CAS_URL=http://localhost:8080 \
+  bash tests/hf-roundtrip/standalone-roundtrip.sh
+```
+
+It generates a 4 MiB random binary and a small text file, uploads with
+`hf upload`, downloads with `hf download` into empty `HF_HOME` and
+`HF_XET_CACHE` directories, retrying every 20 seconds until the pin lands, and
+compares SHA-256 for every file. Exit `0` means byte-identical.
+
+Variables: `OPENWEIGHTS_API_KEY` (required), `CAS_URL` (default
+`http://localhost:8080`), `HF_CLI` (default `hf`), `REPO`, `WAIT_SECS` (default
+900), and `KEEP` to retain the temp directory.
+
+### Through Caddy
+
+`make integration-hf-roundtrip` exercises the transfer path through a
+Caddy-fronted stack, which is the configuration where reverse-proxy range
+handling gets tested.
+
+It works differently from the standalone harness. It uploads a fixture to a
+scratch repository, then downloads the **upstream** fixture at its pinned
+revision with `hf_xet` routed at your CAS, and compares that against the copy it
+fetched natively from Hugging Face. The upload leg is tolerated if it fails, so
+what this proves is that OpenWeights serves the bytes correctly through a
+reverse proxy. For a true same-artifact round-trip, use
+`standalone-roundtrip.sh` above.
+
+```bash
+make integration-hf-roundtrip-dry-run   # lint the scripts, validate the overlay merge
+make integration-hf-roundtrip           # bring the stack up and run it
+make integration-hf-roundtrip-down      # tear down, including volumes
+```
+
+The full run stacks three compose files (base, `.ci`, `.caddy`), waits for
+health, mints a test key with `scripts/issue-test-key.sh`, and runs the harness
+container against `http://localhost:8090/cas` and
+`http://localhost:8090/gateway`.
+
+The harness itself takes no arguments and is configured entirely by environment:
+`CAS_BASE_URL`, `GATEWAY_BASE_URL`, `OPENWEIGHTS_API_KEY`, `HF_FIXTURE_REPO`,
+and `HF_FIXTURE_REVISION` are all required, and `HF_FIXTURE_KIND` defaults to
+`model`. It exits `0` on a byte-identical round-trip and `1` on a hash mismatch
+or a transfer failure. Passing `--self-check` instead runs an image smoke that
+only proves the CLI resolves inside the container, and exits `0`.
+
+It picks `hf` when available and falls back to `huggingface-cli` on older
+`huggingface_hub` releases.
+
+### Range integrity through a proxy
+
+`tests/hf-roundtrip/verify-range-integrity.sh` is the cheap guard on the
+multipart contract. It issues one single-range and one multi-range `GET` through
+Caddy at the gateway and asserts four things: a `206` status, a
+`Content-Range: bytes <s>-<e>/<total>` on the single range, a
+`Content-Type: multipart/byteranges; boundary=<b>` on the multi-range, and the
+boundary appearing at least twice in the body. The third is the one that matters:
+a concatenated body would corrupt `xet-core` downloads silently.
+
+It takes no arguments and runs in one of two modes:
+
+- **Direct.** Set `SIGNED_URL_PATH` to everything after the gateway base, plus
+  `GATEWAY_VIA_CADDY_URL`. The signed URL is used as given.
+- **Mint.** Set `XORB_HASH`, `CAS_VIA_CADDY_URL`, and `OPENWEIGHTS_API_KEY`, and
+  it fetches a signed URL from `/v1/reconstructions/{hash}` first.
+
+Exit `0` means both range shapes survived the proxy, `1` means an assertion
+failed, and `2` means it had neither a signed URL nor a xorb to mint one from.
+
+No Makefile target runs it directly. It executes as check 5 of
+[`make deploy-smoke`](/docs/developers/deployment), and the dry-run target only
+syntax-checks it.
+
+<Callout type="warn">
+`scripts/issue-test-key.sh` inserts an API key straight into Postgres, bypassing
+sign-in, and creates a user at id `999999999`. It is for CI and local
+development. Never run it against a production database.
+</Callout>
+
+## Measurement harnesses
+
+```bash
+make test-unit       # go test -short ./... in bench/, no network
+make smoke           # 1 MiB round-trip against the configured indexer
+make compose-smoke   # testcontainers run of the full stack healthcheck gating
+make thesis          # Sia range-download measurement
+make verify          # test-unit, then thesis, compose-smoke, and smoke
+```
+
+`make thesis` measures whether a Sia byte-range download fetches only the
+overlapping sectors rather than the whole object. That measures the SDK's range
+capability and the storage economics behind the project, not the gateway's
+current request path, which fetches whole xorbs and slices them locally. It
+treats a measurement failure as informational (exit `0`) and reserves a non-zero
+exit for a hard error. The report lands in `bench/thesis/REPORT.md`.
+
+## Benchmarks
+
+```bash
+make benchmark                     # STACK=both by default
+make benchmark STACK=openweights   # skip the Hugging Face baseline
+make benchmark-dry-run             # regenerate the artifacts with null values
+```
+
+Three trials per cell, median reported, writing `docs/benchmarks.md` and
+`console/public/benchmarks.json`. It needs `OPENWEIGHTS_CAS_URL` and
+`OPENWEIGHTS_API_KEY` in the environment for the OpenWeights cells, and the `hf`
+CLI on `PATH`. Swap the fixture in `bench/bench.config.sh`.
+
+## Exit codes
+
+Makefile targets whose code is absent exit `2`, which is distinct from a genuine
+failure at `1`. The bootstrap wizard uses the same convention: `2` for a
+configuration problem, `1` for a runtime one.

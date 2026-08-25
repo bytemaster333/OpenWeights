@@ -1,0 +1,173 @@
+---
+title: Configuration
+description: Every environment variable each service reads, with its default.
+---
+
+All configuration comes from environment variables. The Compose stack reads them
+from the root `.env` through `--env-file .env`, and the template is
+`ops/.env.example`.
+
+`.env` is the secret store. `make setup` writes it with permissions `0600`.
+
+## openweights-cas
+
+The CAS parses its configuration into one struct at boot. A missing required
+variable exits `2`; any other boot failure exits `1`.
+
+### Required
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string |
+| `REDIS_URL` | Redis connection string |
+| `INDEXD_URL` | Sia indexer app API. Compose passes `OPENWEIGHTS_INDEXER_URL` into it |
+| `OPENWEIGHTS_APP_ID` | 64 hex characters |
+| `OPENWEIGHTS_APP_KEY` | Base64 of exactly 32 bytes. Produced by `openweights-cas-register` |
+| `GATEWAY_URL_SIGNING_KEY` | Base64 of exactly 32 bytes |
+
+### Optional
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `BIND_ADDR` | `0.0.0.0:8080` | Listen address |
+| `GATEWAY_URL_SIGNING_KEY_PREV` | empty | Second verification key during rotation |
+| `GATEWAY_URL_TTL_SECS` | `7200` | Signed-URL lifetime |
+| `GATEWAY_BASE_URL` | `http://127.0.0.1:9090` | URL base stamped into signed URLs |
+| `V2_RECONSTRUCTION_ENABLED` | `false` in code, `true` in Compose | V2 reconstruction. Off means `501` and clients fall back to V1 |
+| `PG_MAX_CONNECTIONS` | `20` | Postgres pool size |
+| `CAS_PUBLIC_URL` | `http://localhost:8080` | The CAS URL as the **client** reaches it. Returned as `casUrl` |
+| `CONSOLE_BASE_URL` | `http://localhost:5173` | OAuth redirect target and the single allowed CORS origin |
+| `XET_JWT_SIGNING_KEY` | empty | HS256 secret for Xet tokens. While empty the token endpoints return `500` |
+| `OPENWEIGHTS_ADMIN_PASSWORD` | empty | Password sign-in. Empty disables it |
+| `OPENWEIGHTS_ADMIN_USERNAME` | `admin` | Display name for the password admin |
+| `GITHUB_OAUTH_CLIENT_ID` | empty | GitHub OAuth. Both id and secret must be set to enable it |
+| `GITHUB_OAUTH_CLIENT_SECRET` | empty | |
+| `GITHUB_OAUTH_CALLBACK_URL` | `http://localhost:8080/auth/github/callback` | Must match the OAuth app registration exactly |
+| `INDEXD_ADMIN_URL` | empty | Admin API of your own `indexd`, for the console host map and setup panels |
+| `INDEXD_ADMIN_PASSWORD` | empty | Admin API password |
+| `RUST_LOG` | `info` | `trace`, `debug`, `info`, `warn`, or `error` |
+
+### Read outside the config struct
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `OPENWEIGHTS_GATEWAY_READS` | `true` in Compose | Exactly `true` advertises the gateway read path. Any other value has the CAS serve reads itself |
+| `OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS` | `300` in code, `20` in Compose | How long an upload waits for Sia before handing off to the reconciler |
+| `OPENWEIGHTS_SIA_OP_TIMEOUT_SECS` | `600` in code, `3600` in Compose | Bound on one reconciler attempt |
+| `OPENWEIGHTS_DATA_SHARDS` | `10` | Erasure-coding data shards. An invalid value fails at startup |
+| `OPENWEIGHTS_PARITY_SHARDS` | `20` | Erasure-coding parity shards |
+| `OPENWEIGHTS_SIA_MOCK` | unset | Exactly `true` wires an in-memory mock Sia adapter. Requires the `sia-mock` cargo feature at build time. Bytes are not durable; for local development only |
+
+<Callout>
+The base Compose file passes `CONSOLE_BASE_URL`, the `GITHUB_OAUTH_*` variables,
+and the `INDEXD_ADMIN_*` variables into the CAS container (each reads from `.env`
+with a sensible default), so you configure them by setting them in `.env`. Only
+`OPENWEIGHTS_DATA_SHARDS` / `OPENWEIGHTS_PARITY_SHARDS` are absent from the base
+file — set those via a Compose override if you need to change the scheme.
+</Callout>
+
+## openweights-gateway
+
+Only `GATEWAY_URL_SIGNING_KEY` is required. Everything else has a default, and
+Postgres, Sia, and the cache each degrade to a warning at boot rather than
+crashing.
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `GATEWAY_URL_SIGNING_KEY` | required | Base64 of exactly 32 bytes. Must match the CAS |
+| `GATEWAY_URL_SIGNING_KEY_PREV` | empty | Accepted as a second verification key |
+| `GATEWAY_ADDR` | `:8081` | Public listener |
+| `GATEWAY_METRICS_ADDR` | `127.0.0.1:9100` | Metrics listener, `/metrics` only |
+| `GATEWAY_URL_TTL_SECS` | `7200` | Parsed for shape. Verification uses the URL's own `exp` |
+| `GATEWAY_BASE_URL` | empty | Informational. Verification covers the canonical string, not the URL prefix |
+| `POSTGRES_URL` | empty | Connect as the `openweights_gw` role |
+| `GATEWAY_CACHE_DIR` | `/var/cache/openweights` | Cache root. Empty disables the cache |
+| `GATEWAY_CACHE_SIZE_BYTES` | `107374182400` (100 GiB) | Eviction budget. Zero disables the cache |
+
+The gateway also loads a `.env` file if one is present next to the binary, which
+is a convenience for running it outside Compose.
+
+### Aliases
+
+Each pair resolves to the first non-empty value, canonical name first.
+
+| Canonical | Alias |
+| --- | --- |
+| `OPENWEIGHTS_INDEXER_URL` | `SIA_INDEXER_URL` |
+| `OPENWEIGHTS_APP_KEY` | `APP_KEY` |
+| `GATEWAY_CACHE_DIR` | `CACHE_DIR` |
+| `GATEWAY_CACHE_SIZE_BYTES` | `CACHE_SIZE_BYTES` |
+
+`OPENWEIGHTS_APP_ID` has no alias. The gateway accepts the same base64 App Key
+value the CAS uses and expands it internally, so both derive the identical
+object-encryption key.
+
+## openweights-hf-proxy
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `OPENWEIGHTS_CAS_PUBLIC_URL` | required | The CAS URL as the client reaches it. Exits `2` if unset. Compose marks it required |
+| `HF_UPSTREAM_URL` | `https://huggingface.co` | Must be absolute |
+| `LISTEN_ADDR` | `:28090` | Listen address |
+
+## openweights-console
+
+The console resolves its URLs in three steps: runtime `/config.js` first, then
+build-time `VITE_*`, then localhost defaults. This is what lets one published
+image serve any deployment.
+
+### Runtime, read by the container entrypoint
+
+| Variable | Falls back to |
+| --- | --- |
+| `OPENWEIGHTS_CONSOLE_CAS_URL` | `VITE_CAS_URL`, then `http://localhost:8080` |
+| `OPENWEIGHTS_CONSOLE_GATEWAY_URL` | `VITE_GATEWAY_URL`, then `http://localhost:9090` |
+| `OPENWEIGHTS_CONSOLE_HF_PROXY_URL` | `VITE_HF_PROXY_URL`, then `http://localhost:28090` |
+
+The nginx entrypoint writes these into `/config.js` at container start as
+`window.__OPENWEIGHTS_CONFIG__`. An empty value falls through to the build-time
+default.
+
+### Build-time
+
+`VITE_CAS_URL`, `VITE_GATEWAY_URL`, `VITE_HF_PROXY_URL`, and
+`VITE_CONFORMANCE_BADGE_URL` are Compose build arguments, baked in when you
+build the image yourself. They are browser-visible and hold no secrets.
+
+## Infrastructure
+
+Compose refuses to start without these four.
+
+| Variable | Used by |
+| --- | --- |
+| `POSTGRES_SUPERUSER_PASSWORD` | Postgres |
+| `OPENWEIGHTS_POSTGRES_PASSWORD` | Postgres and the CAS |
+| `OPENWEIGHTS_GW_POSTGRES_PASSWORD` | Postgres and the gateway |
+| `REDIS_PASSWORD` | Redis and the CAS |
+
+`make setup` generates any of them that is empty, as 32 random bytes hex-encoded.
+
+## Stack-level
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `OPENWEIGHTS_INDEXER_URL` | `https://sia.storage` | The indexer for the whole stack |
+| `OPENWEIGHTS_RECOVERY_PHRASE` | none | BIP-39 phrase. Never leaves `.env` |
+| `OPENWEIGHTS_VERSION` | `latest` | Image tag pulled from GHCR |
+| `GATEWAY_POSTGRES_URL` | derived | Full override for the gateway's connection string |
+| `OPENWEIGHTS_ACME_EMAIL` | required in the prod overlay | Let's Encrypt account address |
+
+## Which URL variable is which
+
+Four variables hold a URL for the same service, and mixing them up is the most
+common configuration mistake.
+
+| Variable | Whose view | Local value |
+| --- | --- | --- |
+| `INDEXD_URL` | The CAS, inside the Compose network | your indexer URL |
+| `CAS_PUBLIC_URL` | The client machine, returned as `casUrl` | `http://localhost:8080` |
+| `OPENWEIGHTS_CAS_PUBLIC_URL` | The client machine, substituted by hf-proxy | `http://localhost:8080` |
+| `GATEWAY_BASE_URL` | The client machine, stamped into signed URLs | `http://127.0.0.1:9090` |
+
+Anything labelled "the client machine" must be reachable from where `hf` runs,
+not from inside a container.

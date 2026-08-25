@@ -1,0 +1,125 @@
+---
+title: Database
+description: The Postgres schema, the two roles, and the migrations.
+---
+
+One Postgres 17 database, `openweights`, holds the catalog, the Xet metadata,
+sessions, API keys, and the usage log. Redis holds only rate-limit buckets and
+request coalescing, so nothing durable lives there.
+
+## Roles
+
+Created on first container boot by `ops/postgres-init.sql`, which reads the
+passwords from the Postgres container's environment.
+
+| Role | Used by | Privileges |
+| --- | --- | --- |
+| `openweights` | `openweights-cas` | Owns the database |
+| `openweights_gw` | `openweights-gateway` | `CONNECT`, `USAGE` on `public`, `SELECT` on `xorbs`, `INSERT` on `usage_log`, `USAGE` on that table's sequence |
+
+The gateway's privileges are the whole of its database authority. It cannot read
+API keys, sessions, or repositories, and it cannot write anything except a usage
+row.
+
+Role creation is in the init script rather than a migration because the
+sqlx-embedded migration runner cannot inject environment variables into SQL. The
+per-table grants are in migration `0005`, which runs later, once `xorbs` and
+`usage_log` exist.
+
+## Migrations
+
+Embedded into the CAS binary at compile time and applied at boot, before the
+HTTP listener starts. They are idempotent on replay.
+
+<Callout type="warn">
+`cas/migrations/` must be present at image build time. The macro embeds the
+directory contents; if it is missing, the binary ships with zero migrations,
+reports "migrations up to date", and creates no tables.
+</Callout>
+
+| Migration | Adds |
+| --- | --- |
+| `0001_initial` | Users, API keys, and the `api_key_scope` enum |
+| `0002_xorbs_shards` | `xorbs` and `shards`, the `xorb_pin_state` enum, the generated `hash_prefix_8` column |
+| `0003_usage_log_oauth` | `usage_log`, `sessions`, `oauth_state`, and the `usage_event` enum |
+| `0004_xorbs_nullable_sia_id` | Relaxes `xorbs.sia_object_id` to nullable, since it is unknown until the pin lands |
+| `0005_openweights_gw_role` | The gateway role's per-table grants |
+| `0006_sessions_touch` | Columns the console reads |
+| `0007_xet_jwt_users` | An alternate identity column keyed on the Hugging Face user id in a Xet JWT |
+| `0008_model_repos` | `repos`, `repo_commits`, `repo_files`, `repo_refs`, `lfs_objects`, and the `repo_visibility` enum |
+| `0009_xorb_bodies` | `xorb_bodies`, an inline cache of xorb bytes |
+| `0010_repo_downloads` | `repo_downloads`, per-repo daily counters |
+| `0011_lfs_inline_500mb` | Raises the inline LFS object cap |
+| `0012_reconstruction_files_sha256` | Per-file SHA-256, the bridge from a commit to a reconstruction |
+| `0013_repo_files_xet_to_filed` | Repoints `repo_files.xet_hash` at `reconstruction_files.file_id`, since a file can span several xorbs |
+| `0014_xorb_chunk_boundaries` | Physical chunk-boundary offsets, so reconstruction can map a chunk range to an exact byte range |
+
+## Tables
+
+| Table | Holds |
+| --- | --- |
+| `users` | Accounts, keyed on the numeric GitHub id. Id `-1` is the password admin |
+| `api_keys` | `key_hash` as raw SHA-256 bytes, `scopes`, `label`, `masked_prefix`, `revoked_at`, `last_used_at` |
+| `sessions` | Console sessions with `expires_at` and `last_seen_at` |
+| `oauth_state` | Single-use OAuth state nonces |
+| `xorbs` | One row per stored xorb: hash, size, pin state, Sia object id, chunk boundaries |
+| `xorb_bodies` | Inline xorb bytes |
+| `shards` | Xet shard metadata with its own pin state |
+| `repos` | Repositories with owner and visibility |
+| `repo_commits` | Commits |
+| `repo_files` | Files in a commit: path, size, and the hash pointing at a reconstruction file |
+| `repo_refs` | Named refs, `main` among them |
+| `repo_downloads` | Per-repo daily download counters |
+| `reconstruction_files` | Per-file Xet hash and SHA-256 |
+| `reconstruction_terms` | Ordered terms mapping a file to xorb byte windows |
+| `lfs_objects` | Small files stored inline as bytes |
+| `usage_log` | One row per metered event |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `api_key_scope` | `upload`, `download`, `admin` |
+| `xorb_pin_state` | `uploading`, `pinning`, `pinned`, `orphaned` |
+| `repo_visibility` | `public`, `private`, `unlisted` |
+
+The console create-key picker shows `read + write` (the default), `write`, and
+`read` (not `admin`), translated at the handler boundary so the database enum
+can change without moving the browser-facing wire
+format.
+
+## Conventions
+
+**Hashes are raw bytes.** `xorbs.xorb_merkle_hash` and `api_keys.key_hash` are
+`BYTEA`, never hex strings. Hex is a presentation format.
+
+**Hash prefixes are generated.** `hash_prefix_8` is a stored generated column,
+so prefix search in the console does not scan.
+
+**Pin state drives the reconciler.** A partial index over rows in `uploading` or
+`pinning`, ordered by last attempt, is what the 60-second sweep reads.
+`sia_object_id` stays null until the pin lands.
+
+**Sia object ids are content-addressed.** Re-uploading the same body yields the
+same id, which is what makes reconciler retries safe.
+
+## Recovering the gateway role
+
+If `OPENWEIGHTS_GW_POSTGRES_PASSWORD` was empty when the Postgres volume was
+first created, the role was skipped. Create it by hand:
+
+```bash
+docker compose -f ops/docker-compose.yml exec \
+  -e PGPASSWORD=$POSTGRES_SUPERUSER_PASSWORD postgres \
+  psql -U postgres -c "CREATE ROLE openweights_gw LOGIN PASSWORD '<password>';"
+```
+
+Then restart the CAS so migration `0005` applies its grants.
+
+## Connecting
+
+```bash
+docker compose -f ops/docker-compose.yml --env-file .env exec \
+  -e PGPASSWORD=$OPENWEIGHTS_POSTGRES_PASSWORD postgres \
+  psql -U openweights -d openweights
+```

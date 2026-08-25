@@ -11,8 +11,8 @@ custom-test/
 # all markdown docs except root readme
 **/*.md
 !README.md
-!docs-site/src/content/docs/**/*.md
-!docs-site/src/content/docs/**/*.mdx
+!docs-site/content/docs/**/*.md
+!docs-site/content/docs/**/*.mdx
 
 # cas/gateway/conformance build artifacts
 cas/crates/*/target/
@@ -36,9 +36,10 @@ hf-proxy/bin/
 /bin/
 console/dist/
 console/node_modules/
-docs-site/dist/
+docs-site/out/
+docs-site/.next/
+docs-site/.source/
 docs-site/node_modules/
-docs-site/.astro/
 *.test
 *.out
 

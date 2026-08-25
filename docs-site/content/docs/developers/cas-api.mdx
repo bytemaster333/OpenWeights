@@ -1,0 +1,247 @@
+---
+title: CAS HTTP API
+description: Every route on openweights-cas, with its authentication, scope, and status codes.
+---
+
+`openweights-cas` listens on `8080` inside its container. The complete route map
+lives in `cas/crates/openweights-cas/src/router.rs`; every handler is under
+`cas/crates/openweights-cas-core/src/handlers/`.
+
+## Authentication
+
+Three credentials reach the CAS, and one extractor resolves all of them.
+
+### API keys
+
+```http
+Authorization: Bearer <key>
+```
+
+The key is 32 random bytes as base64url without padding. The CAS hashes the
+presented value with SHA-256 and compares it against `api_keys.key_hash`, stored
+as raw bytes. Plaintext is never stored and never logged.
+
+Successful lookups are cached in process for 5 seconds, which bounds how long a
+revoked key keeps working.
+
+### Xet tokens
+
+A bearer value shaped like a JWT (three dot-separated segments beginning `ey`)
+is routed to the Xet token path instead of the API-key path. The same token is
+also accepted in a dedicated header:
+
+```http
+X-Xet-Access-Token: <jwt>
+```
+
+These are HS256 tokens the CAS itself minted from `XET_JWT_SIGNING_KEY` through
+`xet-write-token` and `xet-read-token`. `hf_xet` presents them during a
+transfer.
+
+### Session cookie
+
+```
+openweights_session=<uuid>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
+```
+
+Minted by the sign-in routes, consumed by `/admin/*`. Valid for 7 days, with the
+expiry refreshed on each authenticated request.
+
+## Scopes
+
+The wire format uses the console's names; the database enum uses its own.
+
+| Wire | Database | Grants |
+| --- | --- | --- |
+| `readwrite` | `{download, upload}` | Both read and write in one key — the console default |
+| `write` | `upload` | Xorb upload, shard upload, repository create, preupload, Xet write tokens |
+| `read` | `download` | Reconstruction, chunk-dedup queries, Xet read tokens |
+| `admin` | `admin` | The `/admin/*` routes |
+
+Scopes are stored as an array, so a `readwrite` key holds both `upload` and
+`download`. An unknown or revoked key returns `401`; a valid key without the
+required scope returns `403`. `401` always wins.
+
+## Status codes
+
+Every handler error maps through one taxonomy.
+
+| Status | Condition |
+| --- | --- |
+| `400` | Malformed request, invalid repository name, xorb hash mismatch, shard referencing missing xorbs, unsupported shard version |
+| `401` | Missing bearer, or an unknown or revoked key |
+| `403` | Valid credential, wrong scope |
+| `404` | Not found |
+| `416` | A reconstruction range starts at or past the end of the file |
+| `429` | Rate limit exceeded. Carries `Retry-After` and a body of `{"error":"rate_limited","retry_after":<seconds>}` |
+| `503` | Sia unavailable |
+| `500` | Database or internal error. The body is the literal string `internal`; the real error is logged, never returned |
+
+Hash mismatches return both hashes in the body. Shard-version rejections echo
+the supported header and footer versions.
+
+## Rate limits
+
+Redis-backed token buckets, keyed per API key, applied to the transfer routes.
+
+| Class | Routes | Limit |
+| --- | --- | --- |
+| Upload | Xorb upload, shard upload | 100 per minute |
+| Download | V1 and V2 reconstruction, batch reconstruction | 100 per minute |
+
+The `admin` class is defined at 600 per minute. The `/admin/*` routes are gated
+by the session cookie rather than by a bucket.
+
+## Health and metrics
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/health` | None | Reports healthy only after migrations, the Sia handshake, and the reconciler spawn |
+| `GET` | `/metrics` | None | Prometheus text format. The container binds to loopback and the production Caddyfile answers `404` for this path |
+
+## Xet CAS protocol
+
+| Method | Path | Scope | Notes |
+| --- | --- | --- | --- |
+| `POST` | `/v1/xorbs/{prefix}/{hash}` | `write` | Upload one xorb. Body capped at 64 MiB plus 4096 bytes; over that returns `400 xorb_too_large`. Responds `{"was_inserted": bool}` |
+| `POST` | `/shards` | `write` | Upload a shard |
+| `POST` | `/v1/shards` | `write` | Same handler as `/shards` |
+| `GET` | `/v1/chunks/{prefix}/{hash}` | `read` | Global chunk-dedup query. Authenticated, then answers `404 {"error":"not_found"}` |
+| `GET` | `/v1/reconstructions/{file_id}` | `read` | V1 reconstruction for one file |
+| `GET` | `/v1/reconstructions` | `read` | V1 batch reconstruction |
+| `GET` | `/reconstructions` | `read` | Same handler as `/v1/reconstructions` |
+| `GET` | `/v2/reconstructions/{file_id}` | `read` | V2 reconstruction, behind `V2_RECONSTRUCTION_ENABLED`. The Compose file sets it to `true` |
+
+Shard upload responds `{"result": <0|1>}`, where `0` is `Exists` and `1` is
+`SyncPerformed`.
+
+<Callout>
+Both `/shards` and `/v1/shards` are registered on purpose, and so are both
+`/reconstructions` and `/v1/reconstructions`. The published OpenAPI spec uses
+the `/v1` forms while the production `xet-core` client calls the unprefixed
+ones. Serving both is what keeps unmodified clients working.
+</Callout>
+
+## Hugging Face Hub API
+
+The subset `hf upload` and `hf download` actually call.
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/whoami-v2` | any | Identity probe the CLI makes first — accepts any authenticated key |
+| `POST` | `/api/validate-yaml` | None | Model-card YAML validation |
+| `POST` | `/api/repos/create` | `write` | Body `{type, name, organization, private}`. Responds `{url, endpointUrl, name}`. Re-creating your own repository returns the existing one |
+| `POST` | `/api/models/{owner}/{repo}/preupload/{ref}` | `write` | Classifies each file `lfs` or `regular` |
+| `GET` | `/api/models/{owner}/{repo}/xet-write-token/{ref}` | `write` | Mints a Xet write token. Responds `{casUrl, accessToken, exp}` and mirrors the token into `X-Xet-Access-Token` |
+| `GET` | `/api/models/{owner}/{repo}/xet-read-token/{ref}` | `read` | Mints a Xet read token, same shape |
+| `POST` | `/api/models/{owner}/{repo}/commit/{ref}` | `write` | Records the commit |
+| `POST` | `/{owner}/{repo}.git/info/lfs/objects/batch` | `write` | Git-LFS batch negotiation |
+| `PUT` | `/lfs/objects/{oid}` | None | LFS upload. The body is verified against the SHA-256 in the path and the write is capped at 500 MiB |
+| `GET` | `/lfs/objects/{oid}` | None | LFS download |
+| `GET` | `/{owner}/{repo}/resolve/{revision}/{path}` | Optional | Resolves a file. Returns `302` |
+| `HEAD` | `/{owner}/{repo}/resolve/{revision}/{path}` | Optional | Headers only |
+| `GET` | `/xet/files/{xet_hash}` | None | Reconstructs and serves a file from stored xorbs |
+
+Both token endpoints require `XET_JWT_SIGNING_KEY` to be set. While it is empty
+they return `500`.
+
+`PUT /lfs/objects/{oid}` takes no credential by design. It is content-addressed:
+the body is hashed and must match the `oid` in the path, so it can only write
+the object it names, and the client reaches it only after the authenticated LFS
+batch handshake. A mismatch returns `400 oid_mismatch`, and an oversized body
+returns `400 lfs_object_too_large`.
+
+### Preupload classification
+
+A file is classified `regular` only when it is **both** smaller than 10 KiB and
+text-like: named `README.md`, `.gitattributes`, `config.json`, or
+`tokenizer.json`, or ending in `.md`, `.txt`, or `.json`. Everything else is
+`lfs`, which is what routes it onto the Xet transfer.
+
+### Resolve
+
+`resolve` answers `302` with `Location` pointing at `/lfs/objects/{oid}` or
+`/xet/files/{hash}`, both prefixed with `CAS_PUBLIC_URL` and carrying `?r=<repo
+id>` for the download counter. It also sets `x-linked-size` and `x-linked-etag`.
+
+When `OPENWEIGHTS_GATEWAY_READS` is `true` and the file is a Xet file, resolve
+additionally sets `X-Xet-Hash` and `X-Xet-Refresh-Route`, which is what makes
+`hf_xet` take the reconstruction path rather than following the redirect.
+
+### Repository names
+
+Between 1 and 96 characters, ASCII letters, digits, `-`, `_`, and `.`, and not
+starting with `.`. Anything else returns `400 invalid_repo_name`.
+
+Repositories are owned by the account behind the key. The `organization` field
+and the `<owner>` you type are display labels.
+
+## Public catalog
+
+Readable without a credential. Private repositories are excluded; a bearer token
+identifies you as a viewer so your own private repositories resolve.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/models` | Public model catalog |
+| `GET` | `/api/models/{owner}/{repo}` | One model at `main` |
+| `GET` | `/api/models/{owner}/{repo}/revision/{revision}` | One model at a revision |
+| `GET` | `/api/models/{owner}/{repo}/objects` | Stored objects backing a model |
+| `GET` | `/api/models/{owner}/{repo}/downloads/trend` | Download counts over time |
+| `GET` | `/api/platform/stats` | Deployment totals |
+| `GET` | `/api/platform/sia` | Sia-side platform status |
+
+## Sign-in
+
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/auth/methods` | None | `{"password": bool, "github": bool}`. Tells the console which controls to show |
+| `POST` | `/auth/login` | None | Body `{"password": "..."}`. Returns `204` and sets the session cookie. Wrong or unconfigured password returns `401` |
+| `GET` | `/auth/github/start` | None | `302` to GitHub, requesting `user:email read:user` with a single-use state nonce |
+| `GET` | `/auth/github/callback` | None | Sets the session cookie and redirects to `CONSOLE_BASE_URL`: `/keys` for a first sign-in, `/dashboard` otherwise |
+| `POST` | `/auth/logout` | Cookie | Clears the session cookie |
+
+Password comparison is constant-time over SHA-256 digests. The password admin is
+a single synthetic user at id `-1`, which cannot collide with a GitHub numeric
+id.
+
+## Admin
+
+Session-cookie authenticated. A missing, expired, unknown, or revoked session
+returns `401`.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/admin/me` | The signed-in user |
+| `POST` | `/admin/keys` | Create a key. `201` with `{id, name, scope, masked_prefix, plaintext_key, created_at}`. The only response that ever contains plaintext |
+| `GET` | `/admin/keys` | `{keys: [...]}` with `masked_prefix` and never plaintext |
+| `DELETE` | `/admin/keys/{id}` | `204`. Sets `revoked_at` |
+| `GET` | `/admin/stats` | Usage counters, overall and per key |
+| `GET` | `/admin/xorbs` | Stored-object catalog, filterable |
+| `GET` | `/admin/xorbs/{hash}` | One object by 64-char lowercase hex hash. `400` on a malformed hash, `404` when absent |
+| `GET` | `/admin/stats/map` | Sia host locations, read from the indexer admin API |
+| `GET` | `/admin/setup/status` | Per-subsystem status |
+
+Key names are trimmed, must be non-empty, and are capped at 80 characters.
+
+These routes are gated on a valid session, and any signed-in account reaches
+them. `/admin/me`, `/admin/keys`, and `/admin/stats` scope their results to the
+calling account, so you see your own identity, keys, and usage. `/admin/xorbs`,
+`/admin/stats/map`, and `/admin/setup/status` report on the deployment as a
+whole. Run with password sign-in and that is a single operator; run with GitHub
+OAuth and it is everyone who can sign in.
+
+## CORS
+
+The CAS allows exactly one cross-origin origin, the value of
+`CONSOLE_BASE_URL`, with credentials enabled. It allows `GET`, `POST`, `DELETE`,
+`PUT`, and `OPTIONS`, and the `Authorization`, `Content-Type`, `Accept`, and
+`Origin` headers. A console served from any other origin cannot make
+credentialed calls.
+
+## Routes deliberately absent
+
+`HEAD /v1/xorbs/...`, `HEAD /v1/files/...`, `/simulation/*`, `/v1/fetch_term`,
+and `/v1/get_xorb/...` are not implemented: they are not in the Xet OpenAPI spec
+and the production client never calls them. There are no `DELETE` routes on the
+Xet surface, because Xet CAS storage is append-only.

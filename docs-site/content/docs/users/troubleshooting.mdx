@@ -1,0 +1,215 @@
+---
+title: Troubleshooting
+description: What to do when the stack does not come up or a transfer fails.
+---
+
+Start by looking at the logs. Every service writes structured JSON to stdout.
+
+```bash
+docker compose -f ops/docker-compose.yml --env-file .env logs -f openweights-cas
+docker compose -f ops/docker-compose.yml --env-file .env ps
+```
+
+## The stack will not start
+
+### Compose reports a variable must be set
+
+Compose requires five values and refuses to start without them:
+`POSTGRES_SUPERUSER_PASSWORD`, `OPENWEIGHTS_POSTGRES_PASSWORD`,
+`OPENWEIGHTS_GW_POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and
+`OPENWEIGHTS_CAS_PUBLIC_URL`.
+
+`make setup` generates the first four. Set the fifth yourself, to the CAS URL as
+your client machine reaches it.
+
+### The CAS exits with status 2
+
+A configuration error: a required variable is missing. Required are
+`DATABASE_URL`, `REDIS_URL`, `INDEXD_URL`, `OPENWEIGHTS_APP_ID`,
+`OPENWEIGHTS_APP_KEY`, and `GATEWAY_URL_SIGNING_KEY`. The log line names the
+field.
+
+### The CAS exits with status 1
+
+A boot failure after configuration loaded. The log prints the full error chain.
+Common causes:
+
+| Message mentions | Cause |
+| --- | --- |
+| `OPENWEIGHTS_APP_KEY is not valid base64` | The key is hex. Use `openweights-cas-register`, which prints base64 |
+| `must decode to exactly 32 bytes` | Same: wrong encoding or a truncated value |
+| `OPENWEIGHTS_APP_ID must be 64 hex chars` | The app id is malformed |
+| `signed-url signer init` | `GATEWAY_URL_SIGNING_KEY` is missing, not base64, or not 32 bytes. Generate with `openssl rand 32 \| base64` |
+| `sia adapter init` | The indexer is unreachable, or the app is not registered against this indexer |
+| `postgres pool connect` | Postgres is not up yet, or the password does not match |
+
+### The App Key is rejected no matter what
+
+The App Key must be the base64 (32-byte) value that the Rust
+`openweights-cas-register` CLI produces — `make bootstrap` runs that CLI for you
+and writes the correct `OPENWEIGHTS_APP_KEY`. If you hand-edited it or copied a
+value from somewhere else, re-run the registration:
+
+```bash
+set -a && . ./.env && set +a
+cd cas && cargo run --bin openweights-cas-register
+```
+
+A correct value is 44 characters and is not all hex.
+
+### The gateway logs a warning and /xorb returns 500
+
+The gateway boots even when Postgres, Sia, or the cache fail to initialise, so
+that `/health` keeps answering. The warning at startup names which one. Only
+`GATEWAY_URL_SIGNING_KEY` is fatal at boot.
+
+## Sign-in
+
+### The login page says no sign-in method is configured
+
+Neither `OPENWEIGHTS_ADMIN_PASSWORD` nor a complete GitHub OAuth pair is set.
+Set one and restart:
+
+```bash
+OPENWEIGHTS_ADMIN_PASSWORD=<a strong password>
+```
+
+Check what the CAS thinks is enabled:
+
+```bash
+curl http://localhost:8080/auth/methods
+```
+
+### GitHub returns redirect_uri_mismatch
+
+`GITHUB_OAUTH_CALLBACK_URL` and the callback URL in your GitHub OAuth app differ.
+They must match character for character, including scheme, port, and trailing
+path. This is the most common self-hosting snag.
+
+### GitHub OAuth is configured but the button does not appear
+
+The button shows only when BOTH `GITHUB_OAUTH_CLIENT_ID` and
+`GITHUB_OAUTH_CLIENT_SECRET` are set in `.env` (the base Compose file passes
+them, plus `GITHUB_OAUTH_CALLBACK_URL` and `CONSOLE_BASE_URL`, into the CAS). If
+one is blank the CAS reports OAuth as unconfigured — check with `curl
+http://localhost:8080/auth/methods`, then set both and restart.
+
+### Signing in works but every console request fails
+
+The console makes credentialed cross-origin requests, and the CAS allows exactly
+one origin: `CONSOLE_BASE_URL`. If it does not match the console's actual origin
+exactly, the browser blocks the calls. Its default is
+`http://localhost:5173`.
+
+## Uploads
+
+### 401 unauthorized
+
+The key is unknown or revoked. Mint a new one.
+
+### 403 forbidden
+
+The key is valid but lacks the required scope. Uploads need `write` (a
+`read + write` key qualifies); downloads need `read` (likewise). The default
+`read + write` key satisfies both.
+
+### 400 invalid_repo_name
+
+Repository names are 1 to 96 characters of ASCII letters, digits, `-`, `_`, and
+`.`, and cannot start with `.`.
+
+### 400 xorb_too_large
+
+A single xorb exceeded 64 MiB plus 4096 bytes. This is a client-side packing
+question, not a per-file limit.
+
+### 429 with Retry-After
+
+Uploads are limited to 100 per minute per key. Wait for the number of seconds in
+the header.
+
+### 500 from xet-write-token
+
+`XET_JWT_SIGNING_KEY` is empty. Set it and restart:
+
+```bash
+echo "XET_JWT_SIGNING_KEY=$(openssl rand 32 | base64)" >> .env
+```
+
+### 503
+
+Sia is unavailable. Check that your indexer is reachable and, if you run your
+own `indexd`, that its wallet is funded and it can form contracts.
+
+## Downloads
+
+### 404 right after a successful upload
+
+Expected on a fresh indexer. Reconstruction resolves only against xorbs that are
+`pinned`, and the first pin forms on-chain contracts across many hosts, which
+takes minutes. Watch `/assets` in the console until the state reaches `pinned`,
+then retry.
+
+If it never reaches `pinned` and goes to `orphaned`, the reconciler gave up.
+Check the CAS logs for the underlying Sia error.
+
+### The download is served from cache and never touches Sia
+
+`hf` caches aggressively. Point the caches somewhere fresh:
+
+```bash
+HF_HOME=$(mktemp -d) HF_XET_CACHE=$(mktemp -d) hf download ...
+```
+
+### 403 from the gateway
+
+Either the signed URL expired, its signature does not verify, or the requested
+range falls outside the signed grant. All three return `403` deliberately.
+
+Expiry is normal: `xet-core` treats `403` as the signal to fetch a fresh
+reconstruction. A persistent `403` means `GATEWAY_URL_SIGNING_KEY` differs
+between the CAS and the gateway. It must be the same value in both.
+
+### 502 from the gateway
+
+A Sia fetch failed, or a fetched xorb failed its hash or size check. The gateway
+refuses to serve bytes it could not verify. Check the gateway logs.
+
+### Downloads are corrupt behind a reverse proxy
+
+Your proxy is buffering `multipart/byteranges` responses and destroying the
+range boundaries. In Caddy, set `flush_interval -1` on the gateway route, as
+`ops/Caddyfile` does.
+
+## Contract formation stalls
+
+If pins never land and the indexer reports it cannot reach the required
+redundancy, your host set is too small for the erasure-coding scheme. The
+defaults need enough usable hosts for 10-of-30:
+
+```bash
+OPENWEIGHTS_DATA_SHARDS=10
+OPENWEIGHTS_PARITY_SHARDS=20
+```
+
+Lower them for a smaller host set, or point at an indexer with a deeper host
+pool:
+
+```bash
+OPENWEIGHTS_INDEXER_URL=https://sia.storage
+```
+
+Changing the indexer means re-registering: run `openweights-cas-register` again
+and replace `OPENWEIGHTS_APP_KEY`.
+
+## Starting over
+
+```bash
+make down              # stop, keep data
+make bootstrap-reset   # remove .env, keep volumes
+make clean             # stop and DELETE the Postgres and cache volumes
+```
+
+`make clean` destroys local metadata. Bytes already pinned on Sia survive, and
+your recovery phrase is what reaches them, which is why `.env` matters more than
+any volume.

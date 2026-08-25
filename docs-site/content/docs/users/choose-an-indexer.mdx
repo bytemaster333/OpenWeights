@@ -1,0 +1,94 @@
+---
+title: Choose an indexer
+description: Point OpenWeights at the hosted sia.storage indexer or at your own indexd.
+---
+
+OpenWeights reaches the Sia network through an indexer. It does not bundle one:
+you supply the URL, and both `openweights-cas` and `openweights-gateway` use it.
+
+Set it once in `.env`:
+
+```bash
+OPENWEIGHTS_INDEXER_URL=https://sia.storage
+```
+
+`https://sia.storage` is the default the setup wizard offers and the default the
+Compose file falls back to when the variable is unset.
+
+## Hosted: `https://sia.storage`
+
+A hosted indexer, so you do not run one or fund its wallet yourself.
+
+A hosted indexer exposes no admin API. Two console panels read that API for
+host-level detail, so with `https://sia.storage` they have nothing to show:
+
+- the host map on `/stats/map`
+- the "on Sia network" section of the setup page
+
+Everything else in the console, and both the upload and download paths, work
+normally.
+
+## Your own `indexd`
+
+Run [`indexd`](https://github.com/SiaFoundation/indexd) yourself and point at it:
+
+```bash
+OPENWEIGHTS_INDEXER_URL=http://my-indexd:9982
+```
+
+Running your own indexer means you also fund its wallet and it forms its own
+storage contracts. To light up the console's host map and setup panels, also set
+the admin API:
+
+```bash
+INDEXD_ADMIN_URL=<your indexd admin API base URL, no trailing slash>
+INDEXD_ADMIN_PASSWORD=<your indexd admin password>
+```
+
+`INDEXD_ADMIN_URL` points at indexd's admin API, which is separate from the app
+API in `OPENWEIGHTS_INDEXER_URL`. The CAS reads both.
+
+## Redundancy
+
+Uploads are erasure-coded before they reach Sia. Two variables control the
+scheme:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENWEIGHTS_DATA_SHARDS` | `10` | Data shards per object |
+| `OPENWEIGHTS_PARITY_SHARDS` | `20` | Parity shards per object |
+
+The defaults need enough usable hosts to satisfy a 10-of-30 scheme. Lowering
+them lets a smaller host set form contracts. Set either to a value that is not a
+valid number in the range 0 to 255 and the CAS fails at startup rather than
+falling back to the default.
+
+## After changing the indexer
+
+The App Key is derived per indexer, so switching means re-registering:
+
+1. Update `OPENWEIGHTS_INDEXER_URL` in `.env`.
+2. Re-run `openweights-cas-register` and replace `OPENWEIGHTS_APP_KEY` with the
+   new base64 value it prints.
+3. `make up` to restart the services with the new key.
+
+See [Run the stack](/docs/users/run-the-stack) for the registration steps.
+
+## The first pin takes time
+
+On a fresh indexer, the first upload forms on-chain storage contracts across
+many hosts, which takes minutes. OpenWeights accepts the upload immediately and
+a background reconciler finishes the pin. Two variables bound that work:
+
+| Variable | Default in code | Meaning |
+| --- | --- | --- |
+| `OPENWEIGHTS_SIA_UPLOAD_BUDGET_SECS` | `300` | How long an upload request waits for Sia before it returns and hands off to the reconciler |
+| `OPENWEIGHTS_SIA_OP_TIMEOUT_SECS` | `600` | How long a single reconciler attempt may run |
+
+The shipped Compose file sets these to `20` and `3600`: return to the client
+fast, and give the background pin an hour to land.
+
+A download attempted before the pin lands returns `404` at reconstruction. Retry
+until it succeeds. See
+[Verify a round-trip](/docs/users/verify-a-round-trip), whose harness does this
+for you.

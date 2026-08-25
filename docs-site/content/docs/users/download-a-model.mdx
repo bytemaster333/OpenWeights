@@ -1,0 +1,88 @@
+---
+title: Download a model
+description: Pull files back out of your OpenWeights deployment with the standard hf CLI.
+---
+
+## The command
+
+Pass an API key that can download — the default **read + write** key, or a
+single-scope **read** key:
+
+```bash
+HF_TOKEN=<your-key> HF_ENDPOINT=http://localhost:8080 \
+  hf download <owner>/<repo> --local-dir ./out
+```
+
+<Callout>
+Public repositories are browsable without a key (the model list and file
+listing), but pulling the actual weight bytes goes through Xet reconstruction,
+which requires a `read`-scoped token. So a download always carries `HF_TOKEN`.
+</Callout>
+
+## Downloading from a clean cache
+
+`hf` caches aggressively, so a second download can be served entirely from disk
+without touching your deployment. To force real network reads, point the cache
+directories somewhere fresh:
+
+```bash
+HF_ENDPOINT=http://localhost:8080 \
+HF_HOME=$(mktemp -d) \
+HF_XET_CACHE=$(mktemp -d) \
+  hf download <owner>/<repo> --local-dir ./out
+```
+
+## What happens
+
+1. **Reconstruction.** `hf_xet` asks the CAS how to rebuild each file. The CAS
+   answers with the list of xorb segments and byte ranges, each as an
+   HMAC-signed gateway URL.
+2. **Range fetch.** `hf_xet` requests those ranges from
+   `openweights-gateway`. The gateway verifies the signature, then serves the
+   bytes.
+3. **Cache or Sia.** The gateway serves from its whole-xorb disk cache when it
+   has the xorb. On a miss it fetches the whole xorb from Sia, verifies its
+   hash, caches it, and then serves your range out of the cached file.
+4. **Reassembly.** `hf_xet` reassembles the chunks into the original file and
+   verifies it.
+
+Signed URLs expire, by default after two hours. An expired URL returns `403`,
+which is the signal `hf_xet` uses to ask the CAS for a fresh one.
+
+## A download right after an upload can 404
+
+If the xorb is not yet pinned on Sia, reconstruction returns `404`. This is
+expected on a fresh indexer, where the first pin forms on-chain contracts and
+takes minutes. Retry until it succeeds, and see
+[Choose an indexer](/docs/users/choose-an-indexer#the-first-pin-takes-time).
+
+You can watch pin state directly in the console's assets view: `uploading`, then
+`pinning`, then `pinned`.
+
+## Which requests need a key
+
+| Request | Token needed |
+| --- | --- |
+| Model metadata and file resolution on a public repository | None |
+| Model metadata and file resolution on a private repository | A **read** key belonging to the owner |
+| `xet-read-token`, reconstruction, and chunk-dedup queries | A **read** key, or the Xet token the CAS minted for this download |
+
+`hf_xet` presents the Xet token the CAS issued rather than your API key on the
+reconstruction requests it makes during a transfer, so you do not pass it twice.
+
+## Rate limits
+
+Reconstruction requests are limited to 100 per minute per API key. Over the
+limit, the CAS returns `429` with a `Retry-After` header.
+
+## Serving reads without the gateway
+
+`OPENWEIGHTS_GATEWAY_READS` selects the read path. Set to `true`, which is the
+Compose default, the CAS advertises the Xet reconstruction path and `hf_xet`
+fetches xorbs from `openweights-gateway`. Set to anything else, the CAS
+reconstructs the bytes and serves them itself.
+
+## Next
+
+[Verify a round-trip](/docs/users/verify-a-round-trip) to prove the bytes came
+back identical.

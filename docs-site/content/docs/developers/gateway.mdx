@@ -1,0 +1,229 @@
+---
+title: Gateway
+description: Signed-URL verification, byte-range serving, and the whole-xorb disk cache.
+---
+
+`openweights-gateway` is the read-only data plane. It is a single flat Go
+package under `gateway/`, listening on `:8081` and published on host port
+`9090`.
+
+## Routes
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/health` | JSON liveness, `200` |
+| `GET` | `/xorb/{hash}` | Serves the xorb, whole or by range, for a valid signed URL |
+
+Prometheus metrics live on a **second listener**, `GATEWAY_METRICS_ADDR`,
+default `127.0.0.1:9100`, serving only `/metrics`. Keeping it on its own
+listener means a reverse proxy fronting the public port has no route onto it.
+
+## Signed URLs
+
+The CAS mints them, the gateway verifies them. Both implementations must agree
+byte for byte, so `conformance/fixtures/signed_url_vectors.json` pins the
+contract and both sides assert against it.
+
+### URL shape
+
+```
+<gateway_base>/xorb/<xorb_hash_hex>?exp=<unix>&kid=<uuid>&sig=<base64url>[&r=<s>-<e>[,<s>-<e>...]]
+```
+
+### Canonical string
+
+```
+v1\n<xorb_hash_hex>\n<exp>\n<r_or_empty>\n<kid>
+```
+
+Five fields in a fixed order: version, hash, expiry, range, key id. The
+separator is exactly one LF (`0x0A`), never CRLF and never a colon. The
+signature is `base64url_nopad(HMAC_SHA256(key, canonical))`.
+
+Query-parameter order in the URL is not load-bearing, because the HMAC runs over
+the canonical string and not over the URL bytes. The raw `r` value is fed into
+the canonical verbatim, so the signature holds regardless of how many
+comma-joined segments it carries.
+
+### The `r` parameter
+
+Absent means the URL grants the whole xorb. Present with one segment grants one
+contiguous range. Present with two or more grants a multi-segment range, which
+is what V2 reconstruction mints. Each segment is `start-end` with an inclusive
+end.
+
+Every requested `Range:` must sit entirely inside one granted segment. A request
+outside the grant returns `403`.
+
+### Failure codes
+
+| Condition | Status |
+| --- | --- |
+| Expired | `403` |
+| Bad signature | `403` |
+| Requested range outside the signed grant | `403` |
+| Malformed hash, `exp`, `kid`, `sig`, or `r` | `400` |
+| Unparseable `Range` header | `400` |
+| Range not satisfiable against the object size | `416` with `Content-Range: bytes */<size>` |
+| Hash unknown to Postgres | `404` |
+| Postgres or the Sia adapter not wired | `500` |
+| Sia fetch failed, or a cache hash or size mismatch | `502` |
+
+<Callout type="warn">
+Expiry returns `403`, not `401` and not `410`. `xet-core`'s URL-refresh retry
+path keys on `403` specifically. Bad signature returns `403` too, so it is
+indistinguishable from an expired one.
+</Callout>
+
+Expiry is checked **before** the signature so both paths take the same time.
+
+### Key rotation
+
+`GATEWAY_URL_SIGNING_KEY` is required and must be base64 of exactly 32 bytes;
+the gateway exits at boot otherwise. `GATEWAY_URL_SIGNING_KEY_PREV` is optional
+and accepted as a second verification key. The CAS mints only with the current
+key, so a configured previous key means a rotation window is open. Verification
+tries current first, then previous, and reports which one matched for metrics.
+
+## Range serving
+
+| Request | Response |
+| --- | --- |
+| No `Range` header, unbounded URL | `200` with `Content-Type: application/octet-stream`, `Content-Length`, and `Accept-Ranges: bytes` |
+| No `Range` header, URL carries `r` | `206` over the granted segments, so a bounded URL never serves the whole xorb |
+| One range | `206` with `Content-Range: bytes <start>-<end>/<total>` |
+| Two or more ranges | `206` with `Content-Type: multipart/byteranges; boundary=xet_multipart_boundary` |
+| Unsatisfiable | `416` with `Content-Range: bytes */<size>` |
+
+Satisfiability is checked before the grant, so a range past the end of the object
+returns `416` even on a bounded URL. Overlapping ranges are served verbatim
+rather than merged: `bytes=0-99,50-149` produces two parts carrying the overlap
+twice.
+
+Multi-range responses are framed with Go's standard `mime/multipart` writer, not
+hand-rolled CRLF. The boundary is the fixed literal `xet_multipart_boundary`,
+which keeps responses reproducible; `xet-core` reads the boundary from the
+`Content-Type` header and accepts any RFC 7233-compliant value.
+
+<Callout type="warn">
+A multi-range request must produce `multipart/byteranges`. Concatenating the
+ranges into one body silently corrupts `xet-core` downloads, because the client
+cannot tell where one range ends and the next begins. `ranges_test.go` carries a
+regression test that asserts the response is not concatenated.
+</Callout>
+
+Successful responses also carry `X-Cache` (`HIT` or `MISS`) and
+`X-Sia-Fetch-Ms`. Both are set once the byte source is resolved, so error
+responses do not carry them. Every response on the public listener carries
+`X-Request-Id`, echoing the inbound value or a fresh UUID. Error bodies are
+fixed plain-text strings sent with `X-Content-Type-Options: nosniff`, and never
+include the underlying database or SDK error.
+
+## The disk cache
+
+A whole-xorb LRU on local disk.
+
+- **Layout.** `<root>/xorbs/<first 2 hex chars>/<hash>.bin`. The two-character
+  shard keeps directory entry counts low on filesystems that degrade past
+  roughly ten thousand entries per directory.
+- **Budget.** Size-based eviction against `GATEWAY_CACHE_SIZE_BYTES`, default
+  100 GiB. LRU position is bumped on both read and write.
+- **Write discipline.** Stream into `<final>.tmp` through a tee into a Merkle
+  hasher, `fsync`, compare the computed hash against the expected one, and only
+  then `rename` into place. The rename is atomic on a POSIX filesystem, so
+  readers never observe a partial file.
+- **Hash mismatch.** The temporary file is deleted, a counter increments, and
+  the handler returns `502`. The bytes are never served. This is the defence
+  against cache poisoning.
+- **Size mismatch.** A body shorter or longer than the size Postgres recorded is
+  treated the same way.
+- **Cold boot.** The in-memory index starts empty. Files left by a previous run
+  are not rehydrated, because trusting them would mean serving bytes without a
+  fresh Merkle verification.
+
+Concurrent misses collapse onto a single fetch through a singleflight group, so
+a burst of parallel requests for a cold xorb produces one Sia download. The
+group is keyed on the xorb hash alone, not on hash plus range, because a range
+is a view over the whole cached file: one fetch serves a full-object `200` and
+any number of `206` range responses. Followers block on the leader and read its
+result, so a follower disconnecting does not discard the work.
+
+Setting `GATEWAY_CACHE_DIR` to empty or the size to zero disables the cache, and
+the gateway fetches from Sia on every request.
+
+### What the gateway fetches from Sia
+
+Whole xorbs. Every Sia download the gateway issues is a whole-object fetch, on
+both the cache-warming path and the no-cache fallback, and the Sia SDK's
+range option is left off for them.
+
+Range serving happens afterwards, locally: the gateway seeks into the cached
+file and streams only the requested bytes. So a one-byte `Range` request against
+a cold xorb still pulls the whole xorb from Sia once, and every later request for
+any range of it is served from disk.
+
+This is what makes the whole-xorb cache and the hash-verify-on-write discipline
+work, since verifying a Merkle hash requires the complete object.
+
+## Hash encoding
+
+`xet-core` does not straight hex-encode its Merkle hashes, and neither does the
+gateway. The algorithm:
+
+1. `blake3::keyed_hash(DATA_KEY, data)` with a fixed 32-byte key copied verbatim
+   from `xet_core_structures`, producing a 32-byte digest.
+2. Reinterpret the digest as four little-endian `u64` words.
+3. Print each word with `%016x`.
+
+Printing little-endian words as big-endian hex is the same as reversing each
+8-byte group before hex-encoding. Any drift here produces hashes that disagree
+with the Rust CAS and with every `xet-core` client, so the constant is treated
+as load-bearing and the port is covered by parity tests.
+
+## Database access
+
+The gateway connects as the dedicated `openweights_gw` Postgres role, created by
+migration `0005`. That role can `SELECT` on `xorbs` and `INSERT` into
+`usage_log`, and nothing else. It runs exactly one read:
+
+```sql
+SELECT sia_object_id, size_bytes
+  FROM xorbs
+ WHERE xorb_merkle_hash = $1
+   AND pin_state = 'pinned'
+```
+
+The hash is matched as raw bytes, never hex. No row means the object is unknown
+or not yet pinned, and the request returns `404`. A `sia_object_id` that is not
+exactly 32 bytes is treated as corrupt rather than used.
+
+Each served request then writes one `usage_log` row with `event = 'download'`,
+carrying the bytes served, whether the cache hit, and the key id from the signed
+URL, which is stored as null when the URL carries no key claim. The insert runs
+on its own goroutine against a background context with a 5-second timeout, so a
+client disconnecting mid-transfer cannot abort it. A failed write is not
+propagated: the bytes were already served, and the row is bookkeeping rather
+than a client-visible contract.
+
+## Boot behaviour
+
+Only `GATEWAY_URL_SIGNING_KEY` is required. Postgres, Sia, and the cache are all
+optional at boot: if one fails to initialise the gateway logs a warning, keeps
+`/health` answering, and returns a typed `500` from `/xorb/{hash}` rather than
+crashing.
+
+## Timeouts
+
+There is deliberately no wall-clock timeout on `GET /xorb/{hash}`: large xorbs
+and slow clients are legitimate. A client disconnect propagates through the
+request context and cancels the Sia download. `IdleTimeout` is 120 seconds and
+`ReadHeaderTimeout` is 10 seconds. Shutdown drains for up to 30 seconds on
+`SIGTERM` or `SIGINT`.
+
+HTTP/2 is configured with `MaxConcurrentStreams: 256`, which gives `xet-core`
+headroom for the many parallel range requests a multi-segment reconstruction
+issues.
+
+## Configuration
+
+See the [configuration reference](/docs/developers/configuration#openweights-gateway).

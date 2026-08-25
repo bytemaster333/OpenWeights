@@ -1,0 +1,91 @@
+---
+title: Sign in to the console
+description: Password sign-in for a single operator, GitHub OAuth for a team, or both.
+---
+
+The console is at `http://localhost:5173` with the shipped Compose file. Open
+`/login` and you see whichever sign-in methods the deployment has configured.
+
+The console asks the CAS `GET /auth/methods`, which returns two booleans, and
+renders a password box, a GitHub button, or both. Configure at least one:
+otherwise the page says no sign-in method is configured.
+
+## Password sign-in
+
+The simplest option, and the one to use when you are the only operator. No
+GitHub OAuth app to register.
+
+Set a password in `.env`:
+
+```bash
+OPENWEIGHTS_ADMIN_PASSWORD=<a strong password>
+OPENWEIGHTS_ADMIN_USERNAME=admin
+```
+
+`make setup` offers to generate this for you and prints it once.
+
+Restart the stack, open `/login`, and enter the password. `OPENWEIGHTS_ADMIN_USERNAME`
+is the display name shown in the console; it defaults to `admin`.
+
+The password lives only in `.env`. It is never written to the database or the
+logs, and a submitted guess is compared against it in constant time. Signing in
+this way creates a single local admin account.
+
+A wrong password returns `401` and the console shows "Incorrect password."
+
+## GitHub OAuth
+
+Use this when more than one person signs in.
+
+1. Register an OAuth app at
+   [github.com/settings/applications/new](https://github.com/settings/applications/new).
+2. Set the **Authorization callback URL** to your CAS callback, for a local
+   stack `http://localhost:8080/auth/github/callback`.
+3. Put the credentials in `.env`:
+
+```bash
+GITHUB_OAUTH_CLIENT_ID=<client id>
+GITHUB_OAUTH_CLIENT_SECRET=<client secret>
+GITHUB_OAUTH_CALLBACK_URL=http://localhost:8080/auth/github/callback
+CONSOLE_BASE_URL=http://localhost:5173
+```
+
+<Callout type="warn">
+`GITHUB_OAUTH_CALLBACK_URL` must match the callback URL in your GitHub OAuth app
+character for character. A mismatch surfaces from GitHub as
+`redirect_uri_mismatch`, and it is the most common snag when self-hosting.
+</Callout>
+
+`CONSOLE_BASE_URL` is where the CAS sends the browser after a successful
+sign-in: `/keys` the first time you sign in, `/dashboard` after that. It is also
+the single origin the CAS allows for credentialed cross-origin requests, so it
+has to match your console's origin exactly.
+
+The OAuth flow requests the `user:email` and `read:user` scopes, and accounts
+are keyed on your numeric GitHub ID.
+
+## Both at once
+
+Setting a password and OAuth credentials enables both. The login page shows the
+password form, a divider, and a **Continue with GitHub** button.
+
+## Your session
+
+A successful sign-in sets an `openweights_session` cookie:
+
+```
+openweights_session=<uuid>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800
+```
+
+It lasts 7 days and the expiry is refreshed on every authenticated request. The
+cookie is `HttpOnly`, so browser JavaScript cannot read it, and the console
+never touches it directly. Sign out to clear it.
+
+Every console page except the landing page, the login page, and the public model
+catalog requires a valid session. Visiting one without a session sends you back
+to the landing page.
+
+## Next
+
+[Create an API key](/docs/users/api-keys), then
+[upload a model](/docs/users/upload-a-model).
