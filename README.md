@@ -36,6 +36,15 @@ every stored byte permanently.**
 
 Already have a fully-populated `.env`? Just `make up`.
 
+The four service images are published to
+`ghcr.io/bytemaster333/openweights-{cas,gateway,console,hf-proxy}`. To run from
+prebuilt images instead of building locally, pull them first:
+
+```bash
+docker compose -f ops/docker-compose.yml pull
+make up
+```
+
 ### choosing an indexer
 
 OpenWeights reaches Sia through an indexer you supply via
